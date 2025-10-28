@@ -1,0 +1,89 @@
+﻿<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TicTacToe Farcaster · dApp</title>
+    <meta name="description" content="Крестики-нолики с интеграцией Farcaster. Играйте против ИИ или других игроков прямо в Warpcast!" />
+    <meta name="keywords" content="tic-tac-toe, game, farcaster, dapp, ai, multiplayer" />
+    <meta name="author" content="vebster88" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://your-domain.com/" />
+    <meta property="og:title" content="TicTacToe Farcaster · dApp" />
+    <meta property="og:description" content="Крестики-нолики с интеграцией Farcaster. Играйте против ИИ или других игроков прямо в Warpcast!" />
+    <meta property="og:image" content="https://your-domain.com/assets/hero-BvKjdyUy.jpg" />
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://your-domain.com/" />
+    <meta property="twitter:title" content="TicTacToe Farcaster · dApp" />
+    <meta property="twitter:description" content="Крестики-нолики с интеграцией Farcaster. Играйте против ИИ или других игроков прямо в Warpcast!" />
+    <meta property="twitter:image" content="https://your-domain.com/assets/hero-BvKjdyUy.jpg" />
+    
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#111111" />
+    <link rel="icon" href="/favicon.ico" />
+  </head>
+  <body data-theme="light">
+    <header class="app-header">
+      <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Показать логотип"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> </h1>
+      <nav class="top-actions" aria-label="Actions">
+        <button id="btn-new" class="btn" type="button">Новая игра</button>
+        <select id="mode" aria-label="Режим">
+          <option value="pve-easy">PvE — Лёгкий</option>
+          <option value="pve-hard">PvE — Хард</option>
+          <option value="pvp-local">PvP — Локально</option>
+          <option value="pvp-farcaster">PvP — Farcaster</option>
+        </select>
+        <button id="btn-theme" class="btn" type="button" aria-pressed="false">Тема</button>
+        <select id="lang" aria-label="Язык">
+          <option value="ru" selected>RU</option>
+          <option value="en">EN</option>
+        </select>
+       <button id="btn-auth" class="btn" type="button">Войти</button> <span id="user-label" aria-live="polite"></span>  <button id="btn-create-signer" class="btn" type="button">Создать Signer</button>  <button id="btn-invite" class="btn" type="button">Создать матч (Farcaster)</button>  <button id="btn-check-replies" class="btn" type="button">Проверить ответы</button>  <button id="btn-publish-result" class="btn" type="button" disabled>Опубликовать результат</button> </nav>
+    </header>
+
+    <main class="app-main">
+      <section class="score" aria-label="Счёт">
+        <div>X: <span id="score-x">0</span></div>
+        <div>O: <span id="score-o">0</span></div>
+        <div>≡: <span id="score-draw">0</span></div>
+      </section>
+
+      <section class="board" id="board" role="grid" aria-label="Игровое поле 3×3" aria-live="polite">
+        <!-- 9 клеток -->
+        <button class="cell" role="gridcell" data-cell="0" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="1" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="2" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="3" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="4" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="5" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="6" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="7" aria-label="Пусто" aria-pressed="false"></button>
+        <button class="cell" role="gridcell" data-cell="8" aria-label="Пусто" aria-pressed="false"></button>
+      </section>
+
+      <section class="status" aria-live="polite" id="status">Ход: X</section>
+    </main>
+
+    <div id="toasts" class="toasts" aria-live="polite" aria-atomic="true"></div>
+<div id="logo-modal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="logo-modal-title">
+<div class="modal-content">
+ <button class="modal-close" aria-label="Закрыть">&times;</button>
+    <h2 id="logo-modal-title">vebster88</h2>
+    <img src="/assets/images/hero.jpg" alt="Медведь-киберпанк, ник vebster88" />
+  </div>
+</div>
+
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>
+
+
+
+
+
+

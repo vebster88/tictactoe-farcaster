@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check-config": "node scripts/check-config.js"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.46.2",
@@ -25,6 +26,7 @@
   "dependencies": {
     "axios": "^1.13.0",
     "dayjs": "^1.11.18",
+    "dotenv": "^16.4.5",
     "uuid": "^13.0.0",
     "viem": "^2.38.5"
   }

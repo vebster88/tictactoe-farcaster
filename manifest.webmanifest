@@ -1,0 +1,34 @@
+﻿{
+  "name": "TicTacToe Farcaster",
+  "short_name": "TicTacToe",
+  "description": "Крестики-нолики с интеграцией Farcaster",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#111111",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "ru",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/assets/hero-BvKjdyUy.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/assets/hero-BvKjdyUy.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "form_factor": "wide"
+    }
+  ]
+}
