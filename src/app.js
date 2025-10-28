@@ -6,11 +6,13 @@ import { getSession, signInWithWallet, signOut } from "./farcaster/auth.js";
 import { sendInvite } from "./farcaster/matchmaking.js";
 import { listThreadReplies, publishMatchResult } from "./farcaster/client.js";
 import { createSignedKey } from "./farcaster/signer.js";
+import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 
 const root = document.body;
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
 const themeBtn = document.getElementById("btn-theme");
+const devToggleBtn = document.getElementById("btn-dev-toggle");
 const newBtn = document.getElementById("btn-new");
 const modeSel = document.getElementById("mode");
 const langSel = document.getElementById("lang");
@@ -108,8 +110,31 @@ function handleMove(idx) {
 }
 
 themeBtn?.addEventListener("click", toggleTheme);
+devToggleBtn?.addEventListener("click", () => {
+  if (!checkDevAccess()) {
+    // Секретный способ активации для экстренных случаев
+    const secretCode = prompt("Введите код разработчика:");
+    if (secretCode !== DEV_SECRET_CODE) {
+      alert("Доступ запрещен. Только для разработчиков.");
+      return;
+    }
+  }
+  
+  const currentDevMode = localStorage.getItem("dev-mode") === "true";
+  const newDevMode = !currentDevMode;
+  localStorage.setItem("dev-mode", newDevMode.toString());
+  updateUIForMode();
+  
+  // Обновляем внешний вид кнопки
+  devToggleBtn.setAttribute("aria-pressed", newDevMode.toString());
+  devToggleBtn.title = newDevMode ? "Выключить режим разработчика" : "Включить режим разработчика";
+});
 newBtn?.addEventListener("click", () => resetBoard(true));
-modeSel?.addEventListener("change", () => { mode = modeSel.value; resetBoard(true); });
+modeSel?.addEventListener("change", () => { 
+  mode = modeSel.value; 
+  resetBoard(true); 
+  updateUIForMode();
+});
 langSel?.addEventListener("change", () => render());
 
 boardEl.addEventListener("click", (e) => {
@@ -144,6 +169,69 @@ function refreshUserLabel() {
     authBtn.textContent = "Войти";
     authBtn.dataset.signedIn = "false";
   }
+  updateUIForMode();
+}
+
+function updateUIForMode() {
+  const isFarcasterMode = mode === "pvp-farcaster";
+  const isSignedIn = authBtn?.dataset.signedIn === "true";
+  const devMode = localStorage.getItem("dev-mode") === "true";
+  const isAuthorizedDev = checkDevAccess();
+  
+  // Показываем Farcaster кнопки только в Farcaster режиме
+  if (inviteBtn) {
+    inviteBtn.style.display = isFarcasterMode && isSignedIn ? "inline-block" : "none";
+  }
+  
+  if (publishBtn) {
+    publishBtn.style.display = isFarcasterMode && isSignedIn ? "inline-block" : "none";
+  }
+  
+  // Dev кнопка видна только для авторизованных разработчиков
+  if (devToggleBtn) {
+    devToggleBtn.style.display = isAuthorizedDev ? "inline-block" : "none";
+  }
+  
+  // Технические кнопки показываем только в dev режиме И для авторизованных
+  const devControls = document.getElementById("dev-controls");
+  if (devControls) {
+    devControls.style.display = (devMode && isAuthorizedDev) ? "block" : "none";
+  }
+}
+
+function checkDevAccess() {
+  const session = getSession();
+  
+  let isAuthorized = false;
+  let accessMethod = "none";
+  
+  // Проверяем авторизацию через конфигурацию
+  if (session?.farcaster?.username || session?.address) {
+    isAuthorized = isAuthorizedDeveloper(session?.farcaster?.username, session?.address);
+    
+    if (isAuthorized) {
+      const devInfo = getDeveloperInfo(session?.farcaster?.username, session?.address);
+      accessMethod = `${devInfo.type}:${devInfo.displayName}`;
+    }
+  }
+  
+  // Локальная разработка (если разрешено в конфиге)
+  if (!isAuthorized && DEV_CONFIG.allowLocalhost && 
+      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+    isAuthorized = true;
+    accessMethod = "localhost";
+  }
+  
+  // Логируем попытки доступа (если включено в конфиге)
+  if (DEV_CONFIG.logAccess) {
+    if (isAuthorized) {
+      console.log(`✅ Dev access granted via ${accessMethod}`);
+    } else {
+      console.log(`❌ Dev access denied for ${session?.farcaster?.username || session?.address || 'anonymous'}`);
+    }
+  }
+  
+  return isAuthorized;
 }
 authBtn?.addEventListener("click", async () => {
   if (authBtn.dataset.signedIn === "true") {
@@ -285,5 +373,13 @@ createSignerBtn?.addEventListener("click", async () => {
 });
 
 setTheme(localStorage.getItem("theme") || "light");
+
+// Инициализируем dev режим
+const devMode = localStorage.getItem("dev-mode") === "true";
+if (devToggleBtn) {
+  devToggleBtn.setAttribute("aria-pressed", devMode.toString());
+  devToggleBtn.title = devMode ? "Выключить режим разработчика" : "Включить режим разработчика";
+}
+
 render();
 refreshUserLabel();

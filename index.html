@@ -39,11 +39,23 @@
           <option value="pvp-farcaster">PvP — Farcaster</option>
         </select>
         <button id="btn-theme" class="btn" type="button" aria-pressed="false">Тема</button>
+        <button id="btn-dev-toggle" class="btn" type="button" title="Включить режим разработчика">⚙️</button>
         <select id="lang" aria-label="Язык">
           <option value="ru" selected>RU</option>
           <option value="en">EN</option>
         </select>
-       <button id="btn-auth" class="btn" type="button">Войти</button> <span id="user-label" aria-live="polite"></span>  <button id="btn-create-signer" class="btn" type="button">Создать Signer</button>  <button id="btn-invite" class="btn" type="button">Создать матч (Farcaster)</button>  <button id="btn-check-replies" class="btn" type="button">Проверить ответы</button>  <button id="btn-publish-result" class="btn" type="button" disabled>Опубликовать результат</button> </nav>
+       <button id="btn-auth" class="btn" type="button">Войти</button> 
+       <span id="user-label" aria-live="polite"></span>
+       
+       <!-- Основные игровые кнопки -->
+       <button id="btn-invite" class="btn" type="button" style="display: none;">Создать матч</button>
+       <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Опубликовать результат</button>
+       
+       <!-- Технические кнопки (скрыты по умолчанию) -->
+       <div id="dev-controls" style="display: none;">
+         <button id="btn-create-signer" class="btn" type="button">Создать Signer</button>
+         <button id="btn-check-replies" class="btn" type="button">Проверить ответы</button>
+       </div> </nav>
     </header>
 
     <main class="app-main">
