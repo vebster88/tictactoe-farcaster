@@ -1,0 +1,142 @@
+<svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Градиенты высокого качества -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6200EA;stop-opacity:1" />
+      <stop offset="25%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="75%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a2e;stop-opacity:1" />
+    </linearGradient>
+    
+    <radialGradient id="bgRadial" cx="30%" cy="30%" r="80%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.8" />
+      <stop offset="50%" style="stop-color:#6200EA;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#1a1a2e;stop-opacity:1" />
+    </radialGradient>
+    
+    <linearGradient id="xGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ff5252;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e94560;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="oGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4ecdc4;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#26d0ce;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#45b7b8;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Тени и эффекты -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+    
+    <filter id="innerShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feOffset dx="0" dy="4"/>
+      <feGaussianBlur stdDeviation="8" result="offset-blur"/>
+      <feFlood flood-color="#000000" flood-opacity="0.3"/>
+      <feComposite in2="offset-blur" operator="in"/>
+    </filter>
+    
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Паттерн для текстуры -->
+    <pattern id="texture" patternUnits="userSpaceOnUse" width="4" height="4">
+      <rect width="4" height="4" fill="#ffffff" opacity="0.02"/>
+      <circle cx="2" cy="2" r="0.5" fill="#ffffff" opacity="0.05"/>
+    </pattern>
+    
+    <style>
+      .icon-bg { fill: url(#bgGradient); }
+      .icon-bg-overlay { fill: url(#bgRadial); }
+      .texture { fill: url(#texture); }
+      .grid-line { stroke: #ffffff; stroke-width: 16; stroke-linecap: round; opacity: 0.95; }
+      .grid-line-glow { stroke: #ffffff; stroke-width: 20; stroke-linecap: round; opacity: 0.3; }
+      .x-symbol { fill: url(#xGradient); font-family: Arial, sans-serif; font-weight: 900; text-anchor: middle; dominant-baseline: central; }
+      .o-symbol { fill: url(#oGradient); font-family: Arial, sans-serif; font-weight: 900; text-anchor: middle; dominant-baseline: central; }
+      .win-line { stroke: url(#xGradient); stroke-width: 12; stroke-linecap: round; opacity: 0.9; }
+      .win-line-glow { stroke: url(#xGradient); stroke-width: 20; stroke-linecap: round; opacity: 0.4; }
+      .highlight { fill: none; stroke: #ffffff; stroke-width: 6; opacity: 0.6; }
+      .border { fill: none; stroke: #ffffff; stroke-width: 4; opacity: 0.4; }
+    </style>
+  </defs>
+  
+  <!-- Основной фон с закругленными углами -->
+  <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" class="icon-bg" filter="url(#shadow)"/>
+  
+  <!-- Радиальный градиент поверх основного -->
+  <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" class="icon-bg-overlay" opacity="0.7"/>
+  
+  <!-- Текстура -->
+  <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" class="texture"/>
+  
+  <!-- Внутренние рамки для глубины -->
+  <rect x="40" y="40" width="944" height="944" rx="140" ry="140" class="border"/>
+  <rect x="60" y="60" width="904" height="904" rx="120" ry="120" class="border" opacity="0.2"/>
+  
+  <!-- Игровая сетка 3x3 (увеличенная для 1024px) -->
+  <g transform="translate(212, 212)">
+    <!-- Свечение линий сетки -->
+    <line x1="200" y1="40" x2="200" y2="560" class="grid-line-glow"/>
+    <line x1="400" y1="40" x2="400" y2="560" class="grid-line-glow"/>
+    <line x1="40" y1="200" x2="560" y2="200" class="grid-line-glow"/>
+    <line x1="40" y1="400" x2="560" y2="400" class="grid-line-glow"/>
+    
+    <!-- Основные линии сетки -->
+    <line x1="200" y1="40" x2="200" y2="560" class="grid-line"/>
+    <line x1="400" y1="40" x2="400" y2="560" class="grid-line"/>
+    <line x1="40" y1="200" x2="560" y2="200" class="grid-line"/>
+    <line x1="40" y1="400" x2="560" y2="400" class="grid-line"/>
+    
+    <!-- Символы X и O (увеличенные) -->
+    <!-- Верхний ряд -->
+    <text x="120" y="120" class="x-symbol" font-size="120" filter="url(#glow)">X</text>
+    <text x="500" y="120" class="o-symbol" font-size="100" filter="url(#glow)">O</text>
+    
+    <!-- Средний ряд -->
+    <text x="300" y="300" class="x-symbol" font-size="120" filter="url(#glow)">X</text>
+    
+    <!-- Нижний ряд -->
+    <text x="120" y="480" class="o-symbol" font-size="100" filter="url(#glow)">O</text>
+    <text x="500" y="480" class="x-symbol" font-size="120" filter="url(#glow)">X</text>
+    
+    <!-- Выигрышная линия (диагональ) с эффектами -->
+    <line x1="70" y1="70" x2="530" y2="530" class="win-line-glow"/>
+    <line x1="70" y1="70" x2="530" y2="530" class="win-line" filter="url(#glow)"/>
+  </g>
+  
+  <!-- Декоративные элементы высокого разрешения -->
+  <!-- Блики и отражения -->
+  <ellipse cx="360" cy="240" rx="80" ry="40" fill="#ffffff" opacity="0.25" transform="rotate(-30 360 240)"/>
+  <ellipse cx="700" cy="400" rx="50" ry="25" fill="#ffffff" opacity="0.2" transform="rotate(45 700 400)"/>
+  <ellipse cx="200" cy="700" rx="60" ry="30" fill="#ffffff" opacity="0.15" transform="rotate(60 200 700)"/>
+  
+  <!-- Звездочки и частицы -->
+  <g fill="#ffffff" opacity="0.5">
+    <!-- Большие звезды -->
+    <polygon points="900,160 910,180 930,180 914,194 920,214 900,200 880,214 886,194 870,180 890,180" transform="scale(1.2)"/>
+    <polygon points="160,840 170,860 190,860 174,874 180,894 160,880 140,894 146,874 130,860 150,860" transform="scale(1.0)"/>
+    
+    <!-- Мелкие звезды -->
+    <polygon points="800,800 805,810 815,810 807,817 810,827 800,820 790,827 793,817 785,810 795,810" transform="scale(0.8)"/>
+    <polygon points="150,200 155,210 165,210 157,217 160,227 150,220 140,227 143,217 135,210 145,210" transform="scale(0.6)"/>
+    <polygon points="850,300 855,310 865,310 857,317 860,327 850,320 840,327 843,317 835,310 845,310" transform="scale(0.7)"/>
+  </g>
+  
+  <!-- Дополнительные световые эффекты -->
+  <circle cx="512" cy="200" r="100" fill="url(#xGradient)" opacity="0.1"/>
+  <circle cx="300" cy="512" r="80" fill="url(#oGradient)" opacity="0.1"/>
+  
+  <!-- Подпись внизу (увеличенная) -->
+  <text x="512" y="960" fill="#ffffff" font-family="Arial" font-size="32" font-weight="bold" text-anchor="middle" opacity="0.8">TicTacToe Farcaster</text>
+  
+  <!-- Версия/подпись разработчика -->
+  <text x="512" y="990" fill="#ffffff" font-family="Arial" font-size="16" text-anchor="middle" opacity="0.5">by vebster88</text>
+</svg>
