@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TicTacToe Farcaster Frame</title>
+    
+    <!-- Farcaster Frame метаданные -->
+    <meta property="fc:frame" content="vNext" />
+    <meta property="fc:frame:image" content="https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/api/frame/image" />
+    <meta property="fc:frame:button:1" content="🎮 Начать игру" />
+    <meta property="fc:frame:button:2" content="📖 Правила" />
+    <meta property="fc:frame:post_url" content="https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/api/frame/action" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="TicTacToe Farcaster Frame" />
+    <meta property="og:description" content="Играйте в крестики-нолики прямо в Farcaster!" />
+    <meta property="og:image" content="https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/api/frame/image" />
+    <meta property="og:url" content="https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/frame.html" />
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+            text-align: center;
+        }
+        .frame-preview {
+            border: 2px solid #0f3460;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            background: #16213e;
+        }
+        .game-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        .button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 8px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background: #d63447;
+        }
+        .instructions {
+            text-align: left;
+            background: #0f3460;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 TicTacToe Farcaster Frame</h1>
+    
+    <div class="frame-preview">
+        <h2>Предварительный просмотр Frame</h2>
+        <img src="/api/frame/image" alt="Game Board" class="game-image" />
+        <br>
+        <button class="button">🎮 Начать игру</button>
+        <button class="button">📖 Правила</button>
+    </div>
+    
+    <div class="instructions">
+        <h3>📋 Как играть в Farcaster:</h3>
+        <ol>
+            <li><strong>Поделитесь этой ссылкой</strong> в Farcaster посте</li>
+            <li><strong>Frame появится автоматически</strong> в ленте</li>
+            <li><strong>Нажмите "Начать игру"</strong> для старта</li>
+            <li><strong>Введите номер позиции</strong> (1-9) в поле ввода</li>
+            <li><strong>Нажмите кнопку</strong> для совершения хода</li>
+            <li><strong>Играйте против ИИ</strong> до победы!</li>
+        </ol>
+        
+        <h3>🎯 Позиции на поле:</h3>
+        <pre style="font-size: 18px; text-align: center;">
+1 | 2 | 3
+---------
+4 | 5 | 6
+---------
+7 | 8 | 9
+        </pre>
+    </div>
+    
+    <div class="instructions">
+        <h3>🔗 Ссылки для тестирования:</h3>
+        <p><strong>Frame URL:</strong> <a href="https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/frame.html" style="color: #e94560;">https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/frame.html</a></p>
+        <p><strong>Основное приложение:</strong> <a href="https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/" style="color: #e94560;">https://tiktaktoe-farcaster-8hop2cc02-vebster88-2900s-projects.vercel.app/</a></p>
+        <p><strong>API изображения:</strong> <a href="/api/frame/image" style="color: #e94560;">/api/frame/image</a></p>
+    </div>
+    
+    <p style="margin-top: 40px; color: #666;">
+        Создано <strong>vebster88</strong> | Powered by Farcaster Frames
+    </p>
+</body>
+</html>
