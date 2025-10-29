@@ -105,73 +105,29 @@
         Создано <strong>vebster88</strong> | Powered by Farcaster Frames
     </p>
     
-    <!-- Farcaster Mini App SDK -->
-    <script>
+    <!-- Farcaster Frame SDK -->
+    <script type="module">
+        import sdk from '@farcaster/frame-sdk';
+        
         console.log('🚀 Script started loading...');
         
-        // Инициализация Farcaster Mini App SDK
+        // Инициализация Farcaster Frame SDK (как в официальном примере)
         async function initializeFarcasterSDK() {
             try {
-                console.log('🎮 Initializing Farcaster Mini App SDK...');
+                console.log('🎮 Initializing Farcaster Frame SDK...');
                 
-                // Проверяем, есть ли глобальный SDK от Farcaster
-                let sdk;
-                if (window.farcaster && window.farcaster.sdk) {
-                    sdk = window.farcaster.sdk;
-                    console.log('✅ Global Farcaster SDK found');
-                } else {
-                    console.log('⚠️ Global SDK not available, using mock SDK');
-                    // Fallback на mock SDK
-                    sdk = {
-                        actions: {
-                            ready: async () => {
-                                console.log('✅ Mock sdk.actions.ready() called successfully');
-                                return Promise.resolve();
-                            }
-                        },
-                        user: async () => {
-                            console.log('👤 Mock sdk.user() called');
-                            return { 
-                                fid: 12345, 
-                                username: 'testuser',
-                                displayName: 'Test User'
-                            };
-                        },
-                        context: async () => {
-                            console.log('📱 Mock sdk.context() called');
-                            return { 
-                                cast: { 
-                                    hash: '0x1234567890abcdef',
-                                    author: { fid: 12345, username: 'testuser' }
-                                } 
-                            };
-                        }
-                    };
-                }
+                // Получаем контекст и вызываем ready() - как в официальном примере
+                const context = await sdk.context;
+                console.log('📱 Farcaster context:', context);
                 
                 // Вызываем ready() - это критически важно для Farcaster
-                await sdk.actions.ready();
+                sdk.actions.ready();
                 console.log('✅ sdk.actions.ready() called successfully');
                 
-                // Проверяем, что мы в Farcaster
-                if (sdk.user) {
-                    const user = await sdk.user();
-                    if (user) {
-                        console.log('👤 Farcaster user:', user);
-                    }
-                }
-                
-                if (sdk.context) {
-                    const context = await sdk.context();
-                    if (context) {
-                        console.log('📱 Farcaster context:', context);
-                    }
-                }
-                
-                console.log('✅ Farcaster Mini App SDK initialized successfully');
+                console.log('✅ Farcaster Frame SDK initialized successfully');
                 
             } catch (error) {
-                console.error('❌ Farcaster Mini App SDK initialization failed:', error);
+                console.error('❌ Farcaster Frame SDK initialization failed:', error);
                 console.log('🌐 Not in Farcaster environment, running in browser');
             }
         }

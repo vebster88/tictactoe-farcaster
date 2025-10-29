@@ -1,9 +1,11 @@
-// Farcaster SDK инициализация
-// Обеспечивает правильную работу с Farcaster Mini App
+// Farcaster Frame SDK инициализация
+// Обеспечивает правильную работу с Farcaster Frames v2
+
+import sdk from '@farcaster/frame-sdk';
 
 export class FarcasterSDK {
   constructor() {
-    this.sdk = null;
+    this.sdk = sdk;
     this.isReady = false;
     this.isInitialized = false;
   }
@@ -15,21 +17,20 @@ export class FarcasterSDK {
     }
 
     try {
-      // Проверяем, есть ли глобальный SDK от Farcaster
-      if (window.farcaster && window.farcaster.sdk) {
-        this.sdk = window.farcaster.sdk;
-        console.log('✅ Global Farcaster SDK found');
-      } else {
-        console.log('ℹ️ Global SDK not available, using mock SDK');
-        this.sdk = this.createMockSDK();
-      }
+      // Используем официальный Frame SDK
+      this.sdk = sdk;
       
-      // После полной загрузки приложения вызываем ready()
-      await this.ready();
+      // Получаем контекст и вызываем ready() - как в официальном примере
+      const context = await this.sdk.context;
+      console.log('📱 Farcaster context:', context);
+      
+      // Вызываем ready() - это критически важно для Farcaster
+      this.sdk.actions.ready();
+      this.isReady = true;
       this.isInitialized = true;
-      console.log('✅ Farcaster Mini App SDK initialized');
+      console.log('✅ Farcaster Frame SDK initialized');
     } catch (error) {
-      console.error('❌ Farcaster SDK initialization failed:', error);
+      console.error('❌ Farcaster Frame SDK initialization failed:', error);
       console.log('ℹ️ Not in Farcaster environment, using mock SDK');
       this.sdk = this.createMockSDK();
       this.isInitialized = true;
