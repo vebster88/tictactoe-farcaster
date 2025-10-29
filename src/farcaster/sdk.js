@@ -10,25 +10,20 @@ export class FarcasterSDK {
     this.isInitialized = false;
   }
 
-  // Инициализация SDK
+  // Инициализация SDK согласно официальной документации
   async initialize() {
     if (this.isInitialized) {
       return this.sdk;
     }
 
     try {
-      // Проверяем, что мы в Farcaster Mini App
-      if (this.sdk && this.sdk.actions) {
-        await this.ready();
-        this.isInitialized = true;
-        console.log('✅ Farcaster Mini App SDK initialized');
-      } else {
-        console.log('ℹ️ Not in Farcaster environment, using mock SDK');
-        this.sdk = this.createMockSDK();
-        this.isInitialized = true;
-      }
+      // После полной загрузки приложения вызываем ready()
+      await this.ready();
+      this.isInitialized = true;
+      console.log('✅ Farcaster Mini App SDK initialized');
     } catch (error) {
       console.error('❌ Farcaster SDK initialization failed:', error);
+      console.log('ℹ️ Not in Farcaster environment, using mock SDK');
       this.sdk = this.createMockSDK();
       this.isInitialized = true;
     }
@@ -36,20 +31,20 @@ export class FarcasterSDK {
     return this.sdk;
   }
 
-  // Вызов ready() для уведомления о готовности
+  // Вызов ready() согласно официальной документации
   async ready() {
-    if (!this.sdk || this.isReady) {
+    if (this.isReady) {
       return;
     }
 
     try {
-      if (this.sdk.actions && this.sdk.actions.ready) {
-        await this.sdk.actions.ready();
-        this.isReady = true;
-        console.log('✅ Farcaster SDK ready() called');
-      }
+      // После полной загрузки приложения вызываем ready()
+      await this.sdk.actions.ready();
+      this.isReady = true;
+      console.log('✅ sdk.actions.ready() called successfully');
     } catch (error) {
-      console.error('❌ Farcaster SDK ready() failed:', error);
+      console.error('❌ sdk.actions.ready() failed:', error);
+      throw error; // Пробрасываем ошибку для обработки в initialize()
     }
   }
 
