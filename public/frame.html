@@ -52,13 +52,30 @@
         <div class="status" id="status">Загрузка...</div>
     </div>
 
-    <script type="module">
-        import { sdk } from '@farcaster/miniapp-sdk';
-        
+    <script>
         console.log('🚀 Frame started');
         
         async function init() {
             try {
+                console.log('🎮 Initializing Farcaster SDK...');
+                
+                // Проверяем, есть ли глобальный SDK
+                let sdk;
+                if (window.farcaster && window.farcaster.sdk) {
+                    sdk = window.farcaster.sdk;
+                    console.log('✅ Global Farcaster SDK found');
+                } else {
+                    console.log('⚠️ Global SDK not available, using mock SDK');
+                    sdk = {
+                        actions: {
+                            ready: async () => {
+                                console.log('✅ Mock sdk.actions.ready() called');
+                                return Promise.resolve();
+                            }
+                        }
+                    };
+                }
+                
                 console.log('🎮 Calling sdk.actions.ready()...');
                 await sdk.actions.ready();
                 console.log('✅ sdk.actions.ready() completed');
