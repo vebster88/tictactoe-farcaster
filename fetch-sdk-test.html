@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fetch SDK Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+            text-align: center;
+        }
+        .log {
+            background: #0a0a0f;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Fetch SDK Test</h1>
+    
+    <div class="log" id="log">
+        <div>🚀 Тест через fetch...</div>
+    </div>
+    
+    <button onclick="testFetchSDK()" style="background: #4ecdc4; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-size: 16px;">
+        Тест Fetch SDK
+    </button>
+    
+    <script>
+        const logEl = document.getElementById('log');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(message);
+        }
+        
+        async function testFetchSDK() {
+            log('🧪 Тестируем SDK через fetch...');
+            
+            try {
+                // Пробуем разные CDN
+                const cdns = [
+                    'https://unpkg.com/@farcaster/miniapp-sdk@latest/dist/index.js',
+                    'https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk@latest/dist/index.js',
+                    'https://esm.sh/@farcaster/miniapp-sdk'
+                ];
+                
+                for (const cdn of cdns) {
+                    try {
+                        log(`📦 Пробуем ${cdn}...`);
+                        const response = await fetch(cdn);
+                        if (response.ok) {
+                            log(`✅ ${cdn} доступен!`);
+                            const text = await response.text();
+                            log(`📄 Размер: ${text.length} символов`);
+                            
+                            // Пробуем загрузить как модуль
+                            const module = await import(cdn);
+                            log(`✅ Модуль загружен: ${JSON.stringify(module)}`);
+                            
+                            if (module.sdk && module.sdk.actions && module.sdk.actions.ready) {
+                                log('🔄 Вызываем sdk.actions.ready()...');
+                                await module.sdk.actions.ready();
+                                log('✅ sdk.actions.ready() выполнен!');
+                                return;
+                            }
+                        } else {
+                            log(`❌ ${cdn} недоступен: ${response.status}`);
+                        }
+                    } catch (error) {
+                        log(`❌ ${cdn} ошибка: ${error.message}`);
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ Общая ошибка: ${error.message}`);
+            }
+        }
+        
+        // Автоматический тест
+        window.addEventListener('load', () => {
+            log('🚀 Страница загружена');
+            setTimeout(testFetchSDK, 1000);
+        });
+        
+        // Экспортируем функцию для кнопки
+        window.testFetchSDK = testFetchSDK;
+    </script>
+</body>
+</html>

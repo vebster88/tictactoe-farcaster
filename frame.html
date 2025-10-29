@@ -110,8 +110,8 @@
         console.log('🚀 Script started loading...');
         
         try {
-            console.log('📦 Attempting to import SDK...');
-            const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
+            console.log('📦 Attempting to import SDK locally...');
+            const { sdk } = await import('https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk@latest/dist/index.js');
             console.log('✅ SDK imported successfully:', sdk);
             
             // Инициализация Farcaster Mini App SDK согласно документации
