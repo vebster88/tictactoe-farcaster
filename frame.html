@@ -147,13 +147,6 @@
                 name: importError.name
             });
         }
-        
-        // Инициализируем SDK после загрузки страницы
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeFarcasterSDK);
-        } else {
-            initializeFarcasterSDK();
-        }
     </script>
 </body>
 </html>
