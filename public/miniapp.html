@@ -7,8 +7,7 @@
     <meta name="description" content="A simple TicTacToe game for Farcaster">
     <link rel="icon" href="/tictactoe-icon-1024.png">
     
-    <!-- Farcaster Mini App SDK -->
-    <script type="module" src="https://esm.sh/@farcaster/miniapp-sdk"></script>
+    <!-- Farcaster Mini App SDK will be loaded dynamically -->
     
     <style>
         * {
@@ -202,38 +201,11 @@
             try {
                 console.log('🚀 Initializing Farcaster Mini App...');
                 
-                // Wait for SDK to be available
-                let sdk;
-                let attempts = 0;
-                const maxAttempts = 10;
+                // Import SDK using the correct syntax
+                const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
+                console.log('✅ SDK imported successfully');
                 
-                while (attempts < maxAttempts) {
-                    if (window.farcaster && window.farcaster.sdk) {
-                        sdk = window.farcaster.sdk;
-                        console.log('✅ SDK found globally');
-                        break;
-                    }
-                    
-                    // Try dynamic import as fallback
-                    try {
-                        const module = await import('https://esm.sh/@farcaster/miniapp-sdk');
-                        sdk = module.sdk;
-                        console.log('✅ SDK imported dynamically');
-                        break;
-                    } catch (importError) {
-                        console.log(`⏳ Attempt ${attempts + 1}/${maxAttempts}: SDK not ready yet...`);
-                    }
-                    
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    attempts++;
-                }
-                
-                if (!sdk) {
-                    console.log('❌ SDK not available, running in browser mode');
-                    return;
-                }
-                
-                // Initialize the app
+                // Wait for your app to be ready, then call
                 await sdk.actions.ready();
                 console.log('✅ Mini App ready!');
                 
