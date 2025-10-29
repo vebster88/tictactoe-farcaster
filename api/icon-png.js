@@ -2,212 +2,350 @@
 
 export default async function handler(req, res) {
   try {
-    const { size = '1024' } = req.query;
+    const { size = '512' } = req.query;
     const iconSize = parseInt(size);
     
-    // Поддерживаемые размеры для PNG
-    const supportedSizes = [64, 128, 256, 512, 1024];
-    const finalSize = supportedSizes.includes(iconSize) ? iconSize : 1024;
+    // Поддерживаемые размеры
+    const supportedSizes = [16, 32, 48, 64, 96, 128, 192, 256, 512, 1024];
+    const finalSize = supportedSizes.includes(iconSize) ? iconSize : 512;
     
-    // Генерируем HTML с SVG для конвертации в PNG
-    const html = generateIconHTML(finalSize);
+    // Генерируем PNG через HTML Canvas
+    const pngDataUrl = await generatePNGIcon(finalSize);
     
-    res.setHeader('Content-Type', 'text/html');
-    return res.status(200).send(html);
+    // Извлекаем base64 данные
+    const base64Data = pngDataUrl.split(',')[1];
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 часа
+    res.setHeader('Content-Disposition', `inline; filename="tictactoe-icon-${finalSize}.png"`);
+    
+    return res.status(200).send(buffer);
     
   } catch (error) {
     console.error('PNG Icon generation error:', error);
-    return res.status(500).json({ error: 'Failed to generate PNG icon' });
+    
+    // Fallback - возвращаем HTML страницу для генерации PNG
+    const fallbackHTML = generateFallbackPNG(req.query.size || '512');
+    
+    res.setHeader('Content-Type', 'text/html');
+    return res.status(200).send(fallbackHTML);
   }
 }
 
-function generateIconHTML(size) {
-  const scale = size / 1024;
+async function generatePNGIcon(size) {
+  // Используем jsdom для server-side canvas
+  const { JSDOM } = await import('jsdom');
+  const dom = new JSDOM(`
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <canvas id="canvas" width="${size}" height="${size}"></canvas>
+        <script>
+          ${generateIconScript()}
+        </script>
+      </body>
+    </html>
+  `);
+  
+  const canvas = dom.window.document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Генерируем иконку
+  drawIcon(ctx, size);
+  
+  return canvas.toDataURL('image/png');
+}
+
+function generateIconScript() {
+  return `
+    function drawIcon(ctx, size) {
+      const scale = size / 1024;
+      
+      // Создаем градиенты
+      const bgGradient = ctx.createLinearGradient(0, 0, size, size);
+      bgGradient.addColorStop(0, '#6200EA');
+      bgGradient.addColorStop(0.25, '#7c3aed');
+      bgGradient.addColorStop(0.5, '#8b5cf6');
+      bgGradient.addColorStop(0.75, '#6366f1');
+      bgGradient.addColorStop(1, '#1a1a2e');
+      
+      const xGradient = ctx.createLinearGradient(0, 0, size, size);
+      xGradient.addColorStop(0, '#ff6b6b');
+      xGradient.addColorStop(0.5, '#ff5252');
+      xGradient.addColorStop(1, '#e94560');
+      
+      const oGradient = ctx.createLinearGradient(0, 0, size, size);
+      oGradient.addColorStop(0, '#4ecdc4');
+      oGradient.addColorStop(0.5, '#26d0ce');
+      oGradient.addColorStop(1, '#45b7b8');
+      
+      // Рисуем фон с закругленными углами
+      ctx.fillStyle = bgGradient;
+      roundRect(ctx, 0, 0, size, size, 180 * scale);
+      ctx.fill();
+      
+      // Рисуем рамку
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 4 * scale;
+      roundRect(ctx, 40 * scale, 40 * scale, 944 * scale, 944 * scale, 140 * scale);
+      ctx.stroke();
+      
+      // Рисуем сетку
+      const gridOffset = 212 * scale;
+      ctx.save();
+      ctx.translate(gridOffset, gridOffset);
+      
+      // Линии сетки
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.lineWidth = 16 * scale;
+      ctx.lineCap = 'round';
+      
+      // Вертикальные линии
+      ctx.beginPath();
+      ctx.moveTo(200 * scale, 40 * scale);
+      ctx.lineTo(200 * scale, 560 * scale);
+      ctx.moveTo(400 * scale, 40 * scale);
+      ctx.lineTo(400 * scale, 560 * scale);
+      ctx.stroke();
+      
+      // Горизонтальные линии
+      ctx.beginPath();
+      ctx.moveTo(40 * scale, 200 * scale);
+      ctx.lineTo(560 * scale, 200 * scale);
+      ctx.moveTo(40 * scale, 400 * scale);
+      ctx.lineTo(560 * scale, 400 * scale);
+      ctx.stroke();
+      
+      // Рисуем символы
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = \`900 \${120 * scale}px Arial\`;
+      
+      // X символы
+      ctx.fillStyle = xGradient;
+      ctx.fillText('X', 120 * scale, 120 * scale);
+      ctx.fillText('X', 300 * scale, 300 * scale);
+      ctx.fillText('X', 500 * scale, 480 * scale);
+      
+      // O символы
+      ctx.font = \`900 \${100 * scale}px Arial\`;
+      ctx.fillStyle = oGradient;
+      ctx.fillText('O', 500 * scale, 120 * scale);
+      ctx.fillText('O', 120 * scale, 480 * scale);
+      
+      // Выигрышная линия
+      ctx.strokeStyle = xGradient;
+      ctx.lineWidth = 12 * scale;
+      ctx.beginPath();
+      ctx.moveTo(70 * scale, 70 * scale);
+      ctx.lineTo(530 * scale, 530 * scale);
+      ctx.stroke();
+      
+      ctx.restore();
+      
+      // Подпись
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.font = \`bold \${32 * scale}px Arial\`;
+      ctx.textAlign = 'center';
+      ctx.fillText('TicTacToe', size / 2, 960 * scale);
+    }
+    
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+    
+    // Запускаем генерацию
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const size = parseInt('${size}');
+    drawIcon(ctx, size);
+  `;
+}
+
+function generateFallbackPNG(size) {
+  const iconSize = parseInt(size) || 512;
   
   return `
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>TicTacToe Icon PNG Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TicTacToe Icon PNG ${iconSize}x${iconSize}</title>
     <style>
-        body { margin: 0; padding: 20px; background: #f0f0f0; font-family: Arial, sans-serif; }
-        .container { max-width: 800px; margin: 0 auto; text-align: center; }
-        #iconSvg { border: 1px solid #ddd; border-radius: 8px; }
-        .download-btn { 
-            background: #6200EA; color: white; border: none; 
-            padding: 15px 30px; font-size: 16px; border-radius: 8px; 
-            cursor: pointer; margin: 20px 10px; 
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #6200EA, #1a1a2e);
+            color: white;
+            text-align: center;
+            min-height: 100vh;
         }
-        .download-btn:hover { background: #5000C7; }
-        .info { background: #fff; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+        #iconCanvas {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            max-width: 100%;
+            height: auto;
+        }
+        .download-btn {
+            background: linear-gradient(135deg, #ff6b6b, #e94560);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            margin: 20px;
+            transition: all 0.3s ease;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(233, 69, 96, 0.4);
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎨 TicTacToe PNG Icon Generator</h1>
-        
-        <div class="info">
-            <h3>Размер: ${size}x${size} пикселей</h3>
-            <p>Нажмите кнопку ниже, чтобы скачать PNG версию иконки</p>
-        </div>
-        
-        <svg id="iconSvg" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:#6200EA;stop-opacity:1" />
-                    <stop offset="25%" style="stop-color:#7c3aed;stop-opacity:1" />
-                    <stop offset="50%" style="stop-color:#8b5cf6;stop-opacity:1" />
-                    <stop offset="75%" style="stop-color:#6366f1;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#1a1a2e;stop-opacity:1" />
-                </linearGradient>
-                
-                <radialGradient id="bgRadial" cx="30%" cy="30%" r="80%">
-                    <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.8" />
-                    <stop offset="50%" style="stop-color:#6200EA;stop-opacity:0.9" />
-                    <stop offset="100%" style="stop-color:#1a1a2e;stop-opacity:1" />
-                </radialGradient>
-                
-                <linearGradient id="xGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
-                    <stop offset="50%" style="stop-color:#ff5252;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#e94560;stop-opacity:1" />
-                </linearGradient>
-                
-                <linearGradient id="oGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:#4ecdc4;stop-opacity:1" />
-                    <stop offset="50%" style="stop-color:#26d0ce;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#45b7b8;stop-opacity:1" />
-                </linearGradient>
-                
-                <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feDropShadow dx="0" dy="${16 * scale}" stdDeviation="${24 * scale}" flood-color="#000000" flood-opacity="0.4"/>
-                </filter>
-                
-                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="${4 * scale}" result="coloredBlur"/>
-                    <feMerge> 
-                        <feMergeNode in="coloredBlur"/>
-                        <feMergeNode in="SourceGraphic"/>
-                    </feMerge>
-                </filter>
-                
-                <pattern id="texture" patternUnits="userSpaceOnUse" width="${4 * scale}" height="${4 * scale}">
-                    <rect width="${4 * scale}" height="${4 * scale}" fill="#ffffff" opacity="0.02"/>
-                    <circle cx="${2 * scale}" cy="${2 * scale}" r="${0.5 * scale}" fill="#ffffff" opacity="0.05"/>
-                </pattern>
-            </defs>
-            
-            <!-- Основной фон -->
-            <rect x="0" y="0" width="${size}" height="${size}" rx="${180 * scale}" ry="${180 * scale}" fill="url(#bgGradient)" filter="url(#shadow)"/>
-            <rect x="0" y="0" width="${size}" height="${size}" rx="${180 * scale}" ry="${180 * scale}" fill="url(#bgRadial)" opacity="0.7"/>
-            <rect x="0" y="0" width="${size}" height="${size}" rx="${180 * scale}" ry="${180 * scale}" fill="url(#texture)"/>
-            
-            <!-- Рамки -->
-            <rect x="${40 * scale}" y="${40 * scale}" width="${944 * scale}" height="${944 * scale}" rx="${140 * scale}" ry="${140 * scale}" fill="none" stroke="#ffffff" stroke-width="${4 * scale}" opacity="0.4"/>
-            
-            <!-- Игровая сетка -->
-            <g transform="translate(${212 * scale}, ${212 * scale})">
-                <!-- Свечение линий -->
-                <line x1="${200 * scale}" y1="${40 * scale}" x2="${200 * scale}" y2="${560 * scale}" stroke="#ffffff" stroke-width="${20 * scale}" stroke-linecap="round" opacity="0.3"/>
-                <line x1="${400 * scale}" y1="${40 * scale}" x2="${400 * scale}" y2="${560 * scale}" stroke="#ffffff" stroke-width="${20 * scale}" stroke-linecap="round" opacity="0.3"/>
-                <line x1="${40 * scale}" y1="${200 * scale}" x2="${560 * scale}" y2="${200 * scale}" stroke="#ffffff" stroke-width="${20 * scale}" stroke-linecap="round" opacity="0.3"/>
-                <line x1="${40 * scale}" y1="${400 * scale}" x2="${560 * scale}" y2="${400 * scale}" stroke="#ffffff" stroke-width="${20 * scale}" stroke-linecap="round" opacity="0.3"/>
-                
-                <!-- Основные линии -->
-                <line x1="${200 * scale}" y1="${40 * scale}" x2="${200 * scale}" y2="${560 * scale}" stroke="#ffffff" stroke-width="${16 * scale}" stroke-linecap="round" opacity="0.95"/>
-                <line x1="${400 * scale}" y1="${40 * scale}" x2="${400 * scale}" y2="${560 * scale}" stroke="#ffffff" stroke-width="${16 * scale}" stroke-linecap="round" opacity="0.95"/>
-                <line x1="${40 * scale}" y1="${200 * scale}" x2="${560 * scale}" y2="${200 * scale}" stroke="#ffffff" stroke-width="${16 * scale}" stroke-linecap="round" opacity="0.95"/>
-                <line x1="${40 * scale}" y1="${400 * scale}" x2="${560 * scale}" y2="${400 * scale}" stroke="#ffffff" stroke-width="${16 * scale}" stroke-linecap="round" opacity="0.95"/>
-                
-                <!-- Символы -->
-                <text x="${120 * scale}" y="${120 * scale}" fill="url(#xGradient)" font-family="Arial" font-size="${120 * scale}" font-weight="900" text-anchor="middle" dominant-baseline="central" filter="url(#glow)">X</text>
-                <text x="${500 * scale}" y="${120 * scale}" fill="url(#oGradient)" font-family="Arial" font-size="${100 * scale}" font-weight="900" text-anchor="middle" dominant-baseline="central" filter="url(#glow)">O</text>
-                <text x="${300 * scale}" y="${300 * scale}" fill="url(#xGradient)" font-family="Arial" font-size="${120 * scale}" font-weight="900" text-anchor="middle" dominant-baseline="central" filter="url(#glow)">X</text>
-                <text x="${120 * scale}" y="${480 * scale}" fill="url(#oGradient)" font-family="Arial" font-size="${100 * scale}" font-weight="900" text-anchor="middle" dominant-baseline="central" filter="url(#glow)">O</text>
-                <text x="${500 * scale}" y="${480 * scale}" fill="url(#xGradient)" font-family="Arial" font-size="${120 * scale}" font-weight="900" text-anchor="middle" dominant-baseline="central" filter="url(#glow)">X</text>
-                
-                <!-- Выигрышная линия -->
-                <line x1="${70 * scale}" y1="${70 * scale}" x2="${530 * scale}" y2="${530 * scale}" stroke="url(#xGradient)" stroke-width="${20 * scale}" stroke-linecap="round" opacity="0.4"/>
-                <line x1="${70 * scale}" y1="${70 * scale}" x2="${530 * scale}" y2="${530 * scale}" stroke="url(#xGradient)" stroke-width="${12 * scale}" stroke-linecap="round" opacity="0.9" filter="url(#glow)"/>
-            </g>
-            
-            <!-- Декоративные элементы -->
-            <ellipse cx="${360 * scale}" cy="${240 * scale}" rx="${80 * scale}" ry="${40 * scale}" fill="#ffffff" opacity="0.25" transform="rotate(-30 ${360 * scale} ${240 * scale})"/>
-            <ellipse cx="${700 * scale}" cy="${400 * scale}" rx="${50 * scale}" ry="${25 * scale}" fill="#ffffff" opacity="0.2" transform="rotate(45 ${700 * scale} ${400 * scale})"/>
-            
-            <!-- Подпись -->
-            <text x="${size / 2}" y="${960 * scale}" fill="#ffffff" font-family="Arial" font-size="${32 * scale}" font-weight="bold" text-anchor="middle" opacity="0.8">TicTacToe</text>
-        </svg>
-        
-        <div>
-            <button class="download-btn" onclick="downloadPNG()">📥 Скачать PNG ${size}x${size}</button>
-            <button class="download-btn" onclick="copyImageUrl()">🔗 Копировать как Data URL</button>
-        </div>
-        
-        <div class="info">
-            <p><strong>Прямая ссылка на PNG:</strong></p>
-            <code>https://your-domain.com/api/icon-png?size=${size}</code>
-        </div>
+        <h1>🎨 TicTacToe Icon PNG ${iconSize}×${iconSize}</h1>
+        <canvas id="iconCanvas" width="${iconSize}" height="${iconSize}" style="width: 300px; height: 300px;"></canvas>
+        <br>
+        <button class="download-btn" onclick="downloadPNG()">📥 Скачать PNG ${iconSize}×${iconSize}</button>
     </div>
     
     <script>
-        function downloadPNG() {
-            const svg = document.getElementById('iconSvg');
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+        const canvas = document.getElementById('iconCanvas');
+        const ctx = canvas.getContext('2d');
+        const size = ${iconSize};
+        
+        // Генерируем иконку
+        generateIcon();
+        
+        function generateIcon() {
+            const scale = size / 1024;
             
-            canvas.width = ${size};
-            canvas.height = ${size};
+            // Градиенты
+            const bgGradient = ctx.createLinearGradient(0, 0, size, size);
+            bgGradient.addColorStop(0, '#6200EA');
+            bgGradient.addColorStop(0.25, '#7c3aed');
+            bgGradient.addColorStop(0.5, '#8b5cf6');
+            bgGradient.addColorStop(0.75, '#6366f1');
+            bgGradient.addColorStop(1, '#1a1a2e');
             
-            const data = new XMLSerializer().serializeToString(svg);
-            const img = new Image();
+            const xGradient = ctx.createLinearGradient(0, 0, size, size);
+            xGradient.addColorStop(0, '#ff6b6b');
+            xGradient.addColorStop(0.5, '#ff5252');
+            xGradient.addColorStop(1, '#e94560');
             
-            img.onload = function() {
-                ctx.drawImage(img, 0, 0);
-                
-                canvas.toBlob(function(blob) {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'tictactoe-icon-${size}x${size}.png';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 'image/png');
-            };
+            const oGradient = ctx.createLinearGradient(0, 0, size, size);
+            oGradient.addColorStop(0, '#4ecdc4');
+            oGradient.addColorStop(0.5, '#26d0ce');
+            oGradient.addColorStop(1, '#45b7b8');
             
-            const svgBlob = new Blob([data], {type: 'image/svg+xml;charset=utf-8'});
-            const url = URL.createObjectURL(svgBlob);
-            img.src = url;
+            // Фон
+            ctx.fillStyle = bgGradient;
+            roundRect(ctx, 0, 0, size, size, 180 * scale);
+            ctx.fill();
+            
+            // Рамка
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 4 * scale;
+            roundRect(ctx, 40 * scale, 40 * scale, 944 * scale, 944 * scale, 140 * scale);
+            ctx.stroke();
+            
+            // Сетка
+            ctx.save();
+            ctx.translate(212 * scale, 212 * scale);
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineWidth = 16 * scale;
+            ctx.lineCap = 'round';
+            
+            // Линии
+            ctx.beginPath();
+            ctx.moveTo(200 * scale, 40 * scale); ctx.lineTo(200 * scale, 560 * scale);
+            ctx.moveTo(400 * scale, 40 * scale); ctx.lineTo(400 * scale, 560 * scale);
+            ctx.moveTo(40 * scale, 200 * scale); ctx.lineTo(560 * scale, 200 * scale);
+            ctx.moveTo(40 * scale, 400 * scale); ctx.lineTo(560 * scale, 400 * scale);
+            ctx.stroke();
+            
+            // Символы
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // X
+            ctx.font = \`900 \${120 * scale}px Arial\`;
+            ctx.fillStyle = xGradient;
+            ctx.fillText('X', 120 * scale, 120 * scale);
+            ctx.fillText('X', 300 * scale, 300 * scale);
+            ctx.fillText('X', 500 * scale, 480 * scale);
+            
+            // O
+            ctx.font = \`900 \${100 * scale}px Arial\`;
+            ctx.fillStyle = oGradient;
+            ctx.fillText('O', 500 * scale, 120 * scale);
+            ctx.fillText('O', 120 * scale, 480 * scale);
+            
+            // Линия
+            ctx.strokeStyle = xGradient;
+            ctx.lineWidth = 12 * scale;
+            ctx.beginPath();
+            ctx.moveTo(70 * scale, 70 * scale);
+            ctx.lineTo(530 * scale, 530 * scale);
+            ctx.stroke();
+            
+            ctx.restore();
+            
+            // Подпись
+            if (size >= 128) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = \`bold \${32 * scale}px Arial\`;
+                ctx.textAlign = 'center';
+                ctx.fillText('TicTacToe', size / 2, 960 * scale);
+            }
         }
         
-        function copyImageUrl() {
-            const svg = document.getElementById('iconSvg');
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            canvas.width = ${size};
-            canvas.height = ${size};
-            
-            const data = new XMLSerializer().serializeToString(svg);
-            const img = new Image();
-            
-            img.onload = function() {
-                ctx.drawImage(img, 0, 0);
-                const dataUrl = canvas.toDataURL('image/png');
-                
-                navigator.clipboard.writeText(dataUrl).then(function() {
-                    alert('Data URL скопирован в буфер обмена!');
-                }).catch(function(err) {
-                    console.error('Ошибка копирования: ', err);
-                });
-            };
-            
-            const svgBlob = new Blob([data], {type: 'image/svg+xml;charset=utf-8'});
-            const url = URL.createObjectURL(svgBlob);
-            img.src = url;
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+        
+        function downloadPNG() {
+            const link = document.createElement('a');
+            link.download = \`tictactoe-icon-\${size}x\${size}.png\`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
         }
     </script>
 </body>
