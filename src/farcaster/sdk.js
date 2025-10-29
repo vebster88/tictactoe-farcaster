@@ -1,11 +1,9 @@
 // Farcaster SDK инициализация
 // Обеспечивает правильную работу с Farcaster Mini App
 
-import { sdk } from '@farcaster/miniapp-sdk';
-
 export class FarcasterSDK {
   constructor() {
-    this.sdk = sdk;
+    this.sdk = null;
     this.isReady = false;
     this.isInitialized = false;
   }
@@ -17,6 +15,10 @@ export class FarcasterSDK {
     }
 
     try {
+      // Пытаемся загрузить реальный SDK
+      const { sdk } = await import('@farcaster/miniapp-sdk');
+      this.sdk = sdk;
+      
       // После полной загрузки приложения вызываем ready()
       await this.ready();
       this.isInitialized = true;
