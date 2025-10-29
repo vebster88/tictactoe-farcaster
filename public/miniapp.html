@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TicTacToe Mini App</title>
+    <meta name="description" content="A simple TicTacToe game for Farcaster">
+    <link rel="icon" href="/tictactoe-icon-1024.png">
+    
+    <!-- Farcaster Mini App SDK -->
+    <script type="module" src="https://esm.sh/@farcaster/miniapp-sdk"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 20px;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .cell {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 10px;
+            font-size: 2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .cell:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .cell:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        .status {
+            font-size: 1.2em;
+            margin: 20px 0;
+            min-height: 30px;
+        }
+        
+        .reset-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        
+        .reset-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 TicTacToe</h1>
+        <div class="status" id="status">Your turn!</div>
+        
+        <div class="game-board" id="gameBoard">
+            <button class="cell" data-index="0"></button>
+            <button class="cell" data-index="1"></button>
+            <button class="cell" data-index="2"></button>
+            <button class="cell" data-index="3"></button>
+            <button class="cell" data-index="4"></button>
+            <button class="cell" data-index="5"></button>
+            <button class="cell" data-index="6"></button>
+            <button class="cell" data-index="7"></button>
+            <button class="cell" data-index="8"></button>
+        </div>
+        
+        <button class="reset-btn" id="resetBtn">New Game</button>
+    </div>
+
+    <script>
+        // Game state
+        let board = ['', '', '', '', '', '', '', '', ''];
+        let currentPlayer = 'X';
+        let gameActive = true;
+        
+        // DOM elements
+        const cells = document.querySelectorAll('.cell');
+        const status = document.getElementById('status');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        // Winning combinations
+        const winningCombinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+            [0, 4, 8], [2, 4, 6] // diagonals
+        ];
+        
+        // Game functions
+        function makeMove(index) {
+            if (board[index] !== '' || !gameActive) return;
+            
+            board[index] = currentPlayer;
+            cells[index].textContent = currentPlayer;
+            
+            if (checkWinner()) {
+                status.textContent = `Player ${currentPlayer} wins! 🎉`;
+                gameActive = false;
+                return;
+            }
+            
+            if (board.every(cell => cell !== '')) {
+                status.textContent = "It's a draw! 🤝";
+                gameActive = false;
+                return;
+            }
+            
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            status.textContent = `Player ${currentPlayer}'s turn`;
+        }
+        
+        function checkWinner() {
+            return winningCombinations.some(combination => {
+                const [a, b, c] = combination;
+                return board[a] && board[a] === board[b] && board[a] === board[c];
+            });
+        }
+        
+        function resetGame() {
+            board = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'X';
+            gameActive = true;
+            status.textContent = "Your turn!";
+            
+            cells.forEach(cell => {
+                cell.textContent = '';
+            });
+        }
+        
+        // Event listeners
+        cells.forEach(cell => {
+            cell.addEventListener('click', () => {
+                const index = parseInt(cell.dataset.index);
+                makeMove(index);
+            });
+        });
+        
+        resetBtn.addEventListener('click', resetGame);
+        
+        // Farcaster Mini App SDK initialization
+        async function initializeMiniApp() {
+            try {
+                console.log('🚀 Initializing Farcaster Mini App...');
+                
+                // Wait for SDK to be available
+                let sdk;
+                let attempts = 0;
+                const maxAttempts = 10;
+                
+                while (attempts < maxAttempts) {
+                    if (window.farcaster && window.farcaster.sdk) {
+                        sdk = window.farcaster.sdk;
+                        console.log('✅ SDK found globally');
+                        break;
+                    }
+                    
+                    // Try dynamic import as fallback
+                    try {
+                        const module = await import('https://esm.sh/@farcaster/miniapp-sdk');
+                        sdk = module.sdk;
+                        console.log('✅ SDK imported dynamically');
+                        break;
+                    } catch (importError) {
+                        console.log(`⏳ Attempt ${attempts + 1}/${maxAttempts}: SDK not ready yet...`);
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    attempts++;
+                }
+                
+                if (!sdk) {
+                    console.log('❌ SDK not available, running in browser mode');
+                    return;
+                }
+                
+                // Initialize the app
+                await sdk.actions.ready();
+                console.log('✅ Mini App ready!');
+                
+                // Get user info if available
+                try {
+                    const user = await sdk.user();
+                    console.log('👤 User:', user);
+                    if (user) {
+                        status.textContent = `Welcome, ${user.displayName || user.username || 'Player'}!`;
+                    }
+                } catch (userError) {
+                    console.log('ℹ️ User info not available:', userError);
+                }
+                
+            } catch (error) {
+                console.error('❌ Mini App initialization failed:', error);
+                status.textContent = 'Welcome to TicTacToe!';
+            }
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            setTimeout(initializeMiniApp, 1000);
+        });
+    </script>
+</body>
+</html>

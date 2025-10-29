@@ -1,0 +1,15 @@
+{
+  "name": "TicTacToe Farcaster",
+  "description": "A simple TicTacToe game for Farcaster",
+  "version": "1.0.0",
+  "author": "vebster88",
+  "homepage": "https://tiktaktoe-farcaster-dun.vercel.app",
+  "icon": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
+  "splash": "https://tiktaktoe-farcaster-dun.vercel.app/splash-screen.svg",
+  "permissions": [],
+  "categories": ["games", "entertainment"],
+  "tags": ["tictactoe", "game", "multiplayer"],
+  "screenshots": [
+    "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png"
+  ]
+}
