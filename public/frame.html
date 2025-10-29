@@ -3,10 +3,8 @@
 <body>
     <h1>TicTacToe</h1>
     <script type="module">
-        import { sdk } from '@farcaster/miniapp-sdk';
-        
-        // After app is ready to display
-        await sdk.actions.ready();
+        import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
+        sdk.actions.ready();
     </script>
 </body>
 </html>
