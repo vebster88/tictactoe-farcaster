@@ -1,15 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TicTacToe Farcaster Frame</title>
-    <meta property="fc:frame" content="vNext">
-    <meta property="fc:frame:image" content="https://tiktaktoe-farcaster-dun.vercel.app/api/frame/image">
-    <meta property="fc:frame:button:1" content="Новая игра">
-    <meta property="fc:frame:button:2" content="Правила">
-    <meta property="fc:frame:post_url" content="https://tiktaktoe-farcaster-dun.vercel.app/api/frame/action">
-    
+    <title>Simple Farcaster Frame Test</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -47,15 +41,15 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎮 TicTacToe Farcaster</h1>
-        <p>Простая игра в крестики-нолики</p>
-        <div class="status" id="status">Загрузка...</div>
+        <h1>🎮 Simple Frame Test</h1>
+        <p>Testing Farcaster SDK integration</p>
+        <div class="status" id="status">Loading...</div>
     </div>
 
     <script type="module">
         import { sdk } from '@farcaster/miniapp-sdk';
         
-        console.log('🚀 Frame started');
+        console.log('🚀 Simple frame started');
         
         async function init() {
             try {
@@ -63,12 +57,12 @@
                 await sdk.actions.ready();
                 console.log('✅ sdk.actions.ready() completed');
                 
-                document.getElementById('status').textContent = '✅ Готово!';
+                document.getElementById('status').textContent = '✅ SDK Ready!';
                 document.getElementById('status').style.background = 'rgba(0, 255, 0, 0.2)';
                 
             } catch (error) {
                 console.error('❌ Error:', error);
-                document.getElementById('status').textContent = '❌ Ошибка: ' + error.message;
+                document.getElementById('status').textContent = '❌ Error: ' + error.message;
                 document.getElementById('status').style.background = 'rgba(255, 0, 0, 0.2)';
             }
         }
