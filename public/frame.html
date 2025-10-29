@@ -6,20 +6,26 @@
 <body>
     <h1>TicTacToe</h1>
     <script>
-        // Ждем загрузки SDK
+        // Ждем загрузки SDK с задержкой
         window.addEventListener('load', () => {
-            if (window.farcaster && window.farcaster.sdk) {
-                console.log('✅ SDK found, calling ready()');
-                window.farcaster.sdk.actions.ready();
-            } else {
-                console.log('❌ SDK not found, trying import...');
-                import('https://esm.sh/@farcaster/miniapp-sdk').then(module => {
-                    console.log('✅ SDK imported, calling ready()');
-                    module.sdk.actions.ready();
-                }).catch(error => {
-                    console.log('❌ Import failed:', error);
-                });
-            }
+            console.log('🚀 Page loaded, waiting 2 seconds...');
+            
+            setTimeout(() => {
+                console.log('⏰ Timeout reached, checking SDK...');
+                
+                if (window.farcaster && window.farcaster.sdk) {
+                    console.log('✅ SDK found, calling ready()');
+                    window.farcaster.sdk.actions.ready();
+                } else {
+                    console.log('❌ SDK not found, trying import...');
+                    import('https://esm.sh/@farcaster/miniapp-sdk').then(module => {
+                        console.log('✅ SDK imported, calling ready()');
+                        module.sdk.actions.ready();
+                    }).catch(error => {
+                        console.log('❌ Import failed:', error);
+                    });
+                }
+            }, 2000); // 2 секунды задержки
         });
     </script>
 </body>
