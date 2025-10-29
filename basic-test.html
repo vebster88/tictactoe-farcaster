@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+            text-align: center;
+        }
+        .log {
+            background: #0a0a0f;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Basic JavaScript Test</h1>
+    
+    <div class="log" id="log">
+        <div>🚀 Тест начат...</div>
+    </div>
+    
+    <button onclick="testBasic()" style="background: #4ecdc4; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-size: 16px;">
+        Тест JavaScript
+    </button>
+    
+    <button onclick="testConsole()" style="background: #42a5f5; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-size: 16px; margin-left: 10px;">
+        Тест Console
+    </button>
+    
+    <script>
+        console.log('🚀 Script loaded!');
+        
+        const logEl = document.getElementById('log');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(message);
+        }
+        
+        function testBasic() {
+            log('🧪 Тест JavaScript...');
+            log('✅ JavaScript работает!');
+        }
+        
+        function testConsole() {
+            log('🧪 Тест Console...');
+            console.log('✅ Console работает!');
+            log('✅ Console работает!');
+        }
+        
+        // Автоматический тест
+        window.addEventListener('load', () => {
+            log('🚀 Страница загружена');
+            console.log('🚀 Page loaded');
+        });
+        
+        // Тест при загрузке скрипта
+        log('🚀 Скрипт выполнен');
+        console.log('🚀 Script executed');
+    </script>
+</body>
+</html>
