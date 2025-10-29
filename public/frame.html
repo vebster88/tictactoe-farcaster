@@ -59,16 +59,28 @@
             try {
                 console.log('🎮 Initializing Farcaster SDK...');
                 
-                // Проверяем, есть ли глобальный SDK
+                // Ждем загрузки глобального SDK
                 let sdk;
-                if (window.farcaster && window.farcaster.sdk) {
-                    sdk = window.farcaster.sdk;
-                    console.log('✅ Global Farcaster SDK found');
-                } else {
+                let attempts = 0;
+                const maxAttempts = 10;
+                
+                while (attempts < maxAttempts) {
+                    if (window.farcaster && window.farcaster.sdk) {
+                        sdk = window.farcaster.sdk;
+                        console.log('✅ Global Farcaster SDK found');
+                        break;
+                    }
+                    
+                    console.log(`⏳ Waiting for SDK... attempt ${attempts + 1}/${maxAttempts}`);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (!sdk) {
                     console.log('⚠️ Global SDK not available, using mock SDK');
                     sdk = {
                         actions: {
-                            ready: async () => {
+                            ready: () => {
                                 console.log('✅ Mock sdk.actions.ready() called');
                                 return Promise.resolve();
                             }
@@ -77,8 +89,9 @@
                 }
                 
                 console.log('🎮 Calling sdk.actions.ready()...');
-                await sdk.actions.ready();
-                console.log('✅ sdk.actions.ready() completed');
+                // Вызываем ready() без await - как в официальном гайде
+                sdk.actions.ready();
+                console.log('✅ sdk.actions.ready() called');
                 
                 document.getElementById('status').textContent = '✅ Готово!';
                 document.getElementById('status').style.background = 'rgba(0, 255, 0, 0.2)';
