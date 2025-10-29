@@ -15,9 +15,14 @@ export class FarcasterSDK {
     }
 
     try {
-      // Пытаемся загрузить реальный SDK из CDN
-      const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
-      this.sdk = sdk;
+      // Проверяем, есть ли глобальный SDK от Farcaster
+      if (window.farcaster && window.farcaster.sdk) {
+        this.sdk = window.farcaster.sdk;
+        console.log('✅ Global Farcaster SDK found');
+      } else {
+        console.log('ℹ️ Global SDK not available, using mock SDK');
+        this.sdk = this.createMockSDK();
+      }
       
       // После полной загрузки приложения вызываем ready()
       await this.ready();

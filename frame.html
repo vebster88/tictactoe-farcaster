@@ -106,7 +106,7 @@
     </p>
     
     <!-- Farcaster Mini App SDK -->
-    <script type="module">
+    <script>
         console.log('🚀 Script started loading...');
         
         // Инициализация Farcaster Mini App SDK
@@ -114,14 +114,13 @@
             try {
                 console.log('🎮 Initializing Farcaster Mini App SDK...');
                 
-                // Пытаемся загрузить реальный SDK
+                // Проверяем, есть ли глобальный SDK от Farcaster
                 let sdk;
-                try {
-                    const { sdk: realSDK } = await import('https://esm.sh/@farcaster/miniapp-sdk');
-                    sdk = realSDK;
-                    console.log('✅ Real Farcaster SDK loaded');
-                } catch (importError) {
-                    console.log('⚠️ Real SDK not available, using mock SDK');
+                if (window.farcaster && window.farcaster.sdk) {
+                    sdk = window.farcaster.sdk;
+                    console.log('✅ Global Farcaster SDK found');
+                } else {
+                    console.log('⚠️ Global SDK not available, using mock SDK');
                     // Fallback на mock SDK
                     sdk = {
                         actions: {
