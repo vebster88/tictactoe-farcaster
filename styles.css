@@ -57,7 +57,7 @@ body::before {
 }
 
 /* Буква "Б" на заднем фоне */
-body::after {
+html::after {
   content: "Б";
   position: fixed;
   top: 50%;
@@ -73,7 +73,7 @@ body::after {
   text-shadow: 0 0 50px rgba(255, 255, 255, 0.2);
 }
 
-[data-theme="light"] body::after {
+[data-theme="light"] html::after {
   color: rgba(0, 0, 0, 0.08);
   text-shadow: 0 0 50px rgba(0, 0, 0, 0.1);
 }
