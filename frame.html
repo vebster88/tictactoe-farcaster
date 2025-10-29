@@ -107,22 +107,45 @@
     
     <!-- Farcaster Mini App SDK -->
     <script type="module">
-        import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
+        console.log('🚀 Script started loading...');
         
-        // Инициализация Farcaster Mini App SDK согласно документации
-        async function initializeFarcasterSDK() {
-            try {
-                console.log('🎮 Initializing Farcaster Mini App SDK...');
-                
-                // После полной загрузки приложения вызываем ready()
-                await sdk.actions.ready();
-                console.log('✅ sdk.actions.ready() called successfully');
-                
-                console.log('✅ Farcaster Mini App SDK initialized successfully');
-            } catch (error) {
-                console.error('❌ Farcaster Mini App SDK initialization failed:', error);
-                console.log('🌐 Not in Farcaster environment, running in browser');
+        try {
+            console.log('📦 Attempting to import SDK...');
+            const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
+            console.log('✅ SDK imported successfully:', sdk);
+            
+            // Инициализация Farcaster Mini App SDK согласно документации
+            async function initializeFarcasterSDK() {
+                try {
+                    console.log('🎮 Initializing Farcaster Mini App SDK...');
+                    console.log('🔍 SDK object:', sdk);
+                    console.log('🔍 SDK.actions:', sdk.actions);
+                    
+                    // После полной загрузки приложения вызываем ready()
+                    await sdk.actions.ready();
+                    console.log('✅ sdk.actions.ready() called successfully');
+                    
+                    console.log('✅ Farcaster Mini App SDK initialized successfully');
+                } catch (error) {
+                    console.error('❌ Farcaster Mini App SDK initialization failed:', error);
+                    console.log('🌐 Not in Farcaster environment, running in browser');
+                }
             }
+            
+            // Инициализируем SDK после загрузки страницы
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeFarcasterSDK);
+            } else {
+                initializeFarcasterSDK();
+            }
+            
+        } catch (importError) {
+            console.error('❌ Failed to import SDK:', importError);
+            console.log('🔍 Import error details:', {
+                message: importError.message,
+                stack: importError.stack,
+                name: importError.name
+            });
         }
         
         // Инициализируем SDK после загрузки страницы
