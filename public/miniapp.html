@@ -197,6 +197,8 @@
         resetBtn.addEventListener('click', resetGame);
         
         // Farcaster Mini App SDK initialization
+        let user = null;
+        
         async function initializeMiniApp() {
             try {
                 console.log('🚀 Initializing Farcaster Mini App...');
@@ -205,23 +207,34 @@
                 const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
                 console.log('✅ SDK imported successfully');
                 
-                // Wait for your app to be ready, then call
-                await sdk.actions.ready();
-                console.log('✅ Mini App ready!');
-                
-                // Get user info if available
+                // Get user info first (like in the React example)
                 try {
-                    const user = await sdk.user();
-                    console.log('👤 User:', user);
-                    if (user) {
-                        status.textContent = `Welcome, ${user.displayName || user.username || 'Player'}!`;
+                    const res = await sdk.quickAuth.fetch('https://tiktaktoe-farcaster-dun.vercel.app/api/user');
+                    if (res.ok) {
+                        user = await res.json();
+                        console.log('👤 User:', user);
+                        status.textContent = `Welcome, ${user.displayName || user.username || `User ${user.fid}`}!`;
+                    } else {
+                        // Fallback to direct user call
+                        user = await sdk.user();
+                        console.log('👤 User (fallback):', user);
+                        status.textContent = `Welcome, ${user?.displayName || user?.username || 'Player'}!`;
                     }
                 } catch (userError) {
                     console.log('ℹ️ User info not available:', userError);
+                    // Create a mock user for demo
+                    user = { fid: 12345, displayName: 'Demo Player' };
+                    status.textContent = 'Welcome to TicTacToe!';
                 }
+                
+                // Call ready() WITHOUT await (as in the React example)
+                sdk.actions.ready();
+                console.log('✅ Mini App ready!');
                 
             } catch (error) {
                 console.error('❌ Mini App initialization failed:', error);
+                // Create a mock user for demo
+                user = { fid: 12345, displayName: 'Demo Player' };
                 status.textContent = 'Welcome to TicTacToe!';
             }
         }
