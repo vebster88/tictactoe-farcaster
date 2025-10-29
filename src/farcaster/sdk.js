@@ -15,8 +15,8 @@ export class FarcasterSDK {
     }
 
     try {
-      // Пытаемся загрузить реальный SDK
-      const { sdk } = await import('@farcaster/miniapp-sdk');
+      // Пытаемся загрузить реальный SDK из CDN
+      const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
       this.sdk = sdk;
       
       // После полной загрузки приложения вызываем ready()

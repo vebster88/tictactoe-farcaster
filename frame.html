@@ -106,43 +106,69 @@
     </p>
     
     <!-- Farcaster Mini App SDK -->
-    <script>
+    <script type="module">
         console.log('🚀 Script started loading...');
-        
-        // Создаем mock SDK для тестирования
-        const mockSDK = {
-            actions: {
-                ready: async () => {
-                    console.log('✅ sdk.actions.ready() called successfully');
-                    return Promise.resolve();
-                }
-            },
-            user: async () => {
-                console.log('👤 sdk.user() called');
-                return { 
-                    fid: 12345, 
-                    username: 'testuser',
-                    displayName: 'Test User'
-                };
-            },
-            context: async () => {
-                console.log('📱 sdk.context() called');
-                return { 
-                    cast: { 
-                        hash: '0x1234567890abcdef',
-                        author: { fid: 12345, username: 'testuser' }
-                    } 
-                };
-            }
-        };
         
         // Инициализация Farcaster Mini App SDK
         async function initializeFarcasterSDK() {
             try {
                 console.log('🎮 Initializing Farcaster Mini App SDK...');
                 
-                // После полной загрузки приложения вызываем ready()
-                await mockSDK.actions.ready();
+                // Пытаемся загрузить реальный SDK
+                let sdk;
+                try {
+                    const { sdk: realSDK } = await import('https://esm.sh/@farcaster/miniapp-sdk');
+                    sdk = realSDK;
+                    console.log('✅ Real Farcaster SDK loaded');
+                } catch (importError) {
+                    console.log('⚠️ Real SDK not available, using mock SDK');
+                    // Fallback на mock SDK
+                    sdk = {
+                        actions: {
+                            ready: async () => {
+                                console.log('✅ Mock sdk.actions.ready() called successfully');
+                                return Promise.resolve();
+                            }
+                        },
+                        user: async () => {
+                            console.log('👤 Mock sdk.user() called');
+                            return { 
+                                fid: 12345, 
+                                username: 'testuser',
+                                displayName: 'Test User'
+                            };
+                        },
+                        context: async () => {
+                            console.log('📱 Mock sdk.context() called');
+                            return { 
+                                cast: { 
+                                    hash: '0x1234567890abcdef',
+                                    author: { fid: 12345, username: 'testuser' }
+                                } 
+                            };
+                        }
+                    };
+                }
+                
+                // Вызываем ready() - это критически важно для Farcaster
+                await sdk.actions.ready();
+                console.log('✅ sdk.actions.ready() called successfully');
+                
+                // Проверяем, что мы в Farcaster
+                if (sdk.user) {
+                    const user = await sdk.user();
+                    if (user) {
+                        console.log('👤 Farcaster user:', user);
+                    }
+                }
+                
+                if (sdk.context) {
+                    const context = await sdk.context();
+                    if (context) {
+                        console.log('📱 Farcaster context:', context);
+                    }
+                }
+                
                 console.log('✅ Farcaster Mini App SDK initialized successfully');
                 
             } catch (error) {
