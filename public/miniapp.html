@@ -10,6 +10,13 @@
     <!-- Preconnect to Quick Auth server for better performance -->
     <link rel="preconnect" href="https://auth.farcaster.xyz" />
     
+    <!-- Farcaster Mini App meta tags -->
+    <meta name="farcaster:miniapp" content="true" />
+    <meta name="farcaster:miniapp:name" content="TicTacToe Farcaster" />
+    <meta name="farcaster:miniapp:description" content="A simple TicTacToe game for Farcaster" />
+    <meta name="farcaster:miniapp:icon" content="https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png" />
+    <meta name="farcaster:miniapp:splash" content="https://tiktaktoe-farcaster-dun.vercel.app/splash-screen.svg" />
+    
     <!-- Farcaster Mini App SDK will be loaded dynamically -->
     
     <style>
@@ -108,11 +115,33 @@
             opacity: 0.5;
             pointer-events: none;
         }
+        
+        .user-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        
+        .farcaster-badge {
+            background: linear-gradient(45deg, #8B5CF6, #A855F7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            display: inline-block;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎮 TicTacToe</h1>
+        <h1>🎮 TicTacToe <span class="farcaster-badge">Farcaster</span></h1>
+        <div class="user-info" id="userInfo" style="display: none;">
+            <div id="userDetails"></div>
+        </div>
         <div class="status" id="status">Your turn!</div>
         
         <div class="game-board" id="gameBoard">
@@ -140,6 +169,8 @@
         const cells = document.querySelectorAll('.cell');
         const status = document.getElementById('status');
         const resetBtn = document.getElementById('resetBtn');
+        const userInfo = document.getElementById('userInfo');
+        const userDetails = document.getElementById('userDetails');
         
         // Winning combinations
         const winningCombinations = [
@@ -201,38 +232,34 @@
         
         // Farcaster Mini App SDK initialization
         let user = null;
+        let sdk = null;
         
         async function initializeMiniApp() {
             try {
                 console.log('🚀 Initializing Farcaster Mini App...');
                 
                 // Import SDK using the correct syntax
-                const { sdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
+                const { sdk: importedSdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
+                sdk = importedSdk;
                 console.log('✅ SDK imported successfully');
                 
-                // Get user info first (like in the React example)
+                // ВАЖНО: Сначала вызываем ready() БЕЗ await
+                sdk.actions.ready();
+                console.log('✅ sdk.actions.ready() called');
+                
+                // Затем получаем пользователя
                 try {
-                    const res = await sdk.quickAuth.fetch('https://tiktaktoe-farcaster-dun.vercel.app/api/user');
-                    if (res.ok) {
-                        user = await res.json();
-                        console.log('👤 User:', user);
-                        status.textContent = `Welcome, ${user.displayName || user.username || `User ${user.fid}`}!`;
-                    } else {
-                        // Fallback to direct user call
-                        user = await sdk.user();
-                        console.log('👤 User (fallback):', user);
-                        status.textContent = `Welcome, ${user?.displayName || user?.username || 'Player'}!`;
-                    }
+                    user = await sdk.user();
+                    console.log('👤 User:', user);
+                    displayUserInfo(user);
+                    status.textContent = `Welcome, ${user?.displayName || user?.username || `User ${user?.fid}`}!`;
                 } catch (userError) {
                     console.log('ℹ️ User info not available:', userError);
                     // Create a mock user for demo
-                    user = { fid: 12345, displayName: 'Demo Player' };
+                    user = { fid: 12345, displayName: 'Demo Player', username: 'demo' };
+                    displayUserInfo(user);
                     status.textContent = 'Welcome to TicTacToe!';
                 }
-                
-                // Call ready() WITHOUT await (as in the React example)
-                sdk.actions.ready();
-                console.log('✅ Mini App ready!');
                 
             } catch (error) {
                 console.error('❌ Mini App initialization failed:', error);
@@ -242,10 +269,21 @@
             }
         }
         
-        // Initialize when page loads
-        window.addEventListener('load', () => {
-            setTimeout(initializeMiniApp, 1000);
-        });
+        // Function to display user information
+        function displayUserInfo(user) {
+            if (user && user.fid) {
+                userDetails.innerHTML = `
+                    <div><strong>FID:</strong> ${user.fid}</div>
+                    <div><strong>Name:</strong> ${user.displayName || 'Unknown'}</div>
+                    <div><strong>Username:</strong> @${user.username || 'unknown'}</div>
+                    ${user.followerCount ? `<div><strong>Followers:</strong> ${user.followerCount}</div>` : ''}
+                `;
+                userInfo.style.display = 'block';
+            }
+        }
+        
+        // Initialize immediately when page loads
+        window.addEventListener('load', initializeMiniApp);
     </script>
 </body>
 </html>
