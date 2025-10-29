@@ -6,6 +6,7 @@ import { getSession, signInWithWallet, signOut } from "./farcaster/auth.js";
 import { sendInvite } from "./farcaster/matchmaking.js";
 import { listThreadReplies, publishMatchResult } from "./farcaster/client.js";
 import { createSignedKey } from "./farcaster/signer.js";
+import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 
 const root = document.body;
@@ -379,6 +380,42 @@ const devMode = localStorage.getItem("dev-mode") === "true";
 if (devToggleBtn) {
   devToggleBtn.setAttribute("aria-pressed", devMode.toString());
   devToggleBtn.title = devMode ? "Выключить режим разработчика" : "Включить режим разработчика";
+}
+
+// Инициализация Farcaster SDK
+async function initializeFarcasterSDK() {
+  try {
+    await farcasterSDK.initialize();
+    console.log('✅ Farcaster SDK initialized successfully');
+    
+    // Проверяем, что мы в Farcaster Frame
+    if (farcasterSDK.isInFarcaster()) {
+      console.log('🎮 Running in Farcaster Frame');
+      
+      // Получаем пользователя
+      const user = await farcasterSDK.getUser();
+      if (user) {
+        console.log('👤 Farcaster user:', user);
+      }
+      
+      // Получаем контекст
+      const context = await farcasterSDK.getContext();
+      if (context) {
+        console.log('📱 Farcaster context:', context);
+      }
+    } else {
+      console.log('🌐 Running in regular browser');
+    }
+  } catch (error) {
+    console.error('❌ Farcaster SDK initialization failed:', error);
+  }
+}
+
+// Инициализируем SDK после загрузки DOM
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeFarcasterSDK);
+} else {
+  initializeFarcasterSDK();
 }
 
 render();
