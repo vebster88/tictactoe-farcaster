@@ -1,11 +1,9 @@
 // Farcaster Frame SDK инициализация
 // Обеспечивает правильную работу с Farcaster Frames v2
 
-import sdk from '@farcaster/frame-sdk';
-
 export class FarcasterSDK {
   constructor() {
-    this.sdk = sdk;
+    this.sdk = null;
     this.isReady = false;
     this.isInitialized = false;
   }
@@ -17,8 +15,14 @@ export class FarcasterSDK {
     }
 
     try {
-      // Используем официальный Frame SDK
-      this.sdk = sdk;
+      // Проверяем, есть ли глобальный SDK от Farcaster
+      if (window.farcaster && window.farcaster.sdk) {
+        this.sdk = window.farcaster.sdk;
+        console.log('✅ Global Farcaster SDK found');
+      } else {
+        console.log('ℹ️ Global SDK not available, using mock SDK');
+        this.sdk = this.createMockSDK();
+      }
       
       // Получаем контекст и вызываем ready() - как в официальном примере
       const context = await this.sdk.context;
