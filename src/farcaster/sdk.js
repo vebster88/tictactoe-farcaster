@@ -24,8 +24,8 @@ export class FarcasterSDK {
         this.sdk = this.createMockSDK();
       }
       
-      // Простой вызов ready() - как в официальном гайде
-      this.sdk.actions.ready();
+      // Вызов ready() с await - как в официальном гайде
+      await this.sdk.actions.ready();
       this.isReady = true;
       this.isInitialized = true;
       console.log('✅ Farcaster SDK initialized');

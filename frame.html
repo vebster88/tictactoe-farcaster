@@ -110,7 +110,7 @@
         console.log('🚀 Script started loading...');
         
         // Максимально простой вызов ready() - как в официальном гайде
-        function initializeFarcasterSDK() {
+        async function initializeFarcasterSDK() {
             try {
                 console.log('🎮 Initializing Farcaster SDK...');
                 
@@ -134,8 +134,8 @@
                     };
                 }
                 
-                // Простой вызов ready() - как в официальном гайде
-                sdk.actions.ready();
+                // Вызов ready() с await - как в официальном гайде
+                await sdk.actions.ready();
                 console.log('✅ sdk.actions.ready() called successfully');
                 
             } catch (error) {
