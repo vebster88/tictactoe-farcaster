@@ -1,86 +1,12 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TicTacToe Farcaster Frame</title>
-    <meta property="fc:frame" content="vNext">
-    <meta property="fc:frame:image" content="https://tiktaktoe-farcaster-dun.vercel.app/api/frame/image">
-    <meta property="fc:frame:button:1" content="Новая игра">
-    <meta property="fc:frame:button:2" content="Правила">
-    <meta property="fc:frame:post_url" content="https://tiktaktoe-farcaster-dun.vercel.app/api/frame/action">
-    
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-        .container {
-            max-width: 400px;
-            padding: 40px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        h1 {
-            margin-bottom: 20px;
-            font-size: 2em;
-        }
-        .status {
-            margin-top: 20px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            font-family: monospace;
-        }
-    </style>
-</head>
+<html>
 <body>
-    <div class="container">
-        <h1>🎮 TicTacToe Farcaster</h1>
-        <p>Простая игра в крестики-нолики</p>
-        <div class="status" id="status">Загрузка...</div>
-    </div>
-
+    <h1>TicTacToe</h1>
     <script type="module">
-        import sdk from 'https://esm.sh/@farcaster/frame-sdk';
+        import { sdk } from '@farcaster/miniapp-sdk';
         
-        console.log('🚀 Frame started');
-        
-        async function init() {
-            try {
-                console.log('🎮 Initializing Farcaster SDK...');
-                
-                // Получаем контекст как в официальном примере
-                const context = await sdk.context;
-                console.log('📱 Farcaster context:', context);
-                
-                // Вызываем ready() без await - как в официальном примере
-                console.log('🎮 Calling sdk.actions.ready()...');
-                sdk.actions.ready();
-                console.log('✅ sdk.actions.ready() called');
-                
-                document.getElementById('status').textContent = '✅ Готово!';
-                document.getElementById('status').style.background = 'rgba(0, 255, 0, 0.2)';
-                
-            } catch (error) {
-                console.error('❌ Error:', error);
-                document.getElementById('status').textContent = '❌ Ошибка: ' + error.message;
-                document.getElementById('status').style.background = 'rgba(255, 0, 0, 0.2)';
-            }
-        }
-        
-        init();
+        // After app is ready to display
+        await sdk.actions.ready();
     </script>
 </body>
 </html>
