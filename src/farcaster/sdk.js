@@ -8,7 +8,7 @@ export class FarcasterSDK {
     this.isInitialized = false;
   }
 
-  // Инициализация SDK согласно официальной документации
+  // Максимально простая инициализация - как в официальном гайде
   async initialize() {
     if (this.isInitialized) {
       return this.sdk;
@@ -24,18 +24,13 @@ export class FarcasterSDK {
         this.sdk = this.createMockSDK();
       }
       
-      // Получаем контекст и вызываем ready() - как в официальном примере
-      const context = await this.sdk.context;
-      console.log('📱 Farcaster context:', context);
-      
-      // Вызываем ready() - это критически важно для Farcaster
+      // Простой вызов ready() - как в официальном гайде
       this.sdk.actions.ready();
       this.isReady = true;
       this.isInitialized = true;
-      console.log('✅ Farcaster Frame SDK initialized');
+      console.log('✅ Farcaster SDK initialized');
     } catch (error) {
-      console.error('❌ Farcaster Frame SDK initialization failed:', error);
-      console.log('ℹ️ Not in Farcaster environment, using mock SDK');
+      console.error('❌ Farcaster SDK initialization failed:', error);
       this.sdk = this.createMockSDK();
       this.isInitialized = true;
     }
