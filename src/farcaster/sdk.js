@@ -1,9 +1,11 @@
 // Farcaster SDK инициализация
 // Обеспечивает правильную работу с Farcaster Mini App
 
+import { sdk } from '@farcaster/miniapp-sdk';
+
 export class FarcasterSDK {
   constructor() {
-    this.sdk = null;
+    this.sdk = sdk;
     this.isReady = false;
     this.isInitialized = false;
   }
@@ -15,12 +17,11 @@ export class FarcasterSDK {
     }
 
     try {
-      // Проверяем, что мы в Farcaster Frame
-      if (typeof window !== 'undefined' && window.farcaster) {
-        this.sdk = window.farcaster;
+      // Проверяем, что мы в Farcaster Mini App
+      if (this.sdk && this.sdk.actions) {
         await this.ready();
         this.isInitialized = true;
-        console.log('✅ Farcaster SDK initialized');
+        console.log('✅ Farcaster Mini App SDK initialized');
       } else {
         console.log('ℹ️ Not in Farcaster environment, using mock SDK');
         this.sdk = this.createMockSDK();
@@ -141,8 +142,8 @@ export class FarcasterSDK {
 
   // Проверка, что мы в Farcaster
   isInFarcaster() {
-    return typeof window !== 'undefined' && 
-           window.farcaster && 
+    return this.sdk && 
+           this.sdk.actions && 
            this.sdk !== this.createMockSDK();
   }
 

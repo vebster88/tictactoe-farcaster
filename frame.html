@@ -105,49 +105,45 @@
         Создано <strong>vebster88</strong> | Powered by Farcaster Frames
     </p>
     
-    <!-- Farcaster SDK инициализация -->
-    <script>
-        // Инициализация Farcaster SDK
+    <!-- Farcaster Mini App SDK -->
+    <script type="module">
+        import { sdk } from 'https://unpkg.com/@farcaster/miniapp-sdk@latest/dist/index.js';
+        
+        // Инициализация Farcaster Mini App SDK
         async function initializeFarcasterSDK() {
             try {
-                // Проверяем, что мы в Farcaster Frame
-                if (typeof window !== 'undefined' && window.farcaster) {
-                    console.log('🎮 Initializing Farcaster SDK...');
-                    
-                    const sdk = window.farcaster;
-                    
-                    // Вызываем ready() для уведомления о готовности
-                    if (sdk.actions && sdk.actions.ready) {
-                        await sdk.actions.ready();
-                        console.log('✅ Farcaster SDK ready() called successfully');
-                    }
-                    
-                    // Получаем пользователя
-                    if (sdk.user) {
-                        try {
-                            const user = await sdk.user();
-                            console.log('👤 Farcaster user:', user);
-                        } catch (error) {
-                            console.log('ℹ️ User not available:', error.message);
-                        }
-                    }
-                    
-                    // Получаем контекст
-                    if (sdk.context) {
-                        try {
-                            const context = await sdk.context();
-                            console.log('📱 Farcaster context:', context);
-                        } catch (error) {
-                            console.log('ℹ️ Context not available:', error.message);
-                        }
-                    }
-                    
-                    console.log('✅ Farcaster SDK initialized successfully');
-                } else {
-                    console.log('🌐 Not in Farcaster environment, running in browser');
+                console.log('🎮 Initializing Farcaster Mini App SDK...');
+                
+                // Вызываем ready() для уведомления о готовности
+                if (sdk.actions && sdk.actions.ready) {
+                    await sdk.actions.ready();
+                    console.log('✅ Farcaster Mini App SDK ready() called successfully');
                 }
+                
+                // Получаем пользователя
+                if (sdk.user) {
+                    try {
+                        const user = await sdk.user();
+                        console.log('👤 Farcaster user:', user);
+                    } catch (error) {
+                        console.log('ℹ️ User not available:', error.message);
+                    }
+                }
+                
+                // Получаем контекст
+                if (sdk.context) {
+                    try {
+                        const context = await sdk.context();
+                        console.log('📱 Farcaster context:', context);
+                    } catch (error) {
+                        console.log('ℹ️ Context not available:', error.message);
+                    }
+                }
+                
+                console.log('✅ Farcaster Mini App SDK initialized successfully');
             } catch (error) {
-                console.error('❌ Farcaster SDK initialization failed:', error);
+                console.error('❌ Farcaster Mini App SDK initialization failed:', error);
+                console.log('🌐 Not in Farcaster environment, running in browser');
             }
         }
         
