@@ -385,87 +385,99 @@ if (devToggleBtn) {
 
 // Инициализация Farcaster Mini App SDK
 // Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
+// Pattern from docs: import { sdk } from '@farcaster/miniapp-sdk'
+// After your app is fully loaded and ready to display: await sdk.actions.ready()
+
 async function initializeFarcasterSDK() {
+  let readyCalled = false;
+  
   try {
-    // Initialize SDK
-    await farcasterSDK.initialize();
+    // Step 1: Get SDK (following official docs pattern)
+    const sdk = await farcasterSDK.initialize();
     console.log('✅ Farcaster Mini App SDK initialized');
     
+    // Step 2: CRITICAL - Call ready() IMMEDIATELY
+    // According to docs: "After your app loads, you must call sdk.actions.ready()"
+    // This hides the splash screen - MUST be called ASAP
+    readyCalled = await farcasterSDK.ready();
+    if (readyCalled) {
+      console.log('✅ sdk.actions.ready() called - splash screen hidden');
+    }
+    
+    // Step 3: Get user info asynchronously (non-blocking, after ready())
+    // Don't block app loading for user data
     const BACKEND_ORIGIN = import.meta.env.VITE_API_URL || 'https://tiktaktoe-farcaster-dun.vercel.app';
     
-    // Check if we're in Mini App context
+    // Only fetch user if we're in Mini App context
     if (farcasterSDK.isInMiniApp()) {
-      console.log('🎮 Running in Farcaster Mini App');
-      
-      // Use Quick Auth to get user (recommended approach from docs)
-      try {
-        const user = await farcasterSDK.getUserWithQuickAuth(BACKEND_ORIGIN);
-        if (user && user.fid) {
-          console.log('👤 Farcaster user (Quick Auth):', user);
-          // Auto-sign in if we have user data
-          if (!getSession()) {
-            // Store user session for compatibility with existing auth system
-            const session = {
-              user: {
-                fid: user.fid,
-                username: user.username,
-                displayName: user.displayName || user.username,
-                pfpUrl: user.pfp || user.pfpUrl
-              },
-              token: 'quick-auth-' + Date.now()
-            };
-            localStorage.setItem('farcaster_session', JSON.stringify(session));
-            refreshUserLabel();
-            updateUIForMode();
+      // Fetch user asynchronously - don't block UI
+      (async () => {
+        try {
+          const user = await farcasterSDK.getUserWithQuickAuth(BACKEND_ORIGIN);
+          if (user && user.fid) {
+            console.log('👤 Farcaster user (Quick Auth):', user);
+            // Auto-sign in if we have user data
+            if (!getSession()) {
+              const session = {
+                user: {
+                  fid: user.fid,
+                  username: user.username,
+                  displayName: user.displayName || user.username,
+                  pfpUrl: user.pfp || user.pfpUrl
+                },
+                token: 'quick-auth-' + Date.now()
+              };
+              localStorage.setItem('farcaster_session', JSON.stringify(session));
+              refreshUserLabel();
+              updateUIForMode();
+            }
+          }
+        } catch (authError) {
+          console.log('ℹ️ Quick Auth failed, trying direct user call:', authError);
+          // Fallback to direct user call
+          try {
+            const user = await farcasterSDK.getUser();
+            if (user && user.fid) {
+              console.log('👤 Farcaster user (direct):', user);
+            }
+          } catch (userError) {
+            console.log('ℹ️ User fetch not available');
           }
         }
-      } catch (authError) {
-        console.log('ℹ️ Quick Auth failed, trying direct user call:', authError);
-        // Fallback to direct user call
-        const user = await farcasterSDK.getUser();
-        if (user && user.fid) {
-          console.log('👤 Farcaster user (direct):', user);
-        }
-      }
+      })();
       
-      // Get context if available
-      try {
-        const context = await farcasterSDK.getContext();
+      // Get context asynchronously (non-blocking)
+      farcasterSDK.getContext().then(context => {
         if (context) {
           console.log('📱 Farcaster context:', context);
         }
-      } catch (contextError) {
-        console.log('ℹ️ Context not available:', contextError);
-      }
+      }).catch(() => {
+        // Silently ignore context errors
+      });
     } else {
       console.log('🌐 Running in regular browser');
     }
     
-    // CRITICAL: Call ready() after app is fully loaded to hide splash screen
-    // According to documentation: "After your app loads, you must call sdk.actions.ready()"
-    await farcasterSDK.ready();
-    
   } catch (error) {
     console.error('❌ Farcaster SDK initialization failed:', error);
-    // Still try to call ready() even if initialization partially failed
-    try {
-      await farcasterSDK.ready();
-    } catch (readyError) {
-      console.error('❌ Failed to call ready():', readyError);
+    // CRITICAL: Call ready() even if initialization failed
+    if (!readyCalled) {
+      try {
+        await farcasterSDK.ready();
+      } catch (readyError) {
+        console.error('❌ Failed to call ready():', readyError);
+      }
     }
   }
 }
 
-// Initialize SDK after DOM is ready and app is loaded
-// We wait for full load to ensure everything is ready before calling ready()
+// Initialize SDK when app is ready
+// According to docs: "After your app is fully loaded and ready to display"
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    // Small delay to ensure app is fully initialized
-    setTimeout(initializeFarcasterSDK, 100);
-  });
+  document.addEventListener('DOMContentLoaded', initializeFarcasterSDK);
 } else {
-  // DOM already loaded, but wait a bit for app initialization
-  setTimeout(initializeFarcasterSDK, 100);
+  // DOM already loaded
+  initializeFarcasterSDK();
 }
 
 // Display app version
