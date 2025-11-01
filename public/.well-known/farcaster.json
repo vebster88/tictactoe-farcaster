@@ -1,15 +1,20 @@
 {
-  "name": "TicTacToe Farcaster",
-  "description": "A simple TicTacToe game for Farcaster",
-  "version": "1.0.0",
-  "author": "vebster88",
-  "homepage": "https://tiktaktoe-farcaster-dun.vercel.app",
-  "icon": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
-  "splash": "https://tiktaktoe-farcaster-dun.vercel.app/splash-screen.svg",
-  "permissions": [],
-  "categories": ["games", "entertainment"],
-  "tags": ["tictactoe", "game", "multiplayer"],
-  "screenshots": [
-    "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png"
-  ]
+  "frame": {
+    "name": "TicTacToe Farcaster",
+    "version": "1",
+    "iconUrl": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
+    "homeUrl": "https://tiktaktoe-farcaster-dun.vercel.app/",
+    "imageUrl": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
+    "buttonTitle": "🎮 Играть",
+    "splashImageUrl": "https://tiktaktoe-farcaster-dun.vercel.app/splash-screen.svg",
+    "splashBackgroundColor": "#111111",
+    "subtitle": "TicTacToe Farcaster",
+    "description": "TikTakToe pocket game",
+    "primaryCategory": "games"
+  },
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  }
 }
