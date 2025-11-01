@@ -7,7 +7,7 @@
     "imageUrl": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
     "buttonTitle": "🎮 Играть",
     "splashImageUrl": "https://tiktaktoe-farcaster-dun.vercel.app/splash-screen.svg",
-    "splashBackgroundColor": "#111111",
+    "splashBackgroundColor": "#0a0a0f",
     "subtitle": "TicTacToe Farcaster",
     "description": "TikTakToe pocket game",
     "primaryCategory": "games"
