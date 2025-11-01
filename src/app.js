@@ -383,12 +383,6 @@ if (devToggleBtn) {
   devToggleBtn.title = devMode ? "Выключить режим разработчика" : "Включить режим разработчика";
 }
 
-// Инициализация Farcaster Mini App SDK
-// Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
-// After your app is fully loaded and ready to display: await sdk.actions.ready()
-
-farcasterSDK.ready();
-
 // Display app version
 const versionEl = document.getElementById('app-version');
 if (versionEl) {
@@ -398,3 +392,10 @@ if (versionEl) {
 
 render();
 refreshUserLabel();
+
+// Инициализация Farcaster Mini App SDK
+// Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
+// After your app is fully loaded and ready to display: await sdk.actions.ready()
+// Pattern from working React example: call ready() after UI initialization (like useEffect)
+
+farcasterSDK.ready();
