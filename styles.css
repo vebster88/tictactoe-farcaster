@@ -104,6 +104,23 @@ h1 {
   gap: 12px;
 }
 
+.app-version {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  opacity: 0.7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-text-fill-color: var(--muted);
+  cursor: help;
+  transition: opacity 0.2s;
+}
+
+.app-version:hover {
+  opacity: 1;
+}
+
 .top-actions {
   display: flex;
   gap: 12px;

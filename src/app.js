@@ -8,6 +8,7 @@ import { listThreadReplies, publishMatchResult } from "./farcaster/client.js";
 import { createSignedKey } from "./farcaster/signer.js";
 import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
+import { APP_VERSION } from "./version.js";
 
 const root = document.body;
 const boardEl = document.getElementById("board");
@@ -465,6 +466,13 @@ if (document.readyState === 'loading') {
 } else {
   // DOM already loaded, but wait a bit for app initialization
   setTimeout(initializeFarcasterSDK, 100);
+}
+
+// Display app version
+const versionEl = document.getElementById('app-version');
+if (versionEl) {
+  versionEl.textContent = `v${APP_VERSION}`;
+  versionEl.title = `Версия приложения: v${APP_VERSION}`;
 }
 
 render();
