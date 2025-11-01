@@ -4,30 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TicTacToe Mini App</title>
-    <meta name="description" content="A simple TicTacToe game for Farcaster">
-    <link rel="icon" href="/tictactoe-icon-1024.png">
-    
-    <!-- Preconnect to Quick Auth server for better performance -->
     <link rel="preconnect" href="https://auth.farcaster.xyz" />
-    
-    <!-- Farcaster Mini App meta tags -->
-    <meta name="farcaster:miniapp" content="true" />
-    <meta name="farcaster:miniapp:name" content="TicTacToe Farcaster" />
-    <meta name="farcaster:miniapp:description" content="A simple TicTacToe game for Farcaster" />
-    <meta name="farcaster:miniapp:icon" content="https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png" />
-    <meta name="farcaster:miniapp:splash" content="https://tiktaktoe-farcaster-dun.vercel.app/splash-screen.svg" />
-    
-    <!-- Farcaster Mini App SDK will be loaded dynamically -->
-    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -37,32 +18,22 @@
             color: white;
             padding: 20px;
         }
-        
         .container {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 30px;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-            border: 1px solid rgba(255, 255, 255, 0.18);
             text-align: center;
             max-width: 400px;
             width: 100%;
         }
-        
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-        
+        h1 { font-size: 2em; margin-bottom: 20px; }
         .game-board {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
             margin: 20px 0;
         }
-        
         .cell {
             width: 80px;
             height: 80px;
@@ -73,27 +44,10 @@
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
-        
-        .cell:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
-        
-        .cell:disabled {
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        
-        .status {
-            font-size: 1.2em;
-            margin: 20px 0;
-            min-height: 30px;
-        }
-        
+        .cell:hover { background: rgba(255, 255, 255, 0.3); transform: scale(1.05); }
+        .cell:disabled { cursor: not-allowed; opacity: 0.7; }
+        .status { font-size: 1.2em; margin: 20px 0; min-height: 30px; }
         .reset-btn {
             background: rgba(255, 255, 255, 0.2);
             border: 2px solid rgba(255, 255, 255, 0.3);
@@ -105,84 +59,52 @@
             transition: all 0.3s ease;
             margin-top: 10px;
         }
-        
-        .reset-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
-        }
-        
-        .loading {
-            opacity: 0.5;
-            pointer-events: none;
-        }
-        
-        .user-info {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 10px;
-            margin: 10px 0;
-            font-size: 0.9em;
-        }
-        
-        .farcaster-badge {
-            background: linear-gradient(45deg, #8B5CF6, #A855F7);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            font-weight: bold;
-            display: inline-block;
-            margin-left: 8px;
-        }
+        .reset-btn:hover { background: rgba(255, 255, 255, 0.3); }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎮 TicTacToe <span class="farcaster-badge">Farcaster</span></h1>
-        <div class="user-info" id="userInfo" style="display: none;">
-            <div id="userDetails"></div>
-        </div>
-        <div class="status" id="status">Your turn!</div>
-        
-        <div class="game-board" id="gameBoard">
-            <button class="cell" data-index="0"></button>
-            <button class="cell" data-index="1"></button>
-            <button class="cell" data-index="2"></button>
-            <button class="cell" data-index="3"></button>
-            <button class="cell" data-index="4"></button>
-            <button class="cell" data-index="5"></button>
-            <button class="cell" data-index="6"></button>
-            <button class="cell" data-index="7"></button>
-            <button class="cell" data-index="8"></button>
-        </div>
-        
+        <h1>🎮 TicTacToe</h1>
+        <div class="status" id="status">Loading...</div>
+        <div class="game-board" id="gameBoard"></div>
         <button class="reset-btn" id="resetBtn">New Game</button>
     </div>
 
-    <script>
+    <script type="module">
+        import { sdk } from '@farcaster/miniapp-sdk';
+
         // Game state
         let board = ['', '', '', '', '', '', '', '', ''];
         let currentPlayer = 'X';
         let gameActive = true;
-        
+        let user = null;
+
         // DOM elements
-        const cells = document.querySelectorAll('.cell');
         const status = document.getElementById('status');
         const resetBtn = document.getElementById('resetBtn');
-        const userInfo = document.getElementById('userInfo');
-        const userDetails = document.getElementById('userDetails');
-        
+        const gameBoard = document.getElementById('gameBoard');
+
+        // Create game board
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('button');
+            cell.className = 'cell';
+            cell.dataset.index = i;
+            cell.addEventListener('click', () => makeMove(i));
+            gameBoard.appendChild(cell);
+        }
+
+        const cells = document.querySelectorAll('.cell');
+
         // Winning combinations
         const winningCombinations = [
             [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
             [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
             [0, 4, 8], [2, 4, 6] // diagonals
         ];
-        
+
         // Game functions
         function makeMove(index) {
             if (board[index] !== '' || !gameActive) return;
-            
             board[index] = currentPlayer;
             cells[index].textContent = currentPlayer;
             
@@ -201,89 +123,46 @@
             currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
             status.textContent = `Player ${currentPlayer}'s turn`;
         }
-        
+
         function checkWinner() {
             return winningCombinations.some(combination => {
                 const [a, b, c] = combination;
                 return board[a] && board[a] === board[b] && board[a] === board[c];
             });
         }
-        
+
         function resetGame() {
             board = ['', '', '', '', '', '', '', '', ''];
             currentPlayer = 'X';
             gameActive = true;
-            status.textContent = "Your turn!";
-            
-            cells.forEach(cell => {
-                cell.textContent = '';
-            });
+            status.textContent = user ? `Your turn, ${user.displayName || user.username || 'Player'}!` : "Your turn!";
+            cells.forEach(cell => cell.textContent = '');
         }
-        
-        // Event listeners
-        cells.forEach(cell => {
-            cell.addEventListener('click', () => {
-                const index = parseInt(cell.dataset.index);
-                makeMove(index);
-            });
-        });
-        
+
         resetBtn.addEventListener('click', resetGame);
-        
-        // Farcaster Mini App SDK initialization
-        let user = null;
-        let sdk = null;
-        
-        async function initializeMiniApp() {
+
+        // Initialize Farcaster SDK (following official React pattern)
+        (async () => {
             try {
-                console.log('🚀 Initializing Farcaster Mini App...');
+                const BACKEND_ORIGIN = 'https://tiktaktoe-farcaster-dun.vercel.app';
+                const res = await sdk.quickAuth.fetch(`${BACKEND_ORIGIN}/api/user`);
                 
-                // Import SDK using the correct syntax
-                const { sdk: importedSdk } = await import('https://esm.sh/@farcaster/miniapp-sdk');
-                sdk = importedSdk;
-                console.log('✅ SDK imported successfully');
-                
-                // ВАЖНО: Сначала вызываем ready() БЕЗ await
-                sdk.actions.ready();
-                console.log('✅ sdk.actions.ready() called');
-                
-                // Затем получаем пользователя
-                try {
-                    user = await sdk.user();
-                    console.log('👤 User:', user);
-                    displayUserInfo(user);
-                    status.textContent = `Welcome, ${user?.displayName || user?.username || `User ${user?.fid}`}!`;
-                } catch (userError) {
-                    console.log('ℹ️ User info not available:', userError);
-                    // Create a mock user for demo
-                    user = { fid: 12345, displayName: 'Demo Player', username: 'demo' };
-                    displayUserInfo(user);
+                if (res.ok) {
+                    user = await res.json();
+                    status.textContent = `Welcome, ${user.displayName || user.username || `User ${user.fid}`}!`;
+                    resetGame();
+                } else {
                     status.textContent = 'Welcome to TicTacToe!';
+                    resetGame();
                 }
                 
+                sdk.actions.ready();
             } catch (error) {
-                console.error('❌ Mini App initialization failed:', error);
-                // Create a mock user for demo
-                user = { fid: 12345, displayName: 'Demo Player' };
+                console.error('Mini App initialization failed:', error);
                 status.textContent = 'Welcome to TicTacToe!';
+                resetGame();
             }
-        }
-        
-        // Function to display user information
-        function displayUserInfo(user) {
-            if (user && user.fid) {
-                userDetails.innerHTML = `
-                    <div><strong>FID:</strong> ${user.fid}</div>
-                    <div><strong>Name:</strong> ${user.displayName || 'Unknown'}</div>
-                    <div><strong>Username:</strong> @${user.username || 'unknown'}</div>
-                    ${user.followerCount ? `<div><strong>Followers:</strong> ${user.followerCount}</div>` : ''}
-                `;
-                userInfo.style.display = 'block';
-            }
-        }
-        
-        // Initialize immediately when page loads
-        window.addEventListener('load', initializeMiniApp);
+        })();
     </script>
 </body>
 </html>
