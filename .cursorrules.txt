@@ -1,3 +1,12 @@
+# .cursorrules
+
+You are working on a Farcaster Mini App - TicTacToe game.
+- Always follow Farcaster Mini App SDK documentation: https://miniapps.farcaster.xyz/docs
+- Critical: sdk.actions.ready() must be called ASAP to hide splash screen
+- Use Quick Auth for user authentication
+- Version format: major.minor (increment by 0.01 per update)
+- Code style: ES6 modules, async/await
+
 # Farcaster Mini Apps
 
 ## Blog

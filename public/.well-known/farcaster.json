@@ -1,7 +1,7 @@
 {
-  "frame": {
-    "name": "TicTacToe Farcaster",
+  "miniapp": {
     "version": "1",
+    "name": "TicTacToe Farcaster",
     "iconUrl": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
     "homeUrl": "https://tiktaktoe-farcaster-dun.vercel.app/",
     "imageUrl": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
