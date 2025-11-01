@@ -26,5 +26,12 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/.well-known/farcaster.json",
+      "destination": "https://api.farcaster.xyz/miniapps/hosted-manifest/REPLACE_WITH_YOUR_MANIFEST_ID",
+      "permanent": false
+    }
   ]
 }
