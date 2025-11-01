@@ -1,61 +1,98 @@
-// Farcaster Frame SDK инициализация
-// Обеспечивает правильную работу с Farcaster Frames v2
+// Farcaster Mini App SDK integration
+// Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
 
-export class FarcasterSDK {
+export class FarcasterMiniAppSDK {
   constructor() {
     this.sdk = null;
     this.isReady = false;
     this.isInitialized = false;
+    this.isMiniAppContext = false;
+    this.user = null;
   }
 
-  // Максимально простая инициализация - как в официальном гайде
+  // Initialize Mini App SDK
   async initialize() {
     if (this.isInitialized) {
       return this.sdk;
     }
 
     try {
-      // Проверяем, есть ли глобальный SDK от Farcaster
-      if (window.farcaster && window.farcaster.sdk) {
-        this.sdk = window.farcaster.sdk;
-        console.log('✅ Global Farcaster SDK found');
-      } else {
-        console.log('ℹ️ Global SDK not available, using mock SDK');
-        this.sdk = this.createMockSDK();
-      }
+      // Import Mini App SDK according to documentation
+      const { sdk } = await import('@farcaster/miniapp-sdk');
+      this.sdk = sdk;
+      this.isMiniAppContext = true;
+      console.log('✅ Farcaster Mini App SDK imported');
       
-      // Вызов ready() с await - как в официальном гайде
-      await this.sdk.actions.ready();
-      this.isReady = true;
+      // Check if we're in Mini App context by trying to detect it
+      try {
+        // Try to get user info to verify we're in Mini App
+        const user = await this.sdk.user();
+        if (user && user.fid) {
+          this.user = user;
+          this.isMiniAppContext = true;
+          console.log('✅ Running in Farcaster Mini App context');
+        }
+      } catch (e) {
+        // Not in Mini App context, but SDK is available
+        console.log('ℹ️ SDK available but not in Mini App context (running in browser)');
+        this.isMiniAppContext = false;
+      }
+
       this.isInitialized = true;
-      console.log('✅ Farcaster SDK initialized');
+      return this.sdk;
     } catch (error) {
-      console.error('❌ Farcaster SDK initialization failed:', error);
+      console.error('❌ Farcaster Mini App SDK initialization failed:', error);
+      console.log('ℹ️ Not in Farcaster environment, running in browser');
       this.sdk = this.createMockSDK();
       this.isInitialized = true;
+      this.isMiniAppContext = false;
+      return this.sdk;
     }
-
-    return this.sdk;
   }
 
-  // Вызов ready() согласно официальной документации
+  // Call ready() to hide splash screen - CRITICAL for Mini Apps
+  // Must be called after app is fully loaded and ready to display
   async ready() {
     if (this.isReady) {
       return;
     }
 
     try {
-      // После полной загрузки приложения вызываем ready()
-      await this.sdk.actions.ready();
-      this.isReady = true;
-      console.log('✅ sdk.actions.ready() called successfully');
+      if (this.sdk && this.sdk.actions) {
+        // According to documentation: await sdk.actions.ready()
+        await this.sdk.actions.ready();
+        this.isReady = true;
+        console.log('✅ sdk.actions.ready() called successfully');
+      } else {
+        console.log('ℹ️ SDK not available, skipping ready() call');
+      }
     } catch (error) {
       console.error('❌ sdk.actions.ready() failed:', error);
-      throw error; // Пробрасываем ошибку для обработки в initialize()
+      // Don't throw - allow app to continue even if ready() fails
     }
   }
 
-  // Получение пользователя
+  // Get user using Quick Auth (recommended approach)
+  async getUserWithQuickAuth(backendOrigin) {
+    if (!this.sdk || !this.sdk.quickAuth) {
+      return null;
+    }
+
+    try {
+      const res = await this.sdk.quickAuth.fetch(`${backendOrigin}/api/user`);
+      if (res.ok) {
+        this.user = await res.json();
+        return this.user;
+      }
+    } catch (error) {
+      console.error('❌ Quick Auth fetch failed:', error);
+    }
+
+    // Fallback to direct user call
+    return this.getUser();
+  }
+
+  // Get user info (fallback method)
   async getUser() {
     if (!this.sdk) {
       return null;
@@ -63,7 +100,9 @@ export class FarcasterSDK {
 
     try {
       if (this.sdk.user) {
-        return await this.sdk.user();
+        const user = await this.sdk.user();
+        this.user = user;
+        return user;
       }
     } catch (error) {
       console.error('❌ Get user failed:', error);
@@ -72,15 +111,16 @@ export class FarcasterSDK {
     return null;
   }
 
-  // Получение контекста
+  // Get context (cast, channel, etc.)
   async getContext() {
     if (!this.sdk) {
       return null;
     }
 
     try {
+      // context is a Promise property, not a function
       if (this.sdk.context) {
-        return await this.sdk.context();
+        return await this.sdk.context;
       }
     } catch (error) {
       console.error('❌ Get context failed:', error);
@@ -89,15 +129,15 @@ export class FarcasterSDK {
     return null;
   }
 
-  // Открытие ссылки
+  // Open link using SDK (opens in-app browser if available)
   async openLink(url) {
-    if (!this.sdk) {
+    if (!this.sdk || !this.sdk.actions) {
       window.open(url, '_blank');
       return;
     }
 
     try {
-      if (this.sdk.actions && this.sdk.actions.openLink) {
+      if (this.sdk.actions.openLink) {
         await this.sdk.actions.openLink(url);
       } else {
         window.open(url, '_blank');
@@ -108,27 +148,38 @@ export class FarcasterSDK {
     }
   }
 
-  // Создание mock SDK для тестирования
+  // Check if running in Mini App context
+  isInMiniApp() {
+    return this.isMiniAppContext && this.sdk && this.sdk !== this.createMockSDK();
+  }
+
+  // Get SDK instance
+  getSDK() {
+    return this.sdk;
+  }
+
+  // Create mock SDK for browser testing
   createMockSDK() {
     return {
       user: async () => ({
-        fid: 12345,
-        username: 'testuser',
-        displayName: 'Test User',
-        pfpUrl: 'https://via.placeholder.com/150',
-        verifiedAddresses: {
-          ethereum: ['0x1234567890123456789012345678901234567890']
-        }
+        fid: null,
+        username: null,
+        displayName: null,
       }),
-      context: async () => ({
-        cast: {
-          hash: '0x1234567890abcdef',
-          author: {
-            fid: 12345,
-            username: 'testuser'
-          }
+      context: async () => null,
+      quickAuth: {
+        fetch: async (url) => {
+          // Return mock response
+          return new Response(JSON.stringify({
+            fid: null,
+            username: null,
+            displayName: null,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
-      }),
+      },
       actions: {
         ready: async () => {
           console.log('✅ Mock SDK ready() called');
@@ -141,26 +192,14 @@ export class FarcasterSDK {
       }
     };
   }
-
-  // Проверка, что мы в Farcaster
-  isInFarcaster() {
-    return this.sdk && 
-           this.sdk.actions && 
-           this.sdk !== this.createMockSDK();
-  }
-
-  // Получение экземпляра SDK
-  getSDK() {
-    return this.sdk;
-  }
 }
 
-// Создаем глобальный экземпляр
-export const farcasterSDK = new FarcasterSDK();
+// Create global instance
+export const farcasterSDK = new FarcasterMiniAppSDK();
 
-// Автоматическая инициализация при загрузке
+// Initialize when DOM is ready
 if (typeof window !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', () => {
-    farcasterSDK.initialize();
+  window.addEventListener('DOMContentLoaded', async () => {
+    await farcasterSDK.initialize();
   });
 }

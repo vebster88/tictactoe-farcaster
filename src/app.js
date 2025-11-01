@@ -382,40 +382,89 @@ if (devToggleBtn) {
   devToggleBtn.title = devMode ? "Выключить режим разработчика" : "Включить режим разработчика";
 }
 
-// Инициализация Farcaster SDK
+// Инициализация Farcaster Mini App SDK
+// Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
 async function initializeFarcasterSDK() {
   try {
+    // Initialize SDK
     await farcasterSDK.initialize();
-    console.log('✅ Farcaster SDK initialized successfully');
+    console.log('✅ Farcaster Mini App SDK initialized');
     
-    // Проверяем, что мы в Farcaster Frame
-    if (farcasterSDK.isInFarcaster()) {
-      console.log('🎮 Running in Farcaster Frame');
+    const BACKEND_ORIGIN = import.meta.env.VITE_API_URL || 'https://tiktaktoe-farcaster-dun.vercel.app';
+    
+    // Check if we're in Mini App context
+    if (farcasterSDK.isInMiniApp()) {
+      console.log('🎮 Running in Farcaster Mini App');
       
-      // Получаем пользователя
-      const user = await farcasterSDK.getUser();
-      if (user) {
-        console.log('👤 Farcaster user:', user);
+      // Use Quick Auth to get user (recommended approach from docs)
+      try {
+        const user = await farcasterSDK.getUserWithQuickAuth(BACKEND_ORIGIN);
+        if (user && user.fid) {
+          console.log('👤 Farcaster user (Quick Auth):', user);
+          // Auto-sign in if we have user data
+          if (!getSession()) {
+            // Store user session for compatibility with existing auth system
+            const session = {
+              user: {
+                fid: user.fid,
+                username: user.username,
+                displayName: user.displayName || user.username,
+                pfpUrl: user.pfp || user.pfpUrl
+              },
+              token: 'quick-auth-' + Date.now()
+            };
+            localStorage.setItem('farcaster_session', JSON.stringify(session));
+            refreshUserLabel();
+            updateUIForMode();
+          }
+        }
+      } catch (authError) {
+        console.log('ℹ️ Quick Auth failed, trying direct user call:', authError);
+        // Fallback to direct user call
+        const user = await farcasterSDK.getUser();
+        if (user && user.fid) {
+          console.log('👤 Farcaster user (direct):', user);
+        }
       }
       
-      // Получаем контекст
-      const context = await farcasterSDK.getContext();
-      if (context) {
-        console.log('📱 Farcaster context:', context);
+      // Get context if available
+      try {
+        const context = await farcasterSDK.getContext();
+        if (context) {
+          console.log('📱 Farcaster context:', context);
+        }
+      } catch (contextError) {
+        console.log('ℹ️ Context not available:', contextError);
       }
     } else {
       console.log('🌐 Running in regular browser');
     }
+    
+    // CRITICAL: Call ready() after app is fully loaded to hide splash screen
+    // According to documentation: "After your app loads, you must call sdk.actions.ready()"
+    await farcasterSDK.ready();
+    
   } catch (error) {
     console.error('❌ Farcaster SDK initialization failed:', error);
+    // Still try to call ready() even if initialization partially failed
+    try {
+      await farcasterSDK.ready();
+    } catch (readyError) {
+      console.error('❌ Failed to call ready():', readyError);
+    }
   }
 }
 
-// Инициализируем SDK после загрузки DOM
+// Initialize SDK after DOM is ready and app is loaded
+// We wait for full load to ensure everything is ready before calling ready()
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeFarcasterSDK);
+  document.addEventListener('DOMContentLoaded', () => {
+    // Small delay to ensure app is fully initialized
+    setTimeout(initializeFarcasterSDK, 100);
+  });
 } else {
-  initializeFarcasterSDK();
+  // DOM already loaded, but wait a bit for app initialization
+  setTimeout(initializeFarcasterSDK, 100);
 }
 
 render();
