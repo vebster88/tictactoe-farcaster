@@ -385,78 +385,9 @@ if (devToggleBtn) {
 
 // Инициализация Farcaster Mini App SDK
 // Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
-// CRITICAL: Call ready() IMMEDIATELY to hide splash screen
+// After your app is fully loaded and ready to display: await sdk.actions.ready()
 
-// Call ready() as soon as module loads - don't wait for anything
-(async () => {
-  try {
-    console.log('🚀 Calling sdk.actions.ready() immediately...');
-    const result = await farcasterSDK.ready();
-    if (result) {
-      console.log('✅ ready() completed successfully');
-    } else {
-      console.warn('⚠️ ready() returned false');
-    }
-  } catch (error) {
-    console.error('❌ ready() failed:', error);
-    console.error('Error stack:', error?.stack);
-  }
-  
-  // Get user info asynchronously (non-blocking, after ready())
-  const BACKEND_ORIGIN = import.meta.env.VITE_API_URL || 'https://tiktaktoe-farcaster-dun.vercel.app';
-  
-  // Only fetch user if we're in Mini App context
-  if (farcasterSDK.isInMiniApp()) {
-    console.log('📱 Running in Farcaster Mini App');
-    
-    // Fetch user asynchronously - don't block UI
-    (async () => {
-      try {
-        const user = await farcasterSDK.getUserWithQuickAuth(BACKEND_ORIGIN);
-        if (user && user.fid) {
-          console.log('👤 Farcaster user (Quick Auth):', user);
-          // Auto-sign in if we have user data
-          if (!getSession()) {
-            const session = {
-              user: {
-                fid: user.fid,
-                username: user.username,
-                displayName: user.displayName || user.username,
-                pfpUrl: user.pfp || user.pfpUrl
-              },
-              token: 'quick-auth-' + Date.now()
-            };
-            localStorage.setItem('farcaster_session', JSON.stringify(session));
-            refreshUserLabel();
-            updateUIForMode();
-          }
-        }
-      } catch (authError) {
-        console.log('ℹ️ Quick Auth failed, trying direct user call:', authError);
-        // Fallback to direct user call
-        try {
-          const user = await farcasterSDK.getUser();
-          if (user && user.fid) {
-            console.log('👤 Farcaster user (direct):', user);
-          }
-        } catch (userError) {
-          console.log('ℹ️ User fetch not available');
-        }
-      }
-    })();
-    
-    // Get context asynchronously (non-blocking)
-    farcasterSDK.getContext().then(context => {
-      if (context) {
-        console.log('📱 Farcaster context:', context);
-      }
-    }).catch(() => {
-      // Silently ignore context errors
-    });
-  } else {
-    console.log('🌐 Running in regular browser');
-  }
-})();
+farcasterSDK.ready();
 
 // Display app version
 const versionEl = document.getElementById('app-version');
