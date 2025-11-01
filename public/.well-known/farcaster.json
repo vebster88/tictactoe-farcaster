@@ -1,7 +1,7 @@
 {
   "miniapp": {
     "version": "1",
-    "name": "TicTacToe Farcaster",
+    "name": "Krestiki-Noliki",
     "iconUrl": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
     "homeUrl": "https://tiktaktoe-farcaster-dun.vercel.app/",
     "imageUrl": "https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png",
@@ -13,8 +13,8 @@
     "primaryCategory": "games"
   },
   "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
+    "header": "eyJmaWQiOjQ4NzQxNiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweEQ5NkM4OTAxMDVkOUNFNEY5MTMwZGY0NEJiZjU4NTAzRmFEODI4M0EifQ",
+    "payload": "eyJkb21haW4iOiJ0aWt0YWt0b2UtZmFyY2FzdGVyLWR1bi52ZXJjZWwuYXBwIn0",
+    "signature": "WZj+GQUy56YCvoiCcDuEWL3zBGsWcjHS/CtW6w1VTW4z7RZkRPIJBKK2AT7fMdHehiJU4EwZETlc6oX9YfnN3Rs="
   }
 }
