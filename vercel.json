@@ -29,8 +29,8 @@
   ],
   "redirects": [
     {
-      "source": "/.well-known/farcaster.json",
-      "destination": "https://api.farcaster.xyz/miniapps/hosted-manifest/REPLACE_WITH_YOUR_MANIFEST_ID",
+      "source": "/.well-known/farcaster.json.disabled",
+      "destination": "https://api.farcaster.xyz/miniapps/hosted-manifest/replace",
       "permanent": false
     }
   ]
