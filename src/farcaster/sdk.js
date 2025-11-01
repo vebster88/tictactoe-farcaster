@@ -3,110 +3,133 @@
 
 let sdkInstance = null;
 let isRealSDK = false;
-let importPromise = null;
 
-// Initialize SDK - use dynamic import that works in both browser and Mini App
-async function initializeSDK() {
+// Try to get SDK - use direct import for Mini App context
+async function getSDKInstance() {
   if (sdkInstance !== null) {
     return sdkInstance;
   }
 
-  if (!importPromise) {
-    importPromise = (async () => {
-      try {
-        // Dynamic import - works in Mini App context
-        const module = await import('@farcaster/miniapp-sdk');
-        const sdk = module.sdk || module.default;
-        sdkInstance = sdk;
-        isRealSDK = true;
-        console.log('✅ Farcaster Mini App SDK imported successfully');
-        return sdk;
-      } catch (error) {
-        // SDK not available (running in browser or import failed)
-        console.log('ℹ️ SDK not available, using fallback (running in browser)');
-        
-        // Create minimal mock for browser testing
-        sdkInstance = {
-          actions: {
-            ready: async () => {
-              console.log('✅ Mock SDK ready() called');
-            },
-            openLink: async (url) => {
-              window.open(url, '_blank');
-            }
-          },
-          user: async () => null,
-          context: Promise.resolve(null),
-          quickAuth: {
-            fetch: async (url) => {
-              return new Response(JSON.stringify({ fid: null }), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
-          }
-        };
-        isRealSDK = false;
-        return sdkInstance;
+  try {
+    // Direct import - this should work in Mini App context
+    const { sdk } = await import('@farcaster/miniapp-sdk');
+    sdkInstance = sdk;
+    isRealSDK = true;
+    console.log('✅ Farcaster Mini App SDK imported');
+    return sdk;
+  } catch (error) {
+    console.warn('⚠️ SDK import failed, using fallback:', error.message);
+    
+    // Fallback for browser
+    sdkInstance = {
+      actions: {
+        ready: async () => {
+          console.log('✅ Mock ready() called');
+        },
+        openLink: async (url) => {
+          window.open(url, '_blank');
+        }
+      },
+      user: async () => null,
+      context: Promise.resolve(null),
+      quickAuth: {
+        fetch: async (url) => {
+          return new Response(JSON.stringify({ fid: null }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
       }
-    })();
+    };
+    isRealSDK = false;
+    return sdkInstance;
   }
-
-  return await importPromise;
 }
 
-// Export SDK instance getter
-export async function getSDK() {
-  return await initializeSDK();
-}
+// CRITICAL: Try to call ready() immediately when SDK is available
+// This ensures ready() is called as early as possible
+let readyCalled = false;
+let readyPromise = null;
 
-// Export SDK wrapper with simplified API
-export const farcasterSDK = {
-  // Initialize and get SDK instance
-  async initialize() {
-    return await getSDK();
-  },
+async function callReadyImmediately() {
+  if (readyCalled || readyPromise) {
+    return readyPromise;
+  }
   
-  // Call ready() - CRITICAL for Mini Apps - call this ASAP
+  readyPromise = (async () => {
+    try {
+      const sdk = await getSDKInstance();
+      if (sdk && sdk.actions && sdk.actions.ready) {
+        await sdk.actions.ready();
+        readyCalled = true;
+        console.log('✅ sdk.actions.ready() called immediately');
+        return true;
+      }
+      console.warn('⚠️ SDK ready() not available yet');
+      return false;
+    } catch (error) {
+      console.error('❌ Immediate ready() call failed:', error);
+      return false;
+    }
+  })();
+  
+  return readyPromise;
+}
+
+// Try to call ready() immediately if SDK is already available
+if (typeof window !== 'undefined') {
+  // Small delay to ensure module is loaded
+  setTimeout(() => {
+    callReadyImmediately().catch(console.error);
+  }, 0);
+}
+
+export const farcasterSDK = {
+  // Call ready() IMMEDIATELY - CRITICAL
   async ready() {
-    const sdk = await getSDK();
+    // If ready() was already called, return success
+    if (readyCalled) {
+      return true;
+    }
+    
+    // If ready() is being called, wait for it
+    if (readyPromise) {
+      return await readyPromise;
+    }
+    
+    // Otherwise, call ready() now
+    const sdk = await getSDKInstance();
     if (!sdk || !sdk.actions || !sdk.actions.ready) {
-      console.error('❌ SDK not available or ready() not found', {
-        sdk: sdk ? 'exists' : 'null',
-        actions: sdk?.actions ? 'exists' : 'null',
-        ready: sdk?.actions?.ready ? 'exists' : 'null'
+      console.error('❌ SDK or ready() not available', {
+        hasSdk: !!sdk,
+        hasActions: !!sdk?.actions,
+        hasReady: !!sdk?.actions?.ready
       });
       return false;
     }
     
     try {
       await sdk.actions.ready();
+      readyCalled = true;
       console.log('✅ sdk.actions.ready() called successfully');
       return true;
     } catch (error) {
-      console.error('❌ sdk.actions.ready() failed:', error);
+      console.error('❌ ready() error:', error);
       console.error('Error details:', {
         message: error?.message,
         stack: error?.stack,
-        name: error?.name,
-        sdk: sdk ? 'exists' : 'null',
-        actions: sdk?.actions ? 'exists' : 'null',
-        ready: sdk?.actions?.ready ? 'exists' : 'null',
-        readyType: typeof sdk?.actions?.ready
+        name: error?.name
       });
       return false;
     }
   },
   
   async getUserWithQuickAuth(backendOrigin) {
-    const sdk = await getSDK();
+    const sdk = await getSDKInstance();
     if (!sdk || !sdk.quickAuth) return null;
-    
     try {
       const res = await sdk.quickAuth.fetch(`${backendOrigin}/api/user`);
-      if (res.ok) {
-        return await res.json();
-      }
+      if (res.ok) return await res.json();
     } catch (error) {
       console.error('❌ Quick Auth failed:', error);
     }
@@ -114,7 +137,7 @@ export const farcasterSDK = {
   },
   
   async getUser() {
-    const sdk = await getSDK();
+    const sdk = await getSDKInstance();
     if (!sdk || !sdk.user) return null;
     try {
       return await sdk.user();
@@ -125,7 +148,7 @@ export const farcasterSDK = {
   },
   
   async getContext() {
-    const sdk = await getSDK();
+    const sdk = await getSDKInstance();
     if (!sdk || !sdk.context) return null;
     try {
       return await sdk.context;
@@ -135,7 +158,6 @@ export const farcasterSDK = {
     }
   },
   
-  // Check if running in Mini App (real SDK loaded)
   isInMiniApp() {
     return isRealSDK && sdkInstance !== null;
   }
