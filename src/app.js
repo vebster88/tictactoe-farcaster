@@ -385,31 +385,30 @@ if (devToggleBtn) {
 
 // Инициализация Farcaster Mini App SDK
 // Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
-// Pattern from docs: import { sdk } from '@farcaster/miniapp-sdk'
-// After your app is fully loaded and ready to display: await sdk.actions.ready()
+// CRITICAL: Call ready() as soon as possible to hide splash screen
 
-async function initializeFarcasterSDK() {
-  let readyCalled = false;
-  
+// Initialize SDK immediately - don't wait for DOMContentLoaded
+(async function initializeFarcasterSDK() {
   try {
-    // Step 1: Get SDK (following official docs pattern)
-    const sdk = await farcasterSDK.initialize();
-    console.log('✅ Farcaster Mini App SDK initialized');
+    console.log('🚀 Initializing Farcaster Mini App SDK...');
     
-    // Step 2: CRITICAL - Call ready() IMMEDIATELY
-    // According to docs: "After your app loads, you must call sdk.actions.ready()"
-    // This hides the splash screen - MUST be called ASAP
-    readyCalled = await farcasterSDK.ready();
-    if (readyCalled) {
+    // Step 1: CRITICAL - Call ready() IMMEDIATELY
+    // This MUST be called as soon as possible to hide splash screen
+    const readyResult = await farcasterSDK.ready();
+    if (readyResult) {
       console.log('✅ sdk.actions.ready() called - splash screen hidden');
+    } else {
+      console.warn('⚠️ sdk.actions.ready() returned false');
     }
     
-    // Step 3: Get user info asynchronously (non-blocking, after ready())
+    // Step 2: Get user info asynchronously (non-blocking, after ready())
     // Don't block app loading for user data
     const BACKEND_ORIGIN = import.meta.env.VITE_API_URL || 'https://tiktaktoe-farcaster-dun.vercel.app';
     
     // Only fetch user if we're in Mini App context
     if (farcasterSDK.isInMiniApp()) {
+      console.log('📱 Running in Farcaster Mini App');
+      
       // Fetch user asynchronously - don't block UI
       (async () => {
         try {
@@ -460,25 +459,16 @@ async function initializeFarcasterSDK() {
     
   } catch (error) {
     console.error('❌ Farcaster SDK initialization failed:', error);
-    // CRITICAL: Call ready() even if initialization failed
-    if (!readyCalled) {
-      try {
-        await farcasterSDK.ready();
-      } catch (readyError) {
-        console.error('❌ Failed to call ready():', readyError);
-      }
+    console.error('Error stack:', error?.stack);
+    
+    // CRITICAL: Still try to call ready() even if everything failed
+    try {
+      await farcasterSDK.ready();
+    } catch (readyError) {
+      console.error('❌ Failed to call ready() in error handler:', readyError);
     }
   }
-}
-
-// Initialize SDK when app is ready
-// According to docs: "After your app is fully loaded and ready to display"
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeFarcasterSDK);
-} else {
-  // DOM already loaded
-  initializeFarcasterSDK();
-}
+})();
 
 // Display app version
 const versionEl = document.getElementById('app-version');
