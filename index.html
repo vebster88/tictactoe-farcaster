@@ -1,5 +1,5 @@
 ﻿<!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -44,29 +44,29 @@
   </head>
   <body data-theme="light">
     <header class="app-header">
-      <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Show logo"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="App version">v1.20</span></h1>
-      <button id="btn-settings" class="btn btn-settings-top" type="button" aria-label="Settings" title="Settings">⚙️</button>
-      <nav class="top-actions" aria-label="Actions">
-        <button id="btn-new" class="btn" type="button">New Game</button>
-        <select id="mode" aria-label="Mode" class="mode-select">
-          <option value="pve-easy">PvE — Easy</option>
-          <option value="pve-hard">PvE — Hard</option>
-          <option value="pvp-local">PvP — Local</option>
-          <option value="pvp-farcaster">PvP — Farcaster</option>
-        </select>
-        <button id="btn-dev-toggle" class="btn" type="button" title="Developer mode" style="display: none;">🔧</button>
-       <button id="btn-auth" class="btn" type="button">Sign In</button> 
-       <span id="user-label" aria-live="polite"></span>
-       
-       <!-- Основные игровые кнопки -->
-       <button id="btn-invite" class="btn" type="button" style="display: none;">Create Match</button>
-       <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish Result</button>
-       
-       <!-- Технические кнопки (скрыты по умолчанию) -->
-       <div id="dev-controls" style="display: none;">
-         <button id="btn-create-signer" class="btn" type="button">Create Signer</button>
-         <button id="btn-check-replies" class="btn" type="button">Check Replies</button>
-       </div> </nav>
+      <div class="header-content">
+        <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Show logo"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="App version">v1.21</span> <button id="btn-settings" class="btn btn-settings-inline" type="button" aria-label="Settings" title="Settings">⚙️</button></h1>
+        <nav class="top-actions" aria-label="Actions">
+          <button id="btn-new" class="btn" type="button">New Game</button>
+          <button id="btn-dev-toggle" class="btn" type="button" title="Developer mode" style="display: none;">🔧</button>
+          <div class="auth-group">
+            <button id="btn-auth" class="btn" type="button">Sign In</button>
+            <span id="user-label" aria-live="polite" class="user-label"></span>
+          </div>
+        </nav>
+      </div>
+      
+      <nav class="game-actions" aria-label="Game Actions">
+        <!-- Основные игровые кнопки -->
+        <button id="btn-invite" class="btn" type="button" style="display: none;">Create Match</button>
+        <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish Result</button>
+        
+        <!-- Технические кнопки (скрыты по умолчанию) -->
+        <div id="dev-controls" style="display: none;">
+          <button id="btn-create-signer" class="btn" type="button">Create Signer</button>
+          <button id="btn-check-replies" class="btn" type="button">Check Replies</button>
+        </div>
+      </nav>
     </header>
 
     <main class="app-main">
@@ -109,11 +109,21 @@
         <h2 id="settings-modal-title" style="position: static; margin: 0 0 20px 0; padding: 0; background: none; font-size: 1.5rem;">Settings</h2>
         
         <div style="display: flex; flex-direction: column; gap: 20px;">
+          <!-- Game Mode Setting -->
+          <div>
+            <label for="settings-mode" style="display: block; margin-bottom: 8px; font-weight: 500;">Game Mode</label>
+            <select id="settings-mode" class="btn" style="width: 100%;">
+              <option value="pve-easy">PvE — Easy</option>
+              <option value="pve-hard">PvE — Hard</option>
+              <option value="pvp-local">PvP — Local</option>
+              <option value="pvp-farcaster">PvP — Farcaster</option>
+            </select>
+          </div>
           <!-- Language Setting -->
           <div>
             <label for="settings-lang" style="display: block; margin-bottom: 8px; font-weight: 500;">Language</label>
             <select id="settings-lang" class="btn" style="width: 100%;">
-              <option value="en" selected>English</option>
+              <option value="en">English</option>
               <option value="ru">Русский</option>
             </select>
           </div>

@@ -22,7 +22,6 @@ const statusEl = document.getElementById("status");
 const settingsBtn = document.getElementById("btn-settings");
 const devToggleBtn = document.getElementById("btn-dev-toggle");
 const newBtn = document.getElementById("btn-new");
-const modeSel = document.getElementById("mode");
 const authBtn = document.getElementById("btn-auth");
 const userLabel = document.getElementById("user-label");
 const createSignerBtn = document.getElementById("btn-create-signer");
@@ -34,19 +33,22 @@ const cells = [...boardEl.querySelectorAll(".cell")];
 // Settings modal elements
 const settingsModal = document.getElementById("settings-modal");
 const settingsLang = document.getElementById("settings-lang");
+const settingsMode = document.getElementById("settings-mode");
 const modalCloseBtns = document.querySelectorAll(".modal-close");
 
 let state = createInitialState();
 let scores = { X: 0, O: 0, draw: 0 };
-let mode = modeSel?.value || "pve-easy";
+let mode = settingsMode?.value || "pve-easy";
 let botThinking = false;
 
 function getLanguage() {
-  return localStorage.getItem("language") || "en";
+  return localStorage.getItem("language") || "en"; // Default to English
 }
 
 function setLanguage(lang) {
   localStorage.setItem("language", lang);
+  // Update HTML lang attribute for accessibility and SEO
+  document.documentElement.lang = lang;
 }
 
 function setTheme(theme) {
@@ -131,11 +133,11 @@ settingsBtn?.addEventListener("click", () => {
   if (settingsModal) {
     settingsModal.setAttribute("aria-hidden", "false");
     // Load current values
-    if (settingsTheme) {
-      settingsTheme.value = root.getAttribute("data-theme") || "light";
-    }
     if (settingsLang) {
       settingsLang.value = getLanguage();
+    }
+    if (settingsMode) {
+      settingsMode.value = mode;
     }
   }
 });
@@ -160,7 +162,9 @@ settingsModal?.addEventListener("click", (e) => {
 // Settings change handlers
 settingsLang?.addEventListener("change", (e) => {
   setLanguage(e.target.value);
-  render(); // Update UI text
+  initializeUITexts(); // Update all UI texts
+  render(); // Update game UI text
+  refreshUserLabel(); // Update user label and button text
 });
 
 devToggleBtn?.addEventListener("click", () => {
@@ -183,8 +187,8 @@ devToggleBtn?.addEventListener("click", () => {
   devToggleBtn.title = newDevMode ? "Выключить режим разработчика" : "Включить режим разработчика";
 });
 newBtn?.addEventListener("click", () => resetBoard(true));
-modeSel?.addEventListener("change", () => { 
-  mode = modeSel.value; 
+settingsMode?.addEventListener("change", () => { 
+  mode = settingsMode.value; 
   resetBoard(true); 
   updateUIForMode();
 });
@@ -589,12 +593,65 @@ createSignerBtn?.addEventListener("click", async () => {
   }
 });
 
+// Function to initialize all UI texts based on current language
+function initializeUITexts() {
+  const lang = getLanguage();
+  
+  // Update button texts
+  if (newBtn) {
+    newBtn.textContent = lang === "ru" ? "Новая игра" : "New Game";
+  }
+  
+  // Update mode select options (now in settings)
+  if (settingsMode) {
+    const options = settingsMode.querySelectorAll("option");
+    if (options.length >= 4) {
+      if (lang === "ru") {
+        options[0].textContent = "PvE — Легко";
+        options[1].textContent = "PvE — Сложно";
+        options[2].textContent = "PvP — Локально";
+        options[3].textContent = "PvP — Farcaster";
+      } else {
+        options[0].textContent = "PvE — Easy";
+        options[1].textContent = "PvE — Hard";
+        options[2].textContent = "PvP — Local";
+        options[3].textContent = "PvP — Farcaster";
+      }
+    }
+  }
+  
+  // Update modal title
+  const modalTitle = document.getElementById("settings-modal-title");
+  if (modalTitle) {
+    modalTitle.textContent = lang === "ru" ? "Настройки" : "Settings";
+  }
+  
+  // Update language label
+  const langLabel = document.querySelector('label[for="settings-lang"]');
+  if (langLabel) {
+    langLabel.textContent = lang === "ru" ? "Язык" : "Language";
+  }
+  
+  // Update game mode label
+  const modeLabel = document.querySelector('label[for="settings-mode"]');
+  if (modeLabel) {
+    modeLabel.textContent = lang === "ru" ? "Режим игры" : "Game Mode";
+  }
+}
+
 // Initialize theme (fixed to light) and language from localStorage
 setTheme("light");
-setLanguage(localStorage.getItem("language") || "en");
+// Default to English if no language is set
+const savedLang = localStorage.getItem("language");
+if (!savedLang) {
+  setLanguage("en");
+} else {
+  setLanguage(savedLang);
+}
 if (settingsLang) {
   settingsLang.value = getLanguage();
 }
+initializeUITexts();
 
 // Инициализируем dev режим
 const devMode = localStorage.getItem("dev-mode") === "true";

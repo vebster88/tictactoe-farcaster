@@ -83,20 +83,26 @@ html::after {
   backdrop-filter: blur(25px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.25);
   padding: 16px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   position: sticky;
   top: 0;
   z-index: 50;
   position: relative;
 }
 
-.btn-settings-top {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 51;
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.btn-settings-inline {
+  margin-left: 8px;
+  padding: 4px 8px;
+  min-width: auto;
+  min-height: auto;
+  font-size: 1rem;
 }
 
 h1 {
@@ -110,6 +116,13 @@ h1 {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+h1 .btn-settings-inline {
+  -webkit-text-fill-color: var(--fg);
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .app-version {
@@ -134,6 +147,36 @@ h1 {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.auth-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: block;
+  text-align: center;
+  padding: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.game-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  justify-content: flex-end;
 }
 
 .btn, select {
@@ -455,15 +498,27 @@ h1 {
 }
 
 @media (max-width: 640px) {
-  .app-header {
+  .header-content {
     flex-direction: column;
-    gap: 16px;
     align-items: stretch;
+    gap: 12px;
   }
   
   .top-actions {
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
+  }
+  
+  .auth-group {
+    align-items: center;
+  }
+  
+  .user-label {
+    text-align: center;
+  }
+  
+  .game-actions {
+    justify-content: flex-start;
   }
   
   .score {
