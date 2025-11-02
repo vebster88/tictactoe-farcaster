@@ -362,8 +362,15 @@ authBtn?.addEventListener("click", async () => {
   
   if (authBtn.dataset.signedIn === "true") {
     addDebugLog('🚪 Выход из системы...');
+    
+    const session = getSession();
+    const username = session?.farcaster?.username || session?.address?.slice(0, 6) || 'пользователь';
+    
     signOut();
     refreshUserLabel();
+    
+    addDebugLog('✅ Выход выполнен', { username });
+    alert(`👋 Вы вышли из аккаунта\n\n${username}`);
     return;
   }
   
