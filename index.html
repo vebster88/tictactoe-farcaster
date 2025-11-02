@@ -44,32 +44,28 @@
   </head>
   <body data-theme="light">
     <header class="app-header">
-      <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Показать логотип"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="Версия приложения">v1.18</span></h1>
+      <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Show logo"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="App version">v1.19</span></h1>
       <nav class="top-actions" aria-label="Actions">
-        <button id="btn-new" class="btn" type="button">Новая игра</button>
-        <select id="mode" aria-label="Режим">
-          <option value="pve-easy">PvE — Лёгкий</option>
-          <option value="pve-hard">PvE — Хард</option>
-          <option value="pvp-local">PvP — Локально</option>
+        <button id="btn-new" class="btn" type="button">New Game</button>
+        <select id="mode" aria-label="Mode">
+          <option value="pve-easy">PvE — Easy</option>
+          <option value="pve-hard">PvE — Hard</option>
+          <option value="pvp-local">PvP — Local</option>
           <option value="pvp-farcaster">PvP — Farcaster</option>
         </select>
-        <button id="btn-theme" class="btn" type="button" aria-pressed="false">Тема</button>
-        <button id="btn-dev-toggle" class="btn" type="button" title="Включить режим разработчика">⚙️</button>
-        <select id="lang" aria-label="Язык">
-          <option value="ru" selected>RU</option>
-          <option value="en">EN</option>
-        </select>
-       <button id="btn-auth" class="btn" type="button">Войти</button> 
+        <button id="btn-settings" class="btn" type="button" aria-label="Settings" title="Settings">⚙️</button>
+        <button id="btn-dev-toggle" class="btn" type="button" title="Developer mode" style="display: none;">🔧</button>
+       <button id="btn-auth" class="btn" type="button">Sign In</button> 
        <span id="user-label" aria-live="polite"></span>
        
        <!-- Основные игровые кнопки -->
-       <button id="btn-invite" class="btn" type="button" style="display: none;">Создать матч</button>
-       <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Опубликовать результат</button>
+       <button id="btn-invite" class="btn" type="button" style="display: none;">Create Match</button>
+       <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish Result</button>
        
        <!-- Технические кнопки (скрыты по умолчанию) -->
        <div id="dev-controls" style="display: none;">
-         <button id="btn-create-signer" class="btn" type="button">Создать Signer</button>
-         <button id="btn-check-replies" class="btn" type="button">Проверить ответы</button>
+         <button id="btn-create-signer" class="btn" type="button">Create Signer</button>
+         <button id="btn-check-replies" class="btn" type="button">Check Replies</button>
        </div> </nav>
     </header>
 
@@ -100,9 +96,37 @@
     
     <div id="logo-modal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="logo-modal-title">
       <div class="modal-content">
-        <button class="modal-close" aria-label="Закрыть">&times;</button>
+        <button class="modal-close" aria-label="Close">&times;</button>
         <h2 id="logo-modal-title">vebster88</h2>
-        <img src="/assets/images/hero.jpg" alt="Медведь-киберпанк, ник vebster88" />
+        <img src="/assets/images/hero.jpg" alt="Cyberpunk bear, username vebster88" />
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="settings-modal-title">
+      <div class="modal-content" style="padding: 24px; max-width: 400px;">
+        <button class="modal-close" aria-label="Close">&times;</button>
+        <h2 id="settings-modal-title" style="position: static; margin: 0 0 20px 0; padding: 0; background: none; font-size: 1.5rem;">Settings</h2>
+        
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <!-- Theme Setting -->
+          <div>
+            <label for="settings-theme" style="display: block; margin-bottom: 8px; font-weight: 500;">Theme</label>
+            <select id="settings-theme" class="btn" style="width: 100%;">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          
+          <!-- Language Setting -->
+          <div>
+            <label for="settings-lang" style="display: block; margin-bottom: 8px; font-weight: 500;">Language</label>
+            <select id="settings-lang" class="btn" style="width: 100%;">
+              <option value="en" selected>English</option>
+              <option value="ru">Русский</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 

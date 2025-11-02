@@ -132,11 +132,12 @@ h1 {
   background: rgba(255, 255, 255, 0.2);
   color: var(--fg);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  padding: 10px 16px;
+  padding: 6px 12px;
   border-radius: var(--radius);
-  min-height: 44px;
-  min-width: 44px;
+  min-height: 32px;
+  min-width: 32px;
   font-weight: 500;
+  font-size: 0.875rem;
   transition: var(--transition);
   cursor: pointer;
   backdrop-filter: blur(20px);

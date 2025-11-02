@@ -19,11 +19,10 @@ function addDebugLog(message, data = null) {
 const root = document.body;
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
-const themeBtn = document.getElementById("btn-theme");
+const settingsBtn = document.getElementById("btn-settings");
 const devToggleBtn = document.getElementById("btn-dev-toggle");
 const newBtn = document.getElementById("btn-new");
 const modeSel = document.getElementById("mode");
-const langSel = document.getElementById("lang");
 const authBtn = document.getElementById("btn-auth");
 const userLabel = document.getElementById("user-label");
 const createSignerBtn = document.getElementById("btn-create-signer");
@@ -32,22 +31,36 @@ const inviteBtn = document.getElementById("btn-invite");
 const publishBtn = document.getElementById("btn-publish-result");
 const cells = [...boardEl.querySelectorAll(".cell")];
 
+// Settings modal elements
+const settingsModal = document.getElementById("settings-modal");
+const settingsTheme = document.getElementById("settings-theme");
+const settingsLang = document.getElementById("settings-lang");
+const modalCloseBtns = document.querySelectorAll(".modal-close");
+
 let state = createInitialState();
 let scores = { X: 0, O: 0, draw: 0 };
 let mode = modeSel?.value || "pve-easy";
 let botThinking = false;
 
+function getLanguage() {
+  return localStorage.getItem("language") || "en";
+}
+
+function setLanguage(lang) {
+  localStorage.setItem("language", lang);
+}
+
 function setTheme(next) {
   root.setAttribute("data-theme", next);
-  themeBtn?.setAttribute("aria-pressed", String(next === "dark"));
   localStorage.setItem("theme", next);
+  if (settingsTheme) {
+    settingsTheme.value = next;
+  }
 }
-function toggleTheme() {
-  const current = root.getAttribute("data-theme") || "light";
-  setTheme(current === "light" ? "dark" : "light");
-}
+
 function t(_key, dict) {
-  return langSel?.value === "ru" ? dict.ru : dict.en;
+  const lang = getLanguage();
+  return lang === "ru" ? dict.ru : dict.en;
 }
 function showStatus(msg) { statusEl.textContent = msg; }
 
@@ -55,7 +68,7 @@ function render() {
   cells.forEach((btn, i) => {
     const v = state.board[i];
     btn.textContent = v ? v : "";
-    btn.setAttribute("aria-label", v ? v : (langSel?.value === "ru" ? "Пусто" : "Empty"));
+    btn.setAttribute("aria-label", v ? v : (getLanguage() === "ru" ? "Пусто" : "Empty"));
     btn.setAttribute("aria-pressed", String(!!v));
     btn.classList.remove("win");
   });
@@ -117,7 +130,47 @@ function handleMove(idx) {
   maybeBotMove();
 }
 
-themeBtn?.addEventListener("click", toggleTheme);
+// Settings modal handlers
+settingsBtn?.addEventListener("click", () => {
+  if (settingsModal) {
+    settingsModal.setAttribute("aria-hidden", "false");
+    // Load current values
+    if (settingsTheme) {
+      settingsTheme.value = root.getAttribute("data-theme") || "light";
+    }
+    if (settingsLang) {
+      settingsLang.value = getLanguage();
+    }
+  }
+});
+
+// Close modal handlers
+modalCloseBtns.forEach(btn => {
+  btn.addEventListener("click", () => {
+    const modal = btn.closest(".modal");
+    if (modal) {
+      modal.setAttribute("aria-hidden", "true");
+    }
+  });
+});
+
+// Close modal on backdrop click
+settingsModal?.addEventListener("click", (e) => {
+  if (e.target === settingsModal) {
+    settingsModal.setAttribute("aria-hidden", "true");
+  }
+});
+
+// Settings change handlers
+settingsTheme?.addEventListener("change", (e) => {
+  setTheme(e.target.value);
+});
+
+settingsLang?.addEventListener("change", (e) => {
+  setLanguage(e.target.value);
+  render(); // Update UI text
+});
+
 devToggleBtn?.addEventListener("click", () => {
   if (!checkDevAccess()) {
     // Секретный способ активации для экстренных случаев
@@ -143,7 +196,6 @@ modeSel?.addEventListener("change", () => {
   resetBoard(true); 
   updateUIForMode();
 });
-langSel?.addEventListener("change", () => render());
 
 boardEl.addEventListener("click", (e) => {
   const btn = e.target.closest(".cell");
@@ -168,6 +220,13 @@ function refreshUserLabel() {
   // Проверяем авторизацию: либо через кошелек (address), либо через Farcaster (farcaster)
   const isAuthorized = !!(s?.address || s?.farcaster);
   
+  const lang = getLanguage();
+  const texts = {
+    en: { signedIn: "Signed In", signOut: "Sign Out", signIn: "Sign In" },
+    ru: { signedIn: "Авторизован", signOut: "Выйти", signIn: "Войти" }
+  };
+  const t = texts[lang] || texts.en;
+  
   if (isAuthorized) {
     // Приоритет: отображаем Farcaster username, если есть
     if (s.farcaster?.username) {
@@ -180,14 +239,14 @@ function refreshUserLabel() {
       // Fallback на адрес кошелька
       userLabel.textContent = s.address.slice(0, 6) + "…" + s.address.slice(-4);
     } else {
-      userLabel.textContent = "Авторизован";
+      userLabel.textContent = t.signedIn;
     }
     
-    authBtn.textContent = "Выйти";
+    authBtn.textContent = t.signOut;
     authBtn.dataset.signedIn = "true";
   } else {
     userLabel.textContent = "";
-    authBtn.textContent = "Войти";
+    authBtn.textContent = t.signIn;
     authBtn.dataset.signedIn = "false";
   }
   
@@ -267,13 +326,16 @@ authBtn?.addEventListener("click", async () => {
     addDebugLog('🚪 Выход из системы...');
     
     const session = getSession();
-    const username = session?.farcaster?.username || session?.address?.slice(0, 6) || 'пользователь';
+    const lang = getLanguage();
+    const username = session?.farcaster?.username || session?.address?.slice(0, 6) || (lang === "ru" ? 'пользователь' : 'user');
     
     signOut();
     refreshUserLabel();
     
-    addDebugLog('✅ Выход выполнен', { username });
-    alert(`👋 Вы вышли из аккаунта\n\n${username}`);
+    const msg = lang === "ru" 
+      ? `👋 Вы вышли из аккаунта\n\n${username}`
+      : `👋 Signed out\n\n${username}`;
+    alert(msg);
     return;
   }
   
@@ -359,7 +421,11 @@ authBtn?.addEventListener("click", async () => {
       });
       
       // Показываем успех
-      alert(`✅ Успешная авторизация!\n\n@${farcasterProfile.username}\nFID: ${farcasterProfile.fid}`);
+      const lang = getLanguage();
+      const msg = lang === "ru"
+        ? `✅ Успешная авторизация!\n\n@${farcasterProfile.username}\nFID: ${farcasterProfile.fid}`
+        : `✅ Signed in successfully!\n\n@${farcasterProfile.username}\nFID: ${farcasterProfile.fid}`;
+      alert(msg);
       return;
       
     } catch (error) {
@@ -371,7 +437,10 @@ authBtn?.addEventListener("click", async () => {
       });
       
       // Показываем пользователю детальную ошибку
-      const errorMsg = `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПроверьте debug panel внизу справа.`;
+      const lang = getLanguage();
+      const errorMsg = lang === "ru"
+        ? `Не удалось подключиться к Farcaster:\n\n${error.message}`
+        : `Failed to connect to Farcaster:\n\n${error.message}`;
       alert(errorMsg);
       
       // НЕ используем кошелек как fallback в Mini App - это ошибка конфигурации
@@ -390,7 +459,11 @@ authBtn?.addEventListener("click", async () => {
       message: e?.message || String(e),
       stack: e?.stack
     }); 
-    alert("Не удалось войти: " + (e?.message || e)); 
+    const lang = getLanguage();
+    const msg = lang === "ru"
+      ? "Не удалось войти: " + (e?.message || e)
+      : "Failed to sign in: " + (e?.message || e);
+    alert(msg); 
   } finally { 
     refreshUserLabel(); 
   }
@@ -524,13 +597,25 @@ createSignerBtn?.addEventListener("click", async () => {
   }
 });
 
+// Initialize theme and language from localStorage
 setTheme(localStorage.getItem("theme") || "light");
+if (settingsTheme) {
+  settingsTheme.value = root.getAttribute("data-theme") || "light";
+}
+setLanguage(localStorage.getItem("language") || "en");
+if (settingsLang) {
+  settingsLang.value = getLanguage();
+}
 
 // Инициализируем dev режим
 const devMode = localStorage.getItem("dev-mode") === "true";
 if (devToggleBtn) {
   devToggleBtn.setAttribute("aria-pressed", devMode.toString());
-  devToggleBtn.title = devMode ? "Выключить режим разработчика" : "Включить режим разработчика";
+  const lang = getLanguage();
+  const title = lang === "ru"
+    ? (devMode ? "Выключить режим разработчика" : "Включить режим разработчика")
+    : (devMode ? "Disable developer mode" : "Enable developer mode");
+  devToggleBtn.title = title;
 }
 
 // Display app version
