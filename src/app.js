@@ -10,33 +10,9 @@ import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 import { APP_VERSION } from "./version.js";
 
-const root = document.body;
-const boardEl = document.getElementById("board");
-const statusEl = document.getElementById("status");
-const themeBtn = document.getElementById("btn-theme");
-const devToggleBtn = document.getElementById("btn-dev-toggle");
-const newBtn = document.getElementById("btn-new");
-const modeSel = document.getElementById("mode");
-const langSel = document.getElementById("lang");
-const authBtn = document.getElementById("btn-auth");
-if (!authBtn) {
-  addDebugLog('❌ Кнопка "btn-auth" не найдена в DOM!');
-} else {
-  addDebugLog('✅ Кнопка "btn-auth" найдена', {
-    id: authBtn.id,
-    text: authBtn.textContent,
-    className: authBtn.className
-  });
-}
-const userLabel = document.getElementById("user-label");
-const createSignerBtn = document.getElementById("btn-create-signer");
-const checkRepliesBtn = document.getElementById("btn-check-replies");
-const inviteBtn = document.getElementById("btn-invite");
-const publishBtn = document.getElementById("btn-publish-result");
-const cells = [...boardEl.querySelectorAll(".cell")];
-
+// ===== DEBUG LOGGING SYSTEM - MUST BE DEFINED FIRST =====
 // Debug logging system for Mini App (console.log may not work)
-// Must be defined BEFORE any usage
+// Must be defined BEFORE any usage to prevent ReferenceError
 let debugLogs = [];
 const MAX_DEBUG_LOGS = 50;
 
@@ -94,8 +70,12 @@ function addDebugLog(message, data = null) {
     // Ignore localStorage errors
   }
   
-  // Update visual debug indicator
-  updateDebugDisplay();
+  // Update visual debug indicator (only if DOM is ready)
+  try {
+    updateDebugDisplay();
+  } catch (e) {
+    // DOM might not be ready yet
+  }
   
   // Also try console.log (might work in some clients)
   try {
@@ -108,22 +88,48 @@ function addDebugLog(message, data = null) {
     // Console not available
   }
 }
+// ===== END DEBUG LOGGING SYSTEM =====
+
+// Load previous logs on startup (after addDebugLog is defined)
+try {
+  const saved = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
+  if (saved.length > 0) {
+    debugLogs = saved.slice(-MAX_DEBUG_LOGS);
+  }
+} catch (e) {
+  // Ignore
+}
+
+// Now we can safely use addDebugLog
+const root = document.body;
+const boardEl = document.getElementById("board");
+const statusEl = document.getElementById("status");
+const themeBtn = document.getElementById("btn-theme");
+const devToggleBtn = document.getElementById("btn-dev-toggle");
+const newBtn = document.getElementById("btn-new");
+const modeSel = document.getElementById("mode");
+const langSel = document.getElementById("lang");
+const authBtn = document.getElementById("btn-auth");
+if (!authBtn) {
+  addDebugLog('❌ Кнопка "btn-auth" не найдена в DOM!');
+} else {
+  addDebugLog('✅ Кнопка "btn-auth" найдена', {
+    id: authBtn.id,
+    text: authBtn.textContent,
+    className: authBtn.className
+  });
+}
+const userLabel = document.getElementById("user-label");
+const createSignerBtn = document.getElementById("btn-create-signer");
+const checkRepliesBtn = document.getElementById("btn-check-replies");
+const inviteBtn = document.getElementById("btn-invite");
+const publishBtn = document.getElementById("btn-publish-result");
+const cells = [...boardEl.querySelectorAll(".cell")];
 
 let state = createInitialState();
 let scores = { X: 0, O: 0, draw: 0 };
 let mode = modeSel?.value || "pve-easy";
 let botThinking = false;
-
-// Load previous logs on startup
-try {
-  const saved = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
-  if (saved.length > 0) {
-    debugLogs = saved.slice(-MAX_DEBUG_LOGS);
-    addDebugLog('📋 Загружены предыдущие логи отладки', `Загружено ${debugLogs.length} записей`);
-  }
-} catch (e) {
-  // Ignore
-}
 
 function setTheme(next) {
   root.setAttribute("data-theme", next);
@@ -602,10 +608,14 @@ refreshUserLabel();
 // Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
 // After your app is fully loaded and ready to display: await sdk.actions.ready()
 // Pattern from working React example: call ready() after UI initialization (like useEffect)
+// CRITICAL: ready() MUST be called to hide splash screen, even if there are errors
 
 (async () => {
   try {
+    // Call ready() FIRST to hide splash screen, even if auto-load fails
+    addDebugLog('🚀 Инициализация Farcaster SDK...');
     await farcasterSDK.ready();
+    addDebugLog('✅ SDK ready() вызван, splash screen скрыт');
     
     // Автоматически загружаем пользователя из Mini App, если доступен
     if (farcasterSDK.checkMiniAppEnvironment()) {
@@ -670,7 +680,20 @@ refreshUserLabel();
       }
     }
   } catch (error) {
-    addDebugLog('❌ Ошибка инициализации Farcaster SDK', error.message);
+    addDebugLog('❌ Ошибка инициализации Farcaster SDK', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // CRITICAL: Still try to call ready() even on error to hide splash screen
+    try {
+      await farcasterSDK.ready();
+      addDebugLog('✅ SDK ready() вызван после ошибки');
+    } catch (readyError) {
+      addDebugLog('❌ Не удалось вызвать SDK ready()', readyError.message);
+    }
+    
     // App will still work in browser, but Mini App features won't be available
   }
 })();
