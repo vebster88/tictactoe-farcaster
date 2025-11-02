@@ -19,6 +19,15 @@ const newBtn = document.getElementById("btn-new");
 const modeSel = document.getElementById("mode");
 const langSel = document.getElementById("lang");
 const authBtn = document.getElementById("btn-auth");
+if (!authBtn) {
+  console.error('❌ Кнопка "btn-auth" не найдена в DOM!');
+} else {
+  console.log('✅ Кнопка "btn-auth" найдена:', {
+    id: authBtn.id,
+    text: authBtn.textContent,
+    className: authBtn.className
+  });
+}
 const userLabel = document.getElementById("user-label");
 const createSignerBtn = document.getElementById("btn-create-signer");
 const checkRepliesBtn = document.getElementById("btn-check-replies");
@@ -236,15 +245,28 @@ function checkDevAccess() {
   return isAuthorized;
 }
 authBtn?.addEventListener("click", async () => {
+  console.log('🖱️ Button "Войти" clicked');
+  console.log('📋 Button state:', {
+    signedIn: authBtn.dataset.signedIn,
+    text: authBtn.textContent,
+    exists: !!authBtn
+  });
+  
   if (authBtn.dataset.signedIn === "true") {
+    console.log('🚪 Signing out...');
     signOut();
     refreshUserLabel();
     return;
   }
   
+  console.log('🔍 Starting authentication flow...');
+  
   // В Mini App используем SDK, а не кошелек
   // Проверяем окружение сначала (не зависит от загрузки SDK)
-  if (farcasterSDK.checkMiniAppEnvironment()) {
+  const isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
+  console.log('🌍 Mini App environment check:', isMiniAppEnv);
+  
+  if (isMiniAppEnv) {
     console.log('🔍 Attempting Farcaster Mini App authentication...');
     console.log('📊 Environment check:', {
       windowFarcaster: !!window.farcaster,
@@ -323,10 +345,12 @@ authBtn?.addEventListener("click", async () => {
   }
   
   // Для обычного браузера используем кошелек
+  console.log('💼 Not in Mini App, trying wallet authentication...');
   try { 
     await signInWithWallet(); 
+    console.log('✅ Wallet authentication successful');
   } catch (e) { 
-    console.error(e); 
+    console.error('❌ Wallet authentication failed:', e); 
     alert("Не удалось войти: " + (e?.message || e)); 
   } finally { 
     refreshUserLabel(); 

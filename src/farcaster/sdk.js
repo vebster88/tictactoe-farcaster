@@ -123,13 +123,28 @@ export const farcasterSDK = {
   },
   
   async getUser() {
+    console.log('🔧 getUser() called, checking SDK...');
     const sdk = await getSDK();
+    console.log('🔧 SDK instance:', {
+      exists: !!sdk,
+      fallbackOnly,
+      hasUser: !!sdk.user,
+      userType: typeof sdk.user
+    });
+    
     if (fallbackOnly) {
-      throw new Error('SDK недоступен (fallback mode) - не в Mini App окружении');
+      const error = new Error('SDK недоступен (fallback mode) - не в Mini App окружении');
+      console.error('❌', error.message);
+      throw error;
     }
     
     if (!sdk.user || typeof sdk.user !== 'function') {
-      throw new Error('SDK.user() метод недоступен');
+      const error = new Error(`SDK.user() метод недоступен (type: ${typeof sdk.user})`);
+      console.error('❌', error.message, {
+        sdkKeys: Object.keys(sdk),
+        sdkUser: sdk.user
+      });
+      throw error;
     }
     
     try {
@@ -141,12 +156,17 @@ export const farcasterSDK = {
         throw new Error('SDK.user() вернул null/undefined');
       }
       
+      if (!user.fid) {
+        console.warn('⚠️ SDK.user() вернул user без fid:', user);
+      }
+      
       return user;
     } catch (error) {
       console.error('❌ SDK.user() failed:', {
         message: error.message,
         stack: error.stack,
-        name: error.name
+        name: error.name,
+        cause: error.cause
       });
       throw error; // Пробрасываем ошибку дальше
     }
@@ -185,11 +205,28 @@ export const farcasterSDK = {
   
   // Alternative: check environment without SDK dependency
   checkMiniAppEnvironment() {
-    return !!(
-      window.farcaster ||
-      (window.parent !== window) ||
-      document.referrer?.includes('farcaster') ||
-      (window.location !== window.parent.location)
+    const checks = {
+      windowFarcaster: !!window.farcaster,
+      parentWindow: window.parent !== window,
+      referrer: document.referrer?.includes('farcaster') || false,
+      location: window.location !== window.parent.location
+    };
+    
+    const result = !!(
+      checks.windowFarcaster ||
+      checks.parentWindow ||
+      checks.referrer ||
+      checks.location
     );
+    
+    console.log('🔍 Mini App environment check:', {
+      ...checks,
+      result,
+      referrerValue: document.referrer,
+      locationHref: window.location.href,
+      parentLocationHref: window.parent.location?.href
+    });
+    
+    return result;
   }
 };
