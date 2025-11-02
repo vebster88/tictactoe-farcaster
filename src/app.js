@@ -20,9 +20,9 @@ const modeSel = document.getElementById("mode");
 const langSel = document.getElementById("lang");
 const authBtn = document.getElementById("btn-auth");
 if (!authBtn) {
-  console.error('❌ Кнопка "btn-auth" не найдена в DOM!');
+  addDebugLog('❌ Кнопка "btn-auth" не найдена в DOM!');
 } else {
-  console.log('✅ Кнопка "btn-auth" найдена:', {
+  addDebugLog('✅ Кнопка "btn-auth" найдена', {
     id: authBtn.id,
     text: authBtn.textContent,
     className: authBtn.className
@@ -39,6 +39,90 @@ let state = createInitialState();
 let scores = { X: 0, O: 0, draw: 0 };
 let mode = modeSel?.value || "pve-easy";
 let botThinking = false;
+
+// Debug logging system for Mini App (console.log may not work)
+let debugLogs = [];
+const MAX_DEBUG_LOGS = 50;
+
+function addDebugLog(message, data = null) {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = {
+    time: timestamp,
+    message,
+    data: data ? (typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)) : null
+  };
+  
+  debugLogs.push(logEntry);
+  
+  // Keep only last MAX_DEBUG_LOGS entries
+  if (debugLogs.length > MAX_DEBUG_LOGS) {
+    debugLogs.shift();
+  }
+  
+  // Save to localStorage for persistence
+  try {
+    const existing = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
+    existing.push(logEntry);
+    if (existing.length > MAX_DEBUG_LOGS) existing.shift();
+    localStorage.setItem('fc_debug_logs', JSON.stringify(existing));
+  } catch (e) {
+    // Ignore localStorage errors
+  }
+  
+  // Update visual debug indicator
+  updateDebugDisplay();
+  
+  // Also try console.log (might work in some clients)
+  try {
+    if (data) {
+      console.log(`[${timestamp}] ${message}`, data);
+    } else {
+      console.log(`[${timestamp}] ${message}`);
+    }
+  } catch (e) {
+    // Console not available
+  }
+}
+
+function updateDebugDisplay() {
+  const statusEl = document.getElementById('debug-status');
+  const contentEl = document.getElementById('debug-status-content');
+  
+  if (!statusEl || !contentEl) return;
+  
+  // Show debug panel
+  statusEl.style.display = 'block';
+  
+  // Display last 8 log entries
+  const recentLogs = debugLogs.slice(-8);
+  contentEl.innerHTML = recentLogs.map(log => {
+    const dataStr = log.data ? `\n${log.data}` : '';
+    return `<div style="margin-bottom: 4px; padding: 4px; background: rgba(0,255,0,0.1); border-left: 2px solid #00ff00;">
+      <strong style="color: #00ff00;">[${log.time}]</strong> <span style="color: #ffffff;">${escapeHtml(log.message)}</span>
+      ${dataStr ? `<pre style="margin: 4px 0 0 0; font-size: 9px; color: #aaa; white-space: pre-wrap; word-break: break-all;">${escapeHtml(dataStr)}</pre>` : ''}
+    </div>`;
+  }).join('');
+  
+  // Auto-scroll to bottom
+  contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Load previous logs on startup
+try {
+  const saved = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
+  if (saved.length > 0) {
+    debugLogs = saved.slice(-MAX_DEBUG_LOGS);
+    addDebugLog('📋 Загружены предыдущие логи отладки', `Загружено ${debugLogs.length} записей`);
+  }
+} catch (e) {
+  // Ignore
+}
 
 function setTheme(next) {
   root.setAttribute("data-theme", next);
@@ -245,30 +329,30 @@ function checkDevAccess() {
   return isAuthorized;
 }
 authBtn?.addEventListener("click", async () => {
-  console.log('🖱️ Button "Войти" clicked');
-  console.log('📋 Button state:', {
+  addDebugLog('🖱️ Кнопка "Войти" нажата');
+  addDebugLog('📋 Состояние кнопки', {
     signedIn: authBtn.dataset.signedIn,
     text: authBtn.textContent,
     exists: !!authBtn
   });
   
   if (authBtn.dataset.signedIn === "true") {
-    console.log('🚪 Signing out...');
+    addDebugLog('🚪 Выход из системы...');
     signOut();
     refreshUserLabel();
     return;
   }
   
-  console.log('🔍 Starting authentication flow...');
+  addDebugLog('🔍 Начинаем процесс авторизации...');
   
   // В Mini App используем SDK, а не кошелек
   // Проверяем окружение сначала (не зависит от загрузки SDK)
   const isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
-  console.log('🌍 Mini App environment check:', isMiniAppEnv);
+  addDebugLog('🌍 Проверка Mini App окружения', { result: isMiniAppEnv });
   
   if (isMiniAppEnv) {
-    console.log('🔍 Attempting Farcaster Mini App authentication...');
-    console.log('📊 Environment check:', {
+    addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
+    addDebugLog('📊 Проверка окружения', {
       windowFarcaster: !!window.farcaster,
       parentWindow: window.parent !== window,
       referrer: document.referrer,
@@ -276,25 +360,26 @@ authBtn?.addEventListener("click", async () => {
     });
     
     try {
+      addDebugLog('👤 Запрос пользователя через SDK...');
       // Пытаемся получить пользователя через SDK
       const user = await farcasterSDK.getUser();
-      console.log('👤 SDK getUser() result:', user);
+      addDebugLog('👤 SDK.getUser() результат', user);
       
       if (!user || !user.fid) {
         throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
       }
       
       const backendOrigin = window.location.origin;
-      console.log('🌐 Backend origin:', backendOrigin);
+      addDebugLog('🌐 Backend origin', backendOrigin);
       
       // Пытаемся получить полные данные через Quick Auth
+      addDebugLog('🔐 Начинаем Quick Auth...');
       let fullUserData = null;
       try {
-        console.log('🔐 Attempting Quick Auth...');
         fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-        console.log('✅ Quick Auth success:', fullUserData);
+        addDebugLog('✅ Quick Auth успешен!', fullUserData);
       } catch (error) {
-        console.error('❌ Quick Auth failed:', {
+        addDebugLog('❌ Quick Auth ошибка', {
           message: error.message,
           stack: error.stack,
           name: error.name
@@ -314,6 +399,8 @@ authBtn?.addEventListener("click", async () => {
         pfp_url: fullUserData.pfp_url || fullUserData.pfp || null
       };
       
+      addDebugLog('👤 Создаём профиль пользователя', farcasterProfile);
+      
       const session = {
         schemaVersion: "1.0.0",
         farcaster: farcasterProfile,
@@ -323,11 +410,14 @@ authBtn?.addEventListener("click", async () => {
       
       localStorage.setItem("fc_session", JSON.stringify(session));
       refreshUserLabel();
-      console.log('✅ Farcaster Mini App user logged in:', farcasterProfile);
+      addDebugLog('✅ Farcaster Mini App пользователь авторизован!', farcasterProfile);
+      
+      // Показываем успех
+      alert(`✅ Успешная авторизация!\n\n@${farcasterProfile.username}\nFID: ${farcasterProfile.fid}`);
       return;
       
     } catch (error) {
-      console.error('❌ Farcaster Mini App authentication failed:', {
+      addDebugLog('❌ Ошибка авторизации Mini App', {
         message: error.message,
         stack: error.stack,
         name: error.name,
@@ -335,22 +425,25 @@ authBtn?.addEventListener("click", async () => {
       });
       
       // Показываем пользователю детальную ошибку
-      const errorMsg = `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПроверьте консоль для деталей.`;
+      const errorMsg = `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПроверьте debug panel внизу справа.`;
       alert(errorMsg);
       
       // НЕ используем кошелек как fallback в Mini App - это ошибка конфигурации
-      console.error('🚫 Не используем кошелек как fallback в Mini App - это ошибка конфигурации');
+      addDebugLog('🚫 Не используем кошелек как fallback в Mini App');
       return;
     }
   }
   
   // Для обычного браузера используем кошелек
-  console.log('💼 Not in Mini App, trying wallet authentication...');
+  addDebugLog('💼 Не Mini App окружение, пробуем авторизацию через кошелек...');
   try { 
     await signInWithWallet(); 
-    console.log('✅ Wallet authentication successful');
+    addDebugLog('✅ Авторизация через кошелек успешна');
   } catch (e) { 
-    console.error('❌ Wallet authentication failed:', e); 
+    addDebugLog('❌ Ошибка авторизации через кошелек', {
+      message: e?.message || String(e),
+      stack: e?.stack
+    }); 
     alert("Не удалось войти: " + (e?.message || e)); 
   } finally { 
     refreshUserLabel(); 
@@ -515,27 +608,27 @@ refreshUserLabel();
     
     // Автоматически загружаем пользователя из Mini App, если доступен
     if (farcasterSDK.checkMiniAppEnvironment()) {
-      console.log('🔍 Auto-loading Farcaster Mini App user...');
+      addDebugLog('🔍 Автоматическая загрузка пользователя Mini App...');
       try {
         const user = await farcasterSDK.getUser();
-        console.log('👤 Auto-load getUser() result:', user);
+        addDebugLog('👤 Auto-load getUser() результат', user);
         
         if (!user || !user.fid) {
-          console.warn('⚠️ SDK не вернул user.fid при авто-загрузке');
+          addDebugLog('⚠️ SDK не вернул user.fid при авто-загрузке');
           return;
         }
         
         const backendOrigin = window.location.origin;
-        console.log('🌐 Backend origin:', backendOrigin);
+        addDebugLog('🌐 Backend origin (auto-load)', backendOrigin);
         
         // Пытаемся получить полные данные через Quick Auth
         let fullUserData = null;
         try {
-          console.log('🔐 Auto-load Quick Auth...');
+          addDebugLog('🔐 Auto-load Quick Auth...');
           fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-          console.log('✅ Auto-load Quick Auth success:', fullUserData);
+          addDebugLog('✅ Auto-load Quick Auth успешен', fullUserData);
         } catch (error) {
-          console.error('❌ Auto-load Quick Auth failed:', {
+          addDebugLog('❌ Auto-load Quick Auth ошибка', {
             message: error.message,
             stack: error.stack,
             name: error.name
@@ -545,7 +638,7 @@ refreshUserLabel();
         }
         
         if (!fullUserData || !fullUserData.fid) {
-          console.error('❌ Quick Auth не вернул fid при авто-загрузке');
+          addDebugLog('❌ Quick Auth не вернул fid при авто-загрузке');
           return;
         }
         
@@ -566,9 +659,9 @@ refreshUserLabel();
         
         localStorage.setItem("fc_session", JSON.stringify(updatedSession));
         refreshUserLabel();
-        console.log('✅ Farcaster Mini App user auto-loaded:', farcasterProfile);
+        addDebugLog('✅ Пользователь Mini App автоматически загружен', farcasterProfile);
       } catch (error) {
-        console.error('❌ Auto-load failed:', {
+        addDebugLog('❌ Ошибка авто-загрузки', {
           message: error.message,
           stack: error.stack,
           name: error.name
@@ -576,7 +669,7 @@ refreshUserLabel();
       }
     }
   } catch (error) {
-    console.error('❌ Failed to initialize Farcaster SDK:', error);
+    addDebugLog('❌ Ошибка инициализации Farcaster SDK', error.message);
     // App will still work in browser, but Mini App features won't be available
   }
 })();
