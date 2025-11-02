@@ -196,20 +196,21 @@ h1 {
 
 .score {
   display: flex;
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 8px;
+  margin-bottom: 16px;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
 .score > div {
   background: rgba(255, 255, 255, 0.2);
-  padding: 12px 20px;
-  border-radius: var(--radius);
+  padding: 8px 12px;
+  border-radius: calc(var(--radius) * 0.75);
   border: 1px solid rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(25px);
   transition: var(--transition);
+  white-space: nowrap;
 }
 
 .score > div:hover {
@@ -450,9 +451,14 @@ h1 {
   }
   
   .score {
-    flex-direction: column;
-    gap: 12px;
-    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    font-size: 0.75rem;
+  }
+  
+  .score > div {
+    padding: 6px 10px;
+    font-size: 0.75rem;
   }
   
   .board {
