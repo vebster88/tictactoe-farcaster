@@ -35,14 +35,39 @@ const inviteBtn = document.getElementById("btn-invite");
 const publishBtn = document.getElementById("btn-publish-result");
 const cells = [...boardEl.querySelectorAll(".cell")];
 
-let state = createInitialState();
-let scores = { X: 0, O: 0, draw: 0 };
-let mode = modeSel?.value || "pve-easy";
-let botThinking = false;
-
 // Debug logging system for Mini App (console.log may not work)
+// Must be defined BEFORE any usage
 let debugLogs = [];
 const MAX_DEBUG_LOGS = 50;
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function updateDebugDisplay() {
+  const statusEl = document.getElementById('debug-status');
+  const contentEl = document.getElementById('debug-status-content');
+  
+  if (!statusEl || !contentEl) return;
+  
+  // Show debug panel
+  statusEl.style.display = 'block';
+  
+  // Display last 8 log entries
+  const recentLogs = debugLogs.slice(-8);
+  contentEl.innerHTML = recentLogs.map(log => {
+    const dataStr = log.data ? `\n${log.data}` : '';
+    return `<div style="margin-bottom: 4px; padding: 4px; background: rgba(0,255,0,0.1); border-left: 2px solid #00ff00;">
+      <strong style="color: #00ff00;">[${log.time}]</strong> <span style="color: #ffffff;">${escapeHtml(log.message)}</span>
+      ${dataStr ? `<pre style="margin: 4px 0 0 0; font-size: 9px; color: #aaa; white-space: pre-wrap; word-break: break-all;">${escapeHtml(dataStr)}</pre>` : ''}
+    </div>`;
+  }).join('');
+  
+  // Auto-scroll to bottom
+  contentEl.scrollTop = contentEl.scrollHeight;
+}
 
 function addDebugLog(message, data = null) {
   const timestamp = new Date().toLocaleTimeString();
@@ -84,33 +109,49 @@ function addDebugLog(message, data = null) {
   }
 }
 
-function updateDebugDisplay() {
-  const statusEl = document.getElementById('debug-status');
-  const contentEl = document.getElementById('debug-status-content');
-  
-  if (!statusEl || !contentEl) return;
-  
-  // Show debug panel
-  statusEl.style.display = 'block';
-  
-  // Display last 8 log entries
-  const recentLogs = debugLogs.slice(-8);
-  contentEl.innerHTML = recentLogs.map(log => {
-    const dataStr = log.data ? `\n${log.data}` : '';
-    return `<div style="margin-bottom: 4px; padding: 4px; background: rgba(0,255,0,0.1); border-left: 2px solid #00ff00;">
-      <strong style="color: #00ff00;">[${log.time}]</strong> <span style="color: #ffffff;">${escapeHtml(log.message)}</span>
-      ${dataStr ? `<pre style="margin: 4px 0 0 0; font-size: 9px; color: #aaa; white-space: pre-wrap; word-break: break-all;">${escapeHtml(dataStr)}</pre>` : ''}
-    </div>`;
-  }).join('');
-  
-  // Auto-scroll to bottom
-  contentEl.scrollTop = contentEl.scrollHeight;
-}
+let state = createInitialState();
+let scores = { X: 0, O: 0, draw: 0 };
+let mode = modeSel?.value || "pve-easy";
+let botThinking = false;
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+function addDebugLog(message, data = null) {
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = {
+    time: timestamp,
+    message,
+    data: data ? (typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)) : null
+  };
+  
+  debugLogs.push(logEntry);
+  
+  // Keep only last MAX_DEBUG_LOGS entries
+  if (debugLogs.length > MAX_DEBUG_LOGS) {
+    debugLogs.shift();
+  }
+  
+  // Save to localStorage for persistence
+  try {
+    const existing = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
+    existing.push(logEntry);
+    if (existing.length > MAX_DEBUG_LOGS) existing.shift();
+    localStorage.setItem('fc_debug_logs', JSON.stringify(existing));
+  } catch (e) {
+    // Ignore localStorage errors
+  }
+  
+  // Update visual debug indicator
+  updateDebugDisplay();
+  
+  // Also try console.log (might work in some clients)
+  try {
+    if (data) {
+      console.log(`[${timestamp}] ${message}`, data);
+    } else {
+      console.log(`[${timestamp}] ${message}`);
+    }
+  } catch (e) {
+    // Console not available
+  }
 }
 
 // Load previous logs on startup
