@@ -110,17 +110,30 @@ export const farcasterSDK = {
   
   // Reliable check: verify host presence, not just SDK import
   isInMiniApp() {
-    // Check if we have real SDK (not fallback) AND host is available
-    if (fallbackOnly || !sdkInstance) {
+    // First check environment indicators (doesn't require SDK to be loaded)
+    const envCheck = !!(
+      window.farcaster ||
+      (window.parent !== window) ||
+      document.referrer?.includes('farcaster') ||
+      (window.location !== window.parent.location)
+    );
+    
+    if (!envCheck) {
       return false;
     }
     
-    // Check for Farcaster host indicators
+    // If environment suggests Mini App, check if we have real SDK
+    // If SDK not loaded yet, return true anyway (we'll try to load it)
+    return !fallbackOnly;
+  },
+  
+  // Alternative: check environment without SDK dependency
+  checkMiniAppEnvironment() {
     return !!(
       window.farcaster ||
-      window.parent !== window ||
+      (window.parent !== window) ||
       document.referrer?.includes('farcaster') ||
-      window.location !== window.parent.location
+      (window.location !== window.parent.location)
     );
   }
 };

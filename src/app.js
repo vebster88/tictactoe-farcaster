@@ -243,8 +243,11 @@ authBtn?.addEventListener("click", async () => {
   }
   
   // В Mini App используем SDK, а не кошелек
-  if (farcasterSDK.isInMiniApp()) {
+  // Проверяем окружение сначала (не зависит от загрузки SDK)
+  if (farcasterSDK.checkMiniAppEnvironment()) {
     try {
+      // Пытаемся получить пользователя через SDK
+      // Если SDK еще не загружен, getSDK() загрузит его
       const user = await farcasterSDK.getUser();
       if (user && user.fid) {
         const backendOrigin = window.location.origin;
@@ -274,11 +277,14 @@ authBtn?.addEventListener("click", async () => {
         refreshUserLabel();
         console.log('✅ Farcaster Mini App user logged in:', farcasterProfile);
         return;
+      } else {
+        console.warn('⚠️ No user data from SDK, trying wallet auth');
+        // Fall through to wallet auth if SDK doesn't provide user
       }
     } catch (error) {
-      console.error('Failed to get user from Mini App:', error);
-      alert("Не удалось войти через Farcaster Mini App: " + (error?.message || error));
-      return;
+      console.error('Failed to get user from Mini App SDK:', error);
+      // Если SDK недоступен, пробуем кошелек как fallback
+      console.log('Falling back to wallet auth');
     }
   }
   
@@ -450,7 +456,7 @@ refreshUserLabel();
     await farcasterSDK.ready();
     
     // Автоматически загружаем пользователя из Mini App, если доступен
-    if (farcasterSDK.isInMiniApp()) {
+    if (farcasterSDK.checkMiniAppEnvironment()) {
       try {
         const user = await farcasterSDK.getUser();
         if (user && user.fid) {
