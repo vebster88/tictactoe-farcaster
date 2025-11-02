@@ -33,7 +33,6 @@ const cells = [...boardEl.querySelectorAll(".cell")];
 
 // Settings modal elements
 const settingsModal = document.getElementById("settings-modal");
-const settingsTheme = document.getElementById("settings-theme");
 const settingsLang = document.getElementById("settings-lang");
 const modalCloseBtns = document.querySelectorAll(".modal-close");
 
@@ -50,12 +49,9 @@ function setLanguage(lang) {
   localStorage.setItem("language", lang);
 }
 
-function setTheme(next) {
-  root.setAttribute("data-theme", next);
-  localStorage.setItem("theme", next);
-  if (settingsTheme) {
-    settingsTheme.value = next;
-  }
+function setTheme(theme) {
+  // Theme is fixed to 'light' - no changes allowed
+  root.setAttribute("data-theme", "light");
 }
 
 function t(_key, dict) {
@@ -162,10 +158,6 @@ settingsModal?.addEventListener("click", (e) => {
 });
 
 // Settings change handlers
-settingsTheme?.addEventListener("change", (e) => {
-  setTheme(e.target.value);
-});
-
 settingsLang?.addEventListener("change", (e) => {
   setLanguage(e.target.value);
   render(); // Update UI text
@@ -597,11 +589,8 @@ createSignerBtn?.addEventListener("click", async () => {
   }
 });
 
-// Initialize theme and language from localStorage
-setTheme(localStorage.getItem("theme") || "light");
-if (settingsTheme) {
-  settingsTheme.value = root.getAttribute("data-theme") || "light";
-}
+// Initialize theme (fixed to light) and language from localStorage
+setTheme("light");
 setLanguage(localStorage.getItem("language") || "en");
 if (settingsLang) {
   settingsLang.value = getLanguage();

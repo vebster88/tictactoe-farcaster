@@ -45,15 +45,15 @@
   <body data-theme="light">
     <header class="app-header">
       <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Show logo"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="App version">v1.19</span></h1>
+      <button id="btn-settings" class="btn btn-settings-top" type="button" aria-label="Settings" title="Settings">⚙️</button>
       <nav class="top-actions" aria-label="Actions">
         <button id="btn-new" class="btn" type="button">New Game</button>
-        <select id="mode" aria-label="Mode">
+        <select id="mode" aria-label="Mode" class="mode-select">
           <option value="pve-easy">PvE — Easy</option>
           <option value="pve-hard">PvE — Hard</option>
           <option value="pvp-local">PvP — Local</option>
           <option value="pvp-farcaster">PvP — Farcaster</option>
         </select>
-        <button id="btn-settings" class="btn" type="button" aria-label="Settings" title="Settings">⚙️</button>
         <button id="btn-dev-toggle" class="btn" type="button" title="Developer mode" style="display: none;">🔧</button>
        <button id="btn-auth" class="btn" type="button">Sign In</button> 
        <span id="user-label" aria-live="polite"></span>
@@ -109,15 +109,6 @@
         <h2 id="settings-modal-title" style="position: static; margin: 0 0 20px 0; padding: 0; background: none; font-size: 1.5rem;">Settings</h2>
         
         <div style="display: flex; flex-direction: column; gap: 20px;">
-          <!-- Theme Setting -->
-          <div>
-            <label for="settings-theme" style="display: block; margin-bottom: 8px; font-weight: 500;">Theme</label>
-            <select id="settings-theme" class="btn" style="width: 100%;">
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </div>
-          
           <!-- Language Setting -->
           <div>
             <label for="settings-lang" style="display: block; margin-bottom: 8px; font-weight: 500;">Language</label>
