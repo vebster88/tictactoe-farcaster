@@ -128,12 +128,14 @@ export const farcasterSDK = {
     // Try console.log but don't rely on it
     try { console.log('🔧 getUser() called, checking SDK...'); } catch (e) {}
     const sdk = await getSDK();
+    
     try { 
       console.log('🔧 SDK instance:', {
         exists: !!sdk,
         fallbackOnly,
-        hasUser: !!sdk.user,
-        userType: typeof sdk.user
+        hasContext: !!sdk.context,
+        contextType: typeof sdk.context,
+        sdkKeys: Object.keys(sdk || {})
       });
     } catch (e) {}
     
@@ -143,31 +145,40 @@ export const farcasterSDK = {
       throw error;
     }
     
-    if (!sdk.user || typeof sdk.user !== 'function') {
-      const error = new Error(`SDK.user() метод недоступен (type: ${typeof sdk.user})`);
-      console.error('❌', error.message, {
-        sdkKeys: Object.keys(sdk),
-        sdkUser: sdk.user
-      });
-      throw error;
-    }
-    
+    // SDK provides user via sdk.context.user, not sdk.user()
+    // context can be a Promise or an object
     try {
-      try { console.log('👤 Calling SDK.user()...'); } catch (e) {}
-      const user = await sdk.user();
-      try { console.log('👤 SDK.user() result:', user); } catch (e) {}
+      try { console.log('👤 Getting SDK context...'); } catch (e) {}
       
-      if (!user) {
-        throw new Error('SDK.user() вернул null/undefined');
+      // Resolve context (might be a Promise)
+      const context = await Promise.resolve(sdk.context);
+      
+      try { 
+        console.log('👤 SDK context:', {
+          exists: !!context,
+          hasUser: !!context?.user,
+          contextKeys: context ? Object.keys(context) : []
+        });
+      } catch (e) {}
+      
+      if (!context) {
+        throw new Error('SDK.context вернул null/undefined');
       }
       
+      if (!context.user) {
+        throw new Error('SDK.context.user недоступен - пользователь не найден в контексте');
+      }
+      
+      const user = context.user;
+      try { console.log('👤 SDK.context.user result:', user); } catch (e) {}
+      
       if (!user.fid) {
-        try { console.warn('⚠️ SDK.user() вернул user без fid:', user); } catch (e) {}
+        try { console.warn('⚠️ SDK.context.user вернул user без fid:', user); } catch (e) {}
       }
       
       return user;
     } catch (error) {
-      console.error('❌ SDK.user() failed:', {
+      console.error('❌ SDK getUser() failed:', {
         message: error.message,
         stack: error.stack,
         name: error.name,
