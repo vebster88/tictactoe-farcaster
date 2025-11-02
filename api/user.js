@@ -24,12 +24,10 @@ export default async function handler(req, res) {
     res.status(200).json(user);
   } catch (error) {
     console.error('User endpoint error:', error);
-    // Fallback to mock data
-    res.status(200).json({
-      fid: 12345,
-      username: 'demo_user',
-      displayName: 'Demo Player',
-      pfp: 'https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png'
+    // Return error instead of mock data
+    res.status(401).json({
+      error: 'Authentication failed',
+      message: 'Unable to validate user session'
     });
   }
 }

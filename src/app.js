@@ -241,9 +241,56 @@ authBtn?.addEventListener("click", async () => {
     refreshUserLabel();
     return;
   }
-  try { await signInWithWallet(); }
-  catch (e) { console.error(e); alert("Не удалось войти: " + (e?.message || e)); }
-  finally { refreshUserLabel(); }
+  
+  // В Mini App используем SDK, а не кошелек
+  if (farcasterSDK.isInMiniApp()) {
+    try {
+      const user = await farcasterSDK.getUser();
+      if (user && user.fid) {
+        const backendOrigin = window.location.origin;
+        let fullUserData = null;
+        try {
+          fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
+        } catch (error) {
+          console.warn('Quick Auth не доступен, используем базовые данные:', error);
+        }
+        
+        const farcasterProfile = fullUserData || {
+          fid: user.fid,
+          username: user.username || `user_${user.fid}`,
+          display_name: user.displayName || user.username || `User ${user.fid}`,
+          pfp_url: user.pfp || null
+        };
+        
+        const session = {
+          schemaVersion: "1.0.0",
+          farcaster: farcasterProfile,
+          miniapp: true,
+          mock: false,
+          issuedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem("fc_session", JSON.stringify(session));
+        refreshUserLabel();
+        console.log('✅ Farcaster Mini App user logged in:', farcasterProfile);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to get user from Mini App:', error);
+      alert("Не удалось войти через Farcaster Mini App: " + (error?.message || error));
+      return;
+    }
+  }
+  
+  // Для обычного браузера используем кошелек
+  try { 
+    await signInWithWallet(); 
+  } catch (e) { 
+    console.error(e); 
+    alert("Не удалось войти: " + (e?.message || e)); 
+  } finally { 
+    refreshUserLabel(); 
+  }
 });
 
 inviteBtn?.addEventListener("click", async () => {
@@ -398,7 +445,51 @@ refreshUserLabel();
 // After your app is fully loaded and ready to display: await sdk.actions.ready()
 // Pattern from working React example: call ready() after UI initialization (like useEffect)
 
-farcasterSDK.ready().catch(error => {
-  console.error('❌ Failed to initialize Farcaster SDK:', error);
-  // App will still work in browser, but Mini App features won't be available
-});
+(async () => {
+  try {
+    await farcasterSDK.ready();
+    
+    // Автоматически загружаем пользователя из Mini App, если доступен
+    if (farcasterSDK.isInMiniApp()) {
+      try {
+        const user = await farcasterSDK.getUser();
+        if (user && user.fid) {
+          // Сохраняем данные пользователя из Mini App в сессию
+          const session = getSession() || {};
+          const backendOrigin = window.location.origin;
+          
+          // Пытаемся получить полные данные через Quick Auth
+          let fullUserData = null;
+          try {
+            fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
+          } catch (error) {
+            console.warn('Quick Auth не доступен, используем базовые данные:', error);
+          }
+          
+          const farcasterProfile = fullUserData || {
+            fid: user.fid,
+            username: user.username || `user_${user.fid}`,
+            display_name: user.displayName || user.username || `User ${user.fid}`,
+            pfp_url: user.pfp || null
+          };
+          
+          const updatedSession = {
+            ...session,
+            farcaster: farcasterProfile,
+            miniapp: true,
+            mock: false
+          };
+          
+          localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+          refreshUserLabel();
+          console.log('✅ Farcaster Mini App user loaded:', farcasterProfile);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to get user from Mini App:', error);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to initialize Farcaster SDK:', error);
+    // App will still work in browser, but Mini App features won't be available
+  }
+})();
