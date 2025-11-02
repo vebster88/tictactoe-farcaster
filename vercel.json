@@ -41,10 +41,6 @@
   ],
   "rewrites": [
     {
-      "source": "/(.*\\.(svg|png|jpg|jpeg|gif|ico|webp|woff|woff2|ttf|eot))",
-      "destination": "/$1"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
