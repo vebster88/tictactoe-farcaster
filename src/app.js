@@ -423,12 +423,16 @@ authBtn?.addEventListener("click", async () => {
         throw new Error('Quick Auth не вернул данные пользователя');
       }
       
+      // Quick Auth возвращает: { fid, username, displayName, pfp, ... }
+      // Маппим в наш формат: { fid, username, display_name, pfp_url }
       const farcasterProfile = {
         fid: fullUserData.fid,
-        username: fullUserData.username || fullUserData.display_name || `user_${fullUserData.fid}`,
-        display_name: fullUserData.display_name || fullUserData.username || `User ${fullUserData.fid}`,
-        pfp_url: fullUserData.pfp_url || fullUserData.pfp || null
+        username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
+        display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
+        pfp_url: fullUserData.pfp || fullUserData.pfpUrl || fullUserData.pfp_url || null
       };
+      
+      addDebugLog('🔍 Quick Auth данные до маппинга', fullUserData);
       
       addDebugLog('👤 Создаём профиль пользователя', farcasterProfile);
       
@@ -685,12 +689,16 @@ refreshUserLabel();
           return;
         }
         
+        // Quick Auth возвращает: { fid, username, displayName, pfp, ... }
+        // Маппим в наш формат: { fid, username, display_name, pfp_url }
         const farcasterProfile = {
           fid: fullUserData.fid,
-          username: fullUserData.username || fullUserData.display_name || `user_${fullUserData.fid}`,
-          display_name: fullUserData.display_name || fullUserData.username || `User ${fullUserData.fid}`,
-          pfp_url: fullUserData.pfp_url || fullUserData.pfp || null
+          username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
+          display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
+          pfp_url: fullUserData.pfp || fullUserData.pfpUrl || fullUserData.pfp_url || null
         };
+        
+        addDebugLog('🔍 Auto-load Quick Auth данные до маппинга', fullUserData);
         
         const session = getSession() || {};
         const updatedSession = {
