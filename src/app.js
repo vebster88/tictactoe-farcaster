@@ -258,12 +258,28 @@ boardEl.addEventListener("keydown", (e) => {
 
 function refreshUserLabel() {
   const s = getSession();
-  if (s?.address) {
+  
+  // Проверяем авторизацию: либо через кошелек (address), либо через Farcaster (farcaster)
+  const isAuthorized = !!(s?.address || s?.farcaster);
+  
+  if (isAuthorized) {
+    // Приоритет: отображаем Farcaster username, если есть
     if (s.farcaster?.username) {
       userLabel.textContent = `@${s.farcaster.username}`;
-    } else {
+      addDebugLog('👤 Отображено имя пользователя', { username: s.farcaster.username });
+    } else if (s.farcaster?.display_name) {
+      userLabel.textContent = s.farcaster.display_name;
+      addDebugLog('👤 Отображено display_name', { display_name: s.farcaster.display_name });
+    } else if (s.farcaster?.fid) {
+      userLabel.textContent = `FID: ${s.farcaster.fid}`;
+      addDebugLog('👤 Отображено FID', { fid: s.farcaster.fid });
+    } else if (s.address) {
+      // Fallback на адрес кошелька
       userLabel.textContent = s.address.slice(0, 6) + "…" + s.address.slice(-4);
+    } else {
+      userLabel.textContent = "Авторизован";
     }
+    
     authBtn.textContent = "Выйти";
     authBtn.dataset.signedIn = "true";
   } else {
@@ -271,6 +287,7 @@ function refreshUserLabel() {
     authBtn.textContent = "Войти";
     authBtn.dataset.signedIn = "false";
   }
+  
   updateUIForMode();
 }
 
@@ -416,8 +433,16 @@ authBtn?.addEventListener("click", async () => {
       };
       
       localStorage.setItem("fc_session", JSON.stringify(session));
+      
+      // Обновляем UI перед показом alert
       refreshUserLabel();
+      
       addDebugLog('✅ Farcaster Mini App пользователь авторизован!', farcasterProfile);
+      addDebugLog('👤 Имя пользователя должно отображаться', { 
+        username: farcasterProfile.username,
+        display_name: farcasterProfile.display_name,
+        fid: farcasterProfile.fid
+      });
       
       // Показываем успех
       alert(`✅ Успешная авторизация!\n\n@${farcasterProfile.username}\nFID: ${farcasterProfile.fid}`);
@@ -669,8 +694,15 @@ refreshUserLabel();
         };
         
         localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+        
+        // Обновляем UI для отображения имени пользователя
         refreshUserLabel();
+        
         addDebugLog('✅ Пользователь Mini App автоматически загружен', farcasterProfile);
+        addDebugLog('👤 Имя пользователя загружено автоматически', { 
+          username: farcasterProfile.username,
+          display_name: farcasterProfile.display_name
+        });
       } catch (error) {
         addDebugLog('❌ Ошибка авто-загрузки', {
           message: error.message,
