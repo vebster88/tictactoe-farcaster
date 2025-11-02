@@ -44,7 +44,7 @@
   </head>
   <body data-theme="light">
     <header class="app-header">
-      <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Показать логотип"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="Версия приложения">v1.17</span></h1>
+      <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Показать логотип"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="Версия приложения">v1.18</span></h1>
       <nav class="top-actions" aria-label="Actions">
         <button id="btn-new" class="btn" type="button">Новая игра</button>
         <select id="mode" aria-label="Режим">
@@ -106,12 +106,6 @@
       </div>
     </div>
 
-    <!-- Debug status indicator for Mini App -->
-    <div id="debug-status" style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.85); color: #00ff00; padding: 12px 16px; border-radius: 8px; font-size: 11px; max-width: 320px; z-index: 10000; display: none; font-family: monospace; border: 1px solid rgba(0,255,0,0.3); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-      <div style="margin-bottom: 8px; font-weight: bold; color: #00ff00; border-bottom: 1px solid rgba(0,255,0,0.3); padding-bottom: 4px;">🔍 Debug Log</div>
-      <div id="debug-status-content" style="max-height: 200px; overflow-y: auto;"></div>
-      <button id="debug-close" onclick="document.getElementById('debug-status').style.display='none'" style="position: absolute; top: 8px; right: 8px; background: rgba(255,0,0,0.5); border: none; color: white; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 10px;">✕</button>
-    </div>
 
     <script type="module" src="/src/app.js"></script>
   </body>

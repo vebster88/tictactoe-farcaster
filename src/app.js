@@ -10,94 +10,9 @@ import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 import { APP_VERSION } from "./version.js";
 
-// ===== DEBUG LOGGING SYSTEM - MUST BE DEFINED FIRST =====
-// Debug logging system for Mini App (console.log may not work)
-// Must be defined BEFORE any usage to prevent ReferenceError
-let debugLogs = [];
-const MAX_DEBUG_LOGS = 50;
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function updateDebugDisplay() {
-  const statusEl = document.getElementById('debug-status');
-  const contentEl = document.getElementById('debug-status-content');
-  
-  if (!statusEl || !contentEl) return;
-  
-  // Show debug panel
-  statusEl.style.display = 'block';
-  
-  // Display last 8 log entries
-  const recentLogs = debugLogs.slice(-8);
-  contentEl.innerHTML = recentLogs.map(log => {
-    const dataStr = log.data ? `\n${log.data}` : '';
-    return `<div style="margin-bottom: 4px; padding: 4px; background: rgba(0,255,0,0.1); border-left: 2px solid #00ff00;">
-      <strong style="color: #00ff00;">[${log.time}]</strong> <span style="color: #ffffff;">${escapeHtml(log.message)}</span>
-      ${dataStr ? `<pre style="margin: 4px 0 0 0; font-size: 9px; color: #aaa; white-space: pre-wrap; word-break: break-all;">${escapeHtml(dataStr)}</pre>` : ''}
-    </div>`;
-  }).join('');
-  
-  // Auto-scroll to bottom
-  contentEl.scrollTop = contentEl.scrollHeight;
-}
-
+// Debug logging disabled - use browser console for debugging
 function addDebugLog(message, data = null) {
-  const timestamp = new Date().toLocaleTimeString();
-  const logEntry = {
-    time: timestamp,
-    message,
-    data: data ? (typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)) : null
-  };
-  
-  debugLogs.push(logEntry);
-  
-  // Keep only last MAX_DEBUG_LOGS entries
-  if (debugLogs.length > MAX_DEBUG_LOGS) {
-    debugLogs.shift();
-  }
-  
-  // Save to localStorage for persistence
-  try {
-    const existing = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
-    existing.push(logEntry);
-    if (existing.length > MAX_DEBUG_LOGS) existing.shift();
-    localStorage.setItem('fc_debug_logs', JSON.stringify(existing));
-  } catch (e) {
-    // Ignore localStorage errors
-  }
-  
-  // Update visual debug indicator (only if DOM is ready)
-  try {
-    updateDebugDisplay();
-  } catch (e) {
-    // DOM might not be ready yet
-  }
-  
-  // Also try console.log (might work in some clients)
-  try {
-    if (data) {
-      console.log(`[${timestamp}] ${message}`, data);
-    } else {
-      console.log(`[${timestamp}] ${message}`);
-    }
-  } catch (e) {
-    // Console not available
-  }
-}
-// ===== END DEBUG LOGGING SYSTEM =====
-
-// Load previous logs on startup (after addDebugLog is defined)
-try {
-  const saved = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
-  if (saved.length > 0) {
-    debugLogs = saved.slice(-MAX_DEBUG_LOGS);
-  }
-} catch (e) {
-  // Ignore
+  // Silent - no logging
 }
 
 // Now we can safely use addDebugLog
@@ -110,15 +25,6 @@ const newBtn = document.getElementById("btn-new");
 const modeSel = document.getElementById("mode");
 const langSel = document.getElementById("lang");
 const authBtn = document.getElementById("btn-auth");
-if (!authBtn) {
-  addDebugLog('❌ Кнопка "btn-auth" не найдена в DOM!');
-} else {
-  addDebugLog('✅ Кнопка "btn-auth" найдена', {
-    id: authBtn.id,
-    text: authBtn.textContent,
-    className: authBtn.className
-  });
-}
 const userLabel = document.getElementById("user-label");
 const createSignerBtn = document.getElementById("btn-create-signer");
 const checkRepliesBtn = document.getElementById("btn-check-replies");
@@ -266,13 +172,10 @@ function refreshUserLabel() {
     // Приоритет: отображаем Farcaster username, если есть
     if (s.farcaster?.username) {
       userLabel.textContent = `@${s.farcaster.username}`;
-      addDebugLog('👤 Отображено имя пользователя', { username: s.farcaster.username });
     } else if (s.farcaster?.display_name) {
       userLabel.textContent = s.farcaster.display_name;
-      addDebugLog('👤 Отображено display_name', { display_name: s.farcaster.display_name });
     } else if (s.farcaster?.fid) {
       userLabel.textContent = `FID: ${s.farcaster.fid}`;
-      addDebugLog('👤 Отображено FID', { fid: s.farcaster.fid });
     } else if (s.address) {
       // Fallback на адрес кошелька
       userLabel.textContent = s.address.slice(0, 6) + "…" + s.address.slice(-4);
@@ -646,101 +549,67 @@ refreshUserLabel();
 // Pattern from working React example: call ready() after UI initialization (like useEffect)
 // CRITICAL: ready() MUST be called to hide splash screen, even if there are errors
 
-(async () => {
-  try {
-    // Call ready() FIRST to hide splash screen, even if auto-load fails
-    addDebugLog('🚀 Инициализация Farcaster SDK...');
-    await farcasterSDK.ready();
-    addDebugLog('✅ SDK ready() вызван, splash screen скрыт');
-    
-    // Автоматически загружаем пользователя из Mini App, если доступен
-    if (farcasterSDK.checkMiniAppEnvironment()) {
-      addDebugLog('🔍 Автоматическая загрузка пользователя Mini App...');
-      try {
-        const user = await farcasterSDK.getUser();
-        addDebugLog('👤 Auto-load getUser() результат', user);
-        
-        if (!user || !user.fid) {
-          addDebugLog('⚠️ SDK не вернул user.fid при авто-загрузке');
-          return;
-        }
-        
-        const backendOrigin = window.location.origin;
-        addDebugLog('🌐 Backend origin (auto-load)', backendOrigin);
-        
-        // Пытаемся получить полные данные через Quick Auth
-        let fullUserData = null;
-        try {
-          addDebugLog('🔐 Auto-load Quick Auth...');
-          fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-          addDebugLog('✅ Auto-load Quick Auth успешен', fullUserData);
-        } catch (error) {
-          addDebugLog('❌ Auto-load Quick Auth ошибка', {
-            message: error.message,
-            stack: error.stack,
-            name: error.name
-          });
-          // Не загружаем пользователя без Quick Auth - это проблема
-          return;
-        }
-        
-        if (!fullUserData || !fullUserData.fid) {
-          addDebugLog('❌ Quick Auth не вернул fid при авто-загрузке');
-          return;
-        }
-        
-        // Quick Auth возвращает: { fid, username, displayName, pfp, ... }
-        // Маппим в наш формат: { fid, username, display_name, pfp_url }
-        const farcasterProfile = {
-          fid: fullUserData.fid,
-          username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
-          display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
-          pfp_url: fullUserData.pfp || fullUserData.pfpUrl || fullUserData.pfp_url || null
-        };
-        
-        addDebugLog('🔍 Auto-load Quick Auth данные до маппинга', fullUserData);
-        
-        const session = getSession() || {};
-        const updatedSession = {
-          ...session,
-          farcaster: farcasterProfile,
-          miniapp: true,
-          issuedAt: new Date().toISOString()
-        };
-        
-        localStorage.setItem("fc_session", JSON.stringify(updatedSession));
-        
-        // Обновляем UI для отображения имени пользователя
-        refreshUserLabel();
-        
-        addDebugLog('✅ Пользователь Mini App автоматически загружен', farcasterProfile);
-        addDebugLog('👤 Имя пользователя загружено автоматически', { 
-          username: farcasterProfile.username,
-          display_name: farcasterProfile.display_name
-        });
-      } catch (error) {
-        addDebugLog('❌ Ошибка авто-загрузки', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-      }
-    }
-  } catch (error) {
-    addDebugLog('❌ Ошибка инициализации Farcaster SDK', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
-    
-    // CRITICAL: Still try to call ready() even on error to hide splash screen
-    try {
-      await farcasterSDK.ready();
-      addDebugLog('✅ SDK ready() вызван после ошибки');
-    } catch (readyError) {
-      addDebugLog('❌ Не удалось вызвать SDK ready()', readyError.message);
-    }
-    
-    // App will still work in browser, but Mini App features won't be available
-  }
-})();
+        (async () => {
+          try {
+            // Call ready() FIRST to hide splash screen, even if auto-load fails
+            await farcasterSDK.ready();
+            
+            // Автоматически загружаем пользователя из Mini App, если доступен
+            if (farcasterSDK.checkMiniAppEnvironment()) {
+              try {
+                const user = await farcasterSDK.getUser();
+                
+                if (!user || !user.fid) {
+                  return;
+                }
+                
+                const backendOrigin = window.location.origin;
+                
+                // Пытаемся получить полные данные через Quick Auth
+                let fullUserData = null;
+                try {
+                  fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
+                } catch (error) {
+                  return;
+                }
+                
+                if (!fullUserData || !fullUserData.fid) {
+                  return;
+                }
+                
+                // Quick Auth возвращает: { fid, username, displayName, pfp, ... }
+                // Маппим в наш формат: { fid, username, display_name, pfp_url }
+                const farcasterProfile = {
+                  fid: fullUserData.fid,
+                  username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
+                  display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
+                  pfp_url: fullUserData.pfp || fullUserData.pfpUrl || fullUserData.pfp_url || null
+                };
+                
+                const session = getSession() || {};
+                const updatedSession = {
+                  ...session,
+                  farcaster: farcasterProfile,
+                  miniapp: true,
+                  issuedAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+                
+                // Обновляем UI для отображения имени пользователя
+                refreshUserLabel();
+              } catch (error) {
+                // Silent fail
+              }
+            }
+          } catch (error) {
+            // CRITICAL: Still try to call ready() even on error to hide splash screen
+            try {
+              await farcasterSDK.ready();
+            } catch (readyError) {
+              // Silent fail
+            }
+            
+            // App will still work in browser, but Mini App features won't be available
+          }
+        })();

@@ -26,32 +26,19 @@ async function resolveUser(fid) {
     
     if (NEYNAR_API_KEY && NEYNAR_API_KEY !== 'your_neynar_api_key_here') {
       try {
-        console.log(`[Quick Auth] Fetching user profile from Neynar API for fid ${fid}`);
         const response = await axios.get(`${NEYNAR_BASE_URL}/farcaster/user/bulk`, {
           params: { fids: fid },
           headers: { 'api_key': NEYNAR_API_KEY }
         });
         
-        console.log(`[Quick Auth] Neynar API response for fid ${fid}:`, JSON.stringify(response.data, null, 2));
-        
         // Neynar возвращает массив users
         if (response.data?.users && response.data.users.length > 0) {
           profile = response.data.users[0];
-          console.log(`[Quick Auth] Profile from Neynar:`, JSON.stringify(profile, null, 2));
         }
       } catch (error) {
-        console.error(`[Quick Auth] Neynar API error for fid ${fid}:`, {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          message: error.message
-        });
         // Продолжаем без Neynar - используем fallback
       }
-    } else {
-      console.log(`[Quick Auth] Neynar API key not configured, skipping profile fetch`);
     }
-
-    console.log(`[Quick Auth] Profile for fid ${fid}:`, JSON.stringify(profile, null, 2));
     
     // Neynar API возвращает данные в формате:
     // { username, display_name, pfp_url, ... }
@@ -66,7 +53,7 @@ async function resolveUser(fid) {
                 profile?.pfp ||
                 null;
 
-    const result = {
+    return {
       fid,
       primaryAddress,
       username: username || `user_${fid}`,
@@ -75,12 +62,7 @@ async function resolveUser(fid) {
       bio: profile?.bio || '',
       verified: profile?.verified || false
     };
-    
-    console.log(`[Quick Auth] Resolved user data for fid ${fid}:`, JSON.stringify(result, null, 2));
-    
-    return result;
   } catch (error) {
-    console.error('Error resolving user:', error);
     // Return basic user info if API calls fail
     return {
       fid,
@@ -110,7 +92,6 @@ export async function quickAuthMiddleware(req, res) {
     const user = await resolveUser(payload.sub);
     return user;
   } catch (error) {
-    console.error('Token validation error:', error);
     res.status(401).json({ error: 'Invalid token' });
     return null;
   }
