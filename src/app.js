@@ -398,4 +398,7 @@ refreshUserLabel();
 // After your app is fully loaded and ready to display: await sdk.actions.ready()
 // Pattern from working React example: call ready() after UI initialization (like useEffect)
 
-farcasterSDK.ready();
+farcasterSDK.ready().catch(error => {
+  console.error('❌ Failed to initialize Farcaster SDK:', error);
+  // App will still work in browser, but Mini App features won't be available
+});
