@@ -114,46 +114,6 @@ let scores = { X: 0, O: 0, draw: 0 };
 let mode = modeSel?.value || "pve-easy";
 let botThinking = false;
 
-function addDebugLog(message, data = null) {
-  const timestamp = new Date().toLocaleTimeString();
-  const logEntry = {
-    time: timestamp,
-    message,
-    data: data ? (typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data)) : null
-  };
-  
-  debugLogs.push(logEntry);
-  
-  // Keep only last MAX_DEBUG_LOGS entries
-  if (debugLogs.length > MAX_DEBUG_LOGS) {
-    debugLogs.shift();
-  }
-  
-  // Save to localStorage for persistence
-  try {
-    const existing = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
-    existing.push(logEntry);
-    if (existing.length > MAX_DEBUG_LOGS) existing.shift();
-    localStorage.setItem('fc_debug_logs', JSON.stringify(existing));
-  } catch (e) {
-    // Ignore localStorage errors
-  }
-  
-  // Update visual debug indicator
-  updateDebugDisplay();
-  
-  // Also try console.log (might work in some clients)
-  try {
-    if (data) {
-      console.log(`[${timestamp}] ${message}`, data);
-    } else {
-      console.log(`[${timestamp}] ${message}`);
-    }
-  } catch (e) {
-    // Console not available
-  }
-}
-
 // Load previous logs on startup
 try {
   const saved = JSON.parse(localStorage.getItem('fc_debug_logs') || '[]');
