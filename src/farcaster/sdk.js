@@ -1,8 +1,8 @@
 // Farcaster Mini App SDK integration
 // Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started
-// Pattern from working React example: direct import works in Mini App context
 
 let sdkInstance = null;
+let fallbackOnly = false;
 
 async function getSDK() {
   if (sdkInstance) {
@@ -11,9 +11,13 @@ async function getSDK() {
 
   try {
     const module = await import('@farcaster/miniapp-sdk');
-    sdkInstance = module.sdk || module.default;
+    console.log('📦 Farcaster module:', module);
+    sdkInstance = module.sdk || module.default || module;
+    fallbackOnly = false;
     return sdkInstance;
   } catch (error) {
+    console.warn('⚠️ SDK import failed, using fallback:', error);
+    fallbackOnly = true;
     // Fallback for browser - SDK not available
     sdkInstance = {
       actions: { ready: async () => {} },
@@ -25,14 +29,52 @@ async function getSDK() {
   }
 }
 
+// Wait for Farcaster host to be initialized
+async function waitForHost(timeout = 5000) {
+  // Check if host is already available
+  if (window.farcaster || window.parent !== window) {
+    return;
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      window.removeEventListener('message', onMsg);
+      reject(new Error('Farcaster host timeout - not running in Mini App'));
+    }, timeout);
+
+    function onMsg(e) {
+      if (e?.data?.type === 'farcaster:ready' || window.farcaster) {
+        clearTimeout(timer);
+        window.removeEventListener('message', onMsg);
+        resolve();
+      }
+    }
+
+    window.addEventListener('message', onMsg);
+  });
+}
+
 export const farcasterSDK = {
   async ready() {
     const sdk = await getSDK();
+    
+    // Only wait for host if we have real SDK (not fallback)
+    if (!fallbackOnly) {
+      try {
+        await waitForHost();
+      } catch (error) {
+        console.warn('⚠️ Host wait timeout:', error.message);
+        // Continue anyway - might be in preview/debug mode
+      }
+    }
+    
     await sdk.actions.ready();
   },
   
   async getUserWithQuickAuth(backendOrigin) {
     const sdk = await getSDK();
+    if (fallbackOnly) return null;
+    
     try {
       const res = await sdk.quickAuth.fetch(`${backendOrigin}/api/user`);
       if (res.ok) return await res.json();
@@ -44,6 +86,8 @@ export const farcasterSDK = {
   
   async getUser() {
     const sdk = await getSDK();
+    if (fallbackOnly) return null;
+    
     try {
       return await sdk.user();
     } catch (error) {
@@ -54,6 +98,8 @@ export const farcasterSDK = {
   
   async getContext() {
     const sdk = await getSDK();
+    if (fallbackOnly) return null;
+    
     try {
       return await sdk.context;
     } catch (error) {
@@ -62,7 +108,19 @@ export const farcasterSDK = {
     }
   },
   
+  // Reliable check: verify host presence, not just SDK import
   isInMiniApp() {
-    return sdkInstance !== null;
+    // Check if we have real SDK (not fallback) AND host is available
+    if (fallbackOnly || !sdkInstance) {
+      return false;
+    }
+    
+    // Check for Farcaster host indicators
+    return !!(
+      window.farcaster ||
+      window.parent !== window ||
+      document.referrer?.includes('farcaster') ||
+      window.location !== window.parent.location
+    );
   }
 };
