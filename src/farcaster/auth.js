@@ -19,11 +19,11 @@ export async function signInWithWallet() {
   
   const [address] = await window.ethereum.request({ method: "eth_requestAccounts" });
   const siweLikeMessage = [
-    "Sign-in with Ethereum (mock, no server verification).",
+    "Sign-in with Ethereum",
     `Address: ${address}`,
     `Nonce: ${uuid()}`,
     `IssuedAt: ${new Date().toISOString()}`,
-    "Domain: localhost"
+    `Domain: ${window.location.hostname}`
   ].join("\n");
   
   const signature = await window.ethereum.request({
@@ -53,7 +53,7 @@ export async function signInWithWallet() {
     signature,
     issuedAt: new Date().toISOString(),
     farcaster: farcasterProfile,
-    mock: import.meta.env.VITE_FARCASTER_MOCK === "true"
+    walletAuth: true
   };
   
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));

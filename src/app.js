@@ -245,46 +245,80 @@ authBtn?.addEventListener("click", async () => {
   // В Mini App используем SDK, а не кошелек
   // Проверяем окружение сначала (не зависит от загрузки SDK)
   if (farcasterSDK.checkMiniAppEnvironment()) {
+    console.log('🔍 Attempting Farcaster Mini App authentication...');
+    console.log('📊 Environment check:', {
+      windowFarcaster: !!window.farcaster,
+      parentWindow: window.parent !== window,
+      referrer: document.referrer,
+      location: window.location.href
+    });
+    
     try {
       // Пытаемся получить пользователя через SDK
-      // Если SDK еще не загружен, getSDK() загрузит его
       const user = await farcasterSDK.getUser();
-      if (user && user.fid) {
-        const backendOrigin = window.location.origin;
-        let fullUserData = null;
-        try {
-          fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-        } catch (error) {
-          console.warn('Quick Auth не доступен, используем базовые данные:', error);
-        }
-        
-        const farcasterProfile = fullUserData || {
-          fid: user.fid,
-          username: user.username || `user_${user.fid}`,
-          display_name: user.displayName || user.username || `User ${user.fid}`,
-          pfp_url: user.pfp || null
-        };
-        
-        const session = {
-          schemaVersion: "1.0.0",
-          farcaster: farcasterProfile,
-          miniapp: true,
-          mock: false,
-          issuedAt: new Date().toISOString()
-        };
-        
-        localStorage.setItem("fc_session", JSON.stringify(session));
-        refreshUserLabel();
-        console.log('✅ Farcaster Mini App user logged in:', farcasterProfile);
-        return;
-      } else {
-        console.warn('⚠️ No user data from SDK, trying wallet auth');
-        // Fall through to wallet auth if SDK doesn't provide user
+      console.log('👤 SDK getUser() result:', user);
+      
+      if (!user || !user.fid) {
+        throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
       }
+      
+      const backendOrigin = window.location.origin;
+      console.log('🌐 Backend origin:', backendOrigin);
+      
+      // Пытаемся получить полные данные через Quick Auth
+      let fullUserData = null;
+      try {
+        console.log('🔐 Attempting Quick Auth...');
+        fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
+        console.log('✅ Quick Auth success:', fullUserData);
+      } catch (error) {
+        console.error('❌ Quick Auth failed:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        // Не используем fallback - если Quick Auth не работает, это проблема
+        throw new Error(`Quick Auth недоступен: ${error.message}`);
+      }
+      
+      if (!fullUserData || !fullUserData.fid) {
+        throw new Error('Quick Auth не вернул данные пользователя');
+      }
+      
+      const farcasterProfile = {
+        fid: fullUserData.fid,
+        username: fullUserData.username || fullUserData.display_name || `user_${fullUserData.fid}`,
+        display_name: fullUserData.display_name || fullUserData.username || `User ${fullUserData.fid}`,
+        pfp_url: fullUserData.pfp_url || fullUserData.pfp || null
+      };
+      
+      const session = {
+        schemaVersion: "1.0.0",
+        farcaster: farcasterProfile,
+        miniapp: true,
+        issuedAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem("fc_session", JSON.stringify(session));
+      refreshUserLabel();
+      console.log('✅ Farcaster Mini App user logged in:', farcasterProfile);
+      return;
+      
     } catch (error) {
-      console.error('Failed to get user from Mini App SDK:', error);
-      // Если SDK недоступен, пробуем кошелек как fallback
-      console.log('Falling back to wallet auth');
+      console.error('❌ Farcaster Mini App authentication failed:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause
+      });
+      
+      // Показываем пользователю детальную ошибку
+      const errorMsg = `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПроверьте консоль для деталей.`;
+      alert(errorMsg);
+      
+      // НЕ используем кошелек как fallback в Mini App - это ошибка конфигурации
+      console.error('🚫 Не используем кошелек как fallback в Mini App - это ошибка конфигурации');
+      return;
     }
   }
   
@@ -457,41 +491,64 @@ refreshUserLabel();
     
     // Автоматически загружаем пользователя из Mini App, если доступен
     if (farcasterSDK.checkMiniAppEnvironment()) {
+      console.log('🔍 Auto-loading Farcaster Mini App user...');
       try {
         const user = await farcasterSDK.getUser();
-        if (user && user.fid) {
-          // Сохраняем данные пользователя из Mini App в сессию
-          const session = getSession() || {};
-          const backendOrigin = window.location.origin;
-          
-          // Пытаемся получить полные данные через Quick Auth
-          let fullUserData = null;
-          try {
-            fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-          } catch (error) {
-            console.warn('Quick Auth не доступен, используем базовые данные:', error);
-          }
-          
-          const farcasterProfile = fullUserData || {
-            fid: user.fid,
-            username: user.username || `user_${user.fid}`,
-            display_name: user.displayName || user.username || `User ${user.fid}`,
-            pfp_url: user.pfp || null
-          };
-          
-          const updatedSession = {
-            ...session,
-            farcaster: farcasterProfile,
-            miniapp: true,
-            mock: false
-          };
-          
-          localStorage.setItem("fc_session", JSON.stringify(updatedSession));
-          refreshUserLabel();
-          console.log('✅ Farcaster Mini App user loaded:', farcasterProfile);
+        console.log('👤 Auto-load getUser() result:', user);
+        
+        if (!user || !user.fid) {
+          console.warn('⚠️ SDK не вернул user.fid при авто-загрузке');
+          return;
         }
+        
+        const backendOrigin = window.location.origin;
+        console.log('🌐 Backend origin:', backendOrigin);
+        
+        // Пытаемся получить полные данные через Quick Auth
+        let fullUserData = null;
+        try {
+          console.log('🔐 Auto-load Quick Auth...');
+          fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
+          console.log('✅ Auto-load Quick Auth success:', fullUserData);
+        } catch (error) {
+          console.error('❌ Auto-load Quick Auth failed:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          });
+          // Не загружаем пользователя без Quick Auth - это проблема
+          return;
+        }
+        
+        if (!fullUserData || !fullUserData.fid) {
+          console.error('❌ Quick Auth не вернул fid при авто-загрузке');
+          return;
+        }
+        
+        const farcasterProfile = {
+          fid: fullUserData.fid,
+          username: fullUserData.username || fullUserData.display_name || `user_${fullUserData.fid}`,
+          display_name: fullUserData.display_name || fullUserData.username || `User ${fullUserData.fid}`,
+          pfp_url: fullUserData.pfp_url || fullUserData.pfp || null
+        };
+        
+        const session = getSession() || {};
+        const updatedSession = {
+          ...session,
+          farcaster: farcasterProfile,
+          miniapp: true,
+          issuedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+        refreshUserLabel();
+        console.log('✅ Farcaster Mini App user auto-loaded:', farcasterProfile);
       } catch (error) {
-        console.warn('⚠️ Failed to get user from Mini App:', error);
+        console.error('❌ Auto-load failed:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
       }
     }
   } catch (error) {

@@ -73,26 +73,82 @@ export const farcasterSDK = {
   
   async getUserWithQuickAuth(backendOrigin) {
     const sdk = await getSDK();
-    if (fallbackOnly) return null;
+    if (fallbackOnly) {
+      throw new Error('SDK недоступен (fallback mode) - не в Mini App окружении');
+    }
+    
+    if (!sdk.quickAuth || !sdk.quickAuth.fetch) {
+      throw new Error('Quick Auth API недоступен в SDK');
+    }
+    
+    const userUrl = `${backendOrigin}/api/user`;
+    console.log('🔐 Quick Auth request URL:', userUrl);
     
     try {
-      const res = await sdk.quickAuth.fetch(`${backendOrigin}/api/user`);
-      if (res.ok) return await res.json();
+      const res = await sdk.quickAuth.fetch(userUrl);
+      console.log('📡 Quick Auth response:', {
+        status: res.status,
+        statusText: res.statusText,
+        ok: res.ok,
+        headers: Object.fromEntries(res.headers.entries())
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ Quick Auth HTTP error:', {
+          status: res.status,
+          statusText: res.statusText,
+          body: errorText
+        });
+        throw new Error(`Quick Auth HTTP ${res.status}: ${res.statusText} - ${errorText}`);
+      }
+      
+      const userData = await res.json();
+      console.log('✅ Quick Auth user data:', userData);
+      
+      if (!userData || !userData.fid) {
+        throw new Error('Quick Auth не вернул fid пользователя');
+      }
+      
+      return userData;
     } catch (error) {
-      console.error('❌ Quick Auth failed:', error);
+      console.error('❌ Quick Auth fetch failed:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        url: userUrl
+      });
+      throw error; // Пробрасываем ошибку дальше
     }
-    return null;
   },
   
   async getUser() {
     const sdk = await getSDK();
-    if (fallbackOnly) return null;
+    if (fallbackOnly) {
+      throw new Error('SDK недоступен (fallback mode) - не в Mini App окружении');
+    }
+    
+    if (!sdk.user || typeof sdk.user !== 'function') {
+      throw new Error('SDK.user() метод недоступен');
+    }
     
     try {
-      return await sdk.user();
+      console.log('👤 Calling SDK.user()...');
+      const user = await sdk.user();
+      console.log('👤 SDK.user() result:', user);
+      
+      if (!user) {
+        throw new Error('SDK.user() вернул null/undefined');
+      }
+      
+      return user;
     } catch (error) {
-      console.error('❌ Get user failed:', error);
-      return null;
+      console.error('❌ SDK.user() failed:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      throw error; // Пробрасываем ошибку дальше
     }
   },
   
