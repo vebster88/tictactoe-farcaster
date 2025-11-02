@@ -1,7 +1,10 @@
 // Quick Auth middleware for validating JWT tokens
 import { createClient } from '@farcaster/quick-auth';
+import axios from 'axios';
 
 const client = createClient();
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
+const NEYNAR_BASE_URL = 'https://api.neynar.com/v2';
 
 // Resolve information about the authenticated Farcaster user
 async function resolveUser(fid) {
@@ -17,35 +20,50 @@ async function resolveUser(fid) {
       }
     })();
 
-    // Get user profile from Farcaster API
-    const profile = await (async () => {
-      const res = await fetch(
-        `https://api.farcaster.xyz/fc/user?fid=${fid}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        console.log(`[Quick Auth] Farcaster API response for fid ${fid}:`, JSON.stringify(data, null, 2));
-        return data.result?.user;
-      } else {
-        console.error(`[Quick Auth] Farcaster API error for fid ${fid}:`, res.status, res.statusText);
-        const errorText = await res.text().catch(() => '');
-        console.error(`[Quick Auth] Error body:`, errorText);
+    // Get user profile from Neynar API (более надежный способ)
+    // Если Neynar API ключ не настроен, используем fallback
+    let profile = null;
+    
+    if (NEYNAR_API_KEY && NEYNAR_API_KEY !== 'your_neynar_api_key_here') {
+      try {
+        console.log(`[Quick Auth] Fetching user profile from Neynar API for fid ${fid}`);
+        const response = await axios.get(`${NEYNAR_BASE_URL}/farcaster/user/bulk`, {
+          params: { fids: fid },
+          headers: { 'api_key': NEYNAR_API_KEY }
+        });
+        
+        console.log(`[Quick Auth] Neynar API response for fid ${fid}:`, JSON.stringify(response.data, null, 2));
+        
+        // Neynar возвращает массив users
+        if (response.data?.users && response.data.users.length > 0) {
+          profile = response.data.users[0];
+          console.log(`[Quick Auth] Profile from Neynar:`, JSON.stringify(profile, null, 2));
+        }
+      } catch (error) {
+        console.error(`[Quick Auth] Neynar API error for fid ${fid}:`, {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          message: error.message
+        });
+        // Продолжаем без Neynar - используем fallback
       }
-      return null;
-    })();
+    } else {
+      console.log(`[Quick Auth] Neynar API key not configured, skipping profile fetch`);
+    }
 
     console.log(`[Quick Auth] Profile for fid ${fid}:`, JSON.stringify(profile, null, 2));
     
-    // Farcaster API может возвращать username в разных местах
-    // Проверяем все возможные варианты
+    // Neynar API возвращает данные в формате:
+    // { username, display_name, pfp_url, ... }
+    // Если Neynar недоступен, используем fallback
     const username = profile?.username || null;
-    const displayName = profile?.displayName || 
-                        profile?.display_name || 
+    const displayName = profile?.display_name || 
+                        profile?.displayName || 
                         username ||
                         null;
-    const pfp = profile?.pfp || 
+    const pfp = profile?.pfp_url || 
                 profile?.pfpUrl || 
-                profile?.pfp_url ||
+                profile?.pfp ||
                 null;
 
     const result = {
