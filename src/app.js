@@ -676,7 +676,8 @@ function refreshUserLabel() {
       const pfpUrlRaw = possiblePfpFields.find(u => typeof u === 'string' && u.trim().length > 0) || null;
       
       if (!pfpUrlRaw) {
-        userAvatar.style.display = "none";
+        if (userAvatar) userAvatar.style.display = "none";
+        if (userAvatarSquare) userAvatarSquare.style.display = "none";
         addDebugLog('ℹ️ Нет URL аватарки в сессии', { farcaster: !!s.farcaster });
       } else {
         // Нормализация URL
@@ -836,7 +837,8 @@ function refreshUserLabel() {
         }
       }
     } else {
-      addDebugLog('⚠️ Элемент user-avatar не найден в DOM');
+      if (!userAvatar) addDebugLog('⚠️ Элемент user-avatar не найден в DOM');
+      if (!userAvatarSquare) addDebugLog('⚠️ Элемент user-avatar-square не найден в DOM');
     }
     
     authBtn.textContent = t.signOut;
