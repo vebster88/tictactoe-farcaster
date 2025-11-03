@@ -26,9 +26,8 @@ const MAX_DEBUG_LOGS = 50;
 const MAX_STORED_LOGS = 100;
 
 function addDebugLog(message, data = null) {
-  if (!DEBUG_ENABLED) {
-    return; // Skip logging if debug is disabled
-  }
+  // Всегда записываем логи для debug панели (независимо от DEBUG_ENABLED)
+  // Но в консоль выводим только если DEBUG_ENABLED включен
   
   const timestamp = new Date().toLocaleTimeString();
   const logEntry = {
@@ -62,12 +61,14 @@ function addDebugLog(message, data = null) {
     }
   }
   
-  // Выводим в консоль (если доступна)
-  const logMessage = `[DEBUG ${timestamp}] ${message}`;
-  if (data !== null && data !== undefined) {
-    console.log(logMessage, data);
-  } else {
-    console.log(logMessage);
+  // Выводим в консоль только если DEBUG_ENABLED включен
+  if (DEBUG_ENABLED) {
+    const logMessage = `[DEBUG ${timestamp}] ${message}`;
+    if (data !== null && data !== undefined) {
+      console.log(logMessage, data);
+    } else {
+      console.log(logMessage);
+    }
   }
   
   // Обновляем визуальный debug panel, если он создан
@@ -868,12 +869,21 @@ function checkDevAccess() {
   return isAuthorized;
 }
 authBtn?.addEventListener("click", async () => {
+  // Логируем начало обработки
   addDebugLog('🖱️ Кнопка "Войти" нажата');
   addDebugLog('📋 Состояние кнопки', {
-    signedIn: authBtn.dataset.signedIn,
-    text: authBtn.textContent,
-    exists: !!authBtn
+    signedIn: authBtn?.dataset?.signedIn,
+    text: authBtn?.textContent,
+    exists: !!authBtn,
+    id: authBtn?.id
   });
+  
+  // Проверяем, что кнопка существует
+  if (!authBtn) {
+    addDebugLog('❌ Кнопка authBtn не найдена!');
+    alert('Ошибка: кнопка авторизации не найдена');
+    return;
+  }
   
   if (authBtn.dataset.signedIn === "true") {
     addDebugLog('🚪 Выход из системы...');
