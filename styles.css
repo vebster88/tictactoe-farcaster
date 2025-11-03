@@ -154,19 +154,19 @@ h1 .btn-settings-inline {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
 .user-label {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--muted);
-  display: block;
+  display: inline-block;
   text-align: center;
   padding: 0;
-  line-height: 1.2;
+  line-height: 1.5;
   white-space: nowrap;
-  position: absolute;
-  top: calc(100% + 3px);
-  left: 50%;
+  position: static;
+  margin: 0;
 }
 
 .user-avatar {
@@ -533,9 +533,11 @@ h1 .btn-settings-inline {
   
   .auth-group {
     align-items: center;
+    gap: 6px;
   }
   
   .user-label {
+    font-size: 0.75rem;
     text-align: center;
   }
   

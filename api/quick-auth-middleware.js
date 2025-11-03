@@ -11,13 +11,22 @@ async function resolveUser(fid) {
   try {
     // Get primary address from Farcaster API
     const primaryAddress = await (async () => {
-      const res = await fetch(
-        `https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`,
-      );
-      if (res.ok) {
-        const { result } = await res.json();
-        return result.address.address;
+      try {
+        const res = await fetch(
+          `https://api.farcaster.xyz/fc/primary-address?fid=${fid}&protocol=ethereum`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          // Проверяем наличие result и address
+          if (data && data.result && data.result.address && data.result.address.address) {
+            return data.result.address.address;
+          }
+        }
+      } catch (error) {
+        // Игнорируем ошибку получения primary address
+        console.warn('Не удалось получить primary address:', error);
       }
+      return null;
     })();
 
     // Get user profile from Neynar API (более надежный способ)
