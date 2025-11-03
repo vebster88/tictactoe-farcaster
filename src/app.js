@@ -14,9 +14,36 @@ import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 import { APP_VERSION } from "./version.js";
 
-// Debug logging disabled - use browser console for debugging
+// Debug logging - can be controlled via environment variable
+const DEBUG_ENABLED = import.meta.env.VITE_DEBUG === "true" || 
+                     import.meta.env.DEV || 
+                     localStorage.getItem("debug-enabled") === "true" ||
+                     window.location.search.includes("debug=true");
+
 function addDebugLog(message, data = null) {
-  // Silent - no logging
+  if (!DEBUG_ENABLED) {
+    return; // Skip logging if debug is disabled
+  }
+  
+  const timestamp = new Date().toISOString();
+  const logMessage = `[DEBUG ${timestamp}] ${message}`;
+  
+  if (data !== null && data !== undefined) {
+    console.log(logMessage, data);
+  } else {
+    console.log(logMessage);
+  }
+}
+
+// Initialize: enable debug if in dev mode or URL has debug=true
+if (DEBUG_ENABLED) {
+  console.log("🔍 Debug logging enabled");
+  console.log("Debug enabled by:", {
+    env: import.meta.env.VITE_DEBUG === "true",
+    dev: import.meta.env.DEV,
+    localStorage: localStorage.getItem("debug-enabled") === "true",
+    urlParam: window.location.search.includes("debug=true")
+  });
 }
 
 // Now we can safely use addDebugLog
