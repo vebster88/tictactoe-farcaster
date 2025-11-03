@@ -663,14 +663,56 @@ function refreshUserLabel() {
     if (userAvatar) {
       const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfp;
       if (pfpUrl) {
-        // Обработка ошибок загрузки изображения
+        // Обработка ошибок загрузки изображения с fallback для Cloudflare Images
+        let retryAttempts = 0;
+        const maxRetries = 3;
+        const originalPfpUrl = pfpUrl;
+        
         userAvatar.onerror = () => {
-          addDebugLog('⚠️ Ошибка загрузки аватарки', { url: pfpUrl });
-          userAvatar.style.display = "none";
+          retryAttempts++;
+          addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${retryAttempts}/${maxRetries})`, { 
+            url: userAvatar.src,
+            originalUrl: originalPfpUrl
+          });
+          
+          // Для Cloudflare Images пробуем альтернативные форматы
+          if (userAvatar.src.includes('imagedelivery.net') && retryAttempts <= maxRetries) {
+            const currentSrc = userAvatar.src;
+            let nextUrl = null;
+            
+            if (currentSrc.match(/\/rectcrop\d+\/?$/)) {
+              // Пробуем вариант 1: добавить /public
+              nextUrl = currentSrc.replace(/\/(rectcrop\d+)\/?$/, '/$1/public');
+              addDebugLog('🔄 Пробуем вариант с /public', { newUrl: nextUrl });
+            } else if (currentSrc.match(/\/rectcrop\d+\/public\/?$/)) {
+              // Пробуем вариант 2: использовать /avatar вместо rectcrop
+              nextUrl = currentSrc.replace(/\/rectcrop\d+\/public\/?$/, '/avatar');
+              addDebugLog('🔄 Пробуем вариант /avatar', { newUrl: nextUrl });
+            } else if (currentSrc.match(/\/avatar\/?$/)) {
+              // Пробуем вариант 3: использовать /public напрямую
+              nextUrl = currentSrc.replace(/\/avatar\/?$/, '/public');
+              addDebugLog('🔄 Пробуем вариант /public', { newUrl: nextUrl });
+            }
+            
+            if (nextUrl && nextUrl !== currentSrc) {
+              userAvatar.src = nextUrl;
+              return; // Продолжаем попытки
+            }
+          }
+          
+          // Если все попытки исчерпаны, скрываем аватарку
+          if (retryAttempts >= maxRetries) {
+            addDebugLog('❌ Все попытки загрузки аватарки исчерпаны');
+            userAvatar.style.display = "none";
+          }
         };
         
         userAvatar.onload = () => {
-          addDebugLog('✅ Аватарка успешно загружена', { url: pfpUrl });
+          addDebugLog('✅ Аватарка успешно загружена', { 
+            url: userAvatar.src,
+            attempts: retryAttempts + 1
+          });
+          retryAttempts = 0; // Сбрасываем счетчик при успешной загрузке
         };
         
         // Нормализуем URL (добавляем https если нужно)
