@@ -20,18 +20,59 @@ const DEBUG_ENABLED = import.meta.env.VITE_DEBUG === "true" ||
                      localStorage.getItem("debug-enabled") === "true" ||
                      window.location.search.includes("debug=true");
 
+// Debug logs storage
+let debugLogs = [];
+const MAX_DEBUG_LOGS = 50;
+const MAX_STORED_LOGS = 100;
+
 function addDebugLog(message, data = null) {
   if (!DEBUG_ENABLED) {
     return; // Skip logging if debug is disabled
   }
   
-  const timestamp = new Date().toISOString();
-  const logMessage = `[DEBUG ${timestamp}] ${message}`;
+  const timestamp = new Date().toLocaleTimeString();
+  const logEntry = {
+    time: timestamp,
+    message,
+    data: data ? JSON.stringify(data, null, 2) : null,
+    timestamp: new Date().toISOString()
+  };
   
+  // Добавляем в массив
+  debugLogs.push(logEntry);
+  if (debugLogs.length > MAX_DEBUG_LOGS) {
+    debugLogs.shift();
+  }
+  
+  // Сохраняем в localStorage (только последние N записей)
+  try {
+    const storedLogs = JSON.parse(localStorage.getItem('debug-logs') || '[]');
+    storedLogs.push(logEntry);
+    if (storedLogs.length > MAX_STORED_LOGS) {
+      storedLogs.shift();
+    }
+    localStorage.setItem('debug-logs', JSON.stringify(storedLogs));
+  } catch (e) {
+    // Если localStorage переполнен, очищаем старые логи
+    try {
+      localStorage.removeItem('debug-logs');
+      localStorage.setItem('debug-logs', JSON.stringify([logEntry]));
+    } catch (e2) {
+      // Если и это не помогло, просто пропускаем сохранение
+    }
+  }
+  
+  // Выводим в консоль (если доступна)
+  const logMessage = `[DEBUG ${timestamp}] ${message}`;
   if (data !== null && data !== undefined) {
     console.log(logMessage, data);
   } else {
     console.log(logMessage);
+  }
+  
+  // Обновляем визуальный debug panel, если он создан
+  if (window.updateDebugModal) {
+    window.updateDebugModal();
   }
 }
 
@@ -44,6 +85,221 @@ if (DEBUG_ENABLED) {
     localStorage: localStorage.getItem("debug-enabled") === "true",
     urlParam: window.location.search.includes("debug=true")
   });
+  
+  // Загружаем сохраненные логи из localStorage
+  try {
+    const savedLogs = JSON.parse(localStorage.getItem('debug-logs') || '[]');
+    debugLogs = savedLogs.slice(-MAX_DEBUG_LOGS);
+  } catch (e) {
+    debugLogs = [];
+  }
+  
+  // Инициализируем debug UI
+  initDebugUI();
+}
+
+// Debug UI - модальное окно для просмотра логов
+function createDebugModal() {
+  const modal = document.createElement('div');
+  modal.id = 'debug-modal';
+  modal.style.cssText = `
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 10001;
+    overflow-y: auto;
+    padding: 20px;
+    font-family: monospace;
+  `;
+  
+  // Получаем язык безопасно
+  const lang = (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en"));
+  
+  modal.innerHTML = `
+    <div style="background: #1a1a1a; color: #0f0; padding: 20px; border-radius: 8px; max-width: 700px; margin: 0 auto; border: 2px solid #0f0; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px;">
+        <h2 style="margin: 0; color: #0f0; font-size: 1.5rem;">🐛 Debug Logs</h2>
+        <button id="debug-modal-close" style="background: #333; color: #0f0; border: 1px solid #0f0; padding: 8px 16px; cursor: pointer; border-radius: 4px; font-size: 14px;">${lang === "ru" ? "Закрыть" : "Close"}</button>
+      </div>
+      <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+        <button id="debug-clear-logs" style="background: #333; color: #f00; border: 1px solid #f00; padding: 8px 16px; cursor: pointer; border-radius: 4px; font-size: 12px;">${lang === "ru" ? "Очистить логи" : "Clear Logs"}</button>
+        <button id="debug-export-logs" style="background: #333; color: #0ff; border: 1px solid #0ff; padding: 8px 16px; cursor: pointer; border-radius: 4px; font-size: 12px;">${lang === "ru" ? "Экспорт" : "Export"}</button>
+        <span style="color: #888; font-size: 12px; line-height: 32px;">${lang === "ru" ? "Всего логов:" : "Total logs:"} <span id="debug-logs-count">0</span></span>
+      </div>
+      <div id="debug-logs-content" style="max-height: 500px; overflow-y: auto; background: #000; padding: 15px; border-radius: 4px; border: 1px solid #333;"></div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Обработчики событий
+  document.getElementById('debug-modal-close')?.addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.style.display = 'none';
+    }
+  });
+  
+  document.getElementById('debug-clear-logs')?.addEventListener('click', () => {
+    if (confirm(lang === "ru" ? "Очистить все логи?" : "Clear all logs?")) {
+      debugLogs = [];
+      localStorage.removeItem('debug-logs');
+      updateDebugModal();
+      addDebugLog('🧹 Логи очищены');
+    }
+  });
+  
+  document.getElementById('debug-export-logs')?.addEventListener('click', () => {
+    try {
+      const allLogs = JSON.parse(localStorage.getItem('debug-logs') || '[]');
+      const logText = allLogs.map(log => 
+        `[${log.time}] ${log.message}\n${log.data ? log.data + '\n' : ''}`
+      ).join('\n---\n');
+      
+      const blob = new Blob([logText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `debug-logs-${new Date().toISOString().slice(0, 10)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(lang === "ru" ? `Ошибка экспорта: ${e.message}` : `Export error: ${e.message}`);
+    }
+  });
+  
+  return modal;
+}
+
+// Глобальная функция для обновления модального окна (вызывается из addDebugLog)
+window.updateDebugModal = function() {
+  const modal = document.getElementById('debug-modal');
+  if (!modal) return;
+  
+  const logsContent = document.getElementById('debug-logs-content');
+  const logsCount = document.getElementById('debug-logs-count');
+  
+  if (!logsContent || !logsCount) return;
+  
+  // Объединяем сохраненные и текущие логи
+  let allLogs = [];
+  try {
+    const storedLogs = JSON.parse(localStorage.getItem('debug-logs') || '[]');
+    allLogs = [...storedLogs, ...debugLogs].slice(-MAX_STORED_LOGS);
+  } catch (e) {
+    allLogs = [...debugLogs];
+  }
+  
+  // Убираем дубликаты по timestamp
+  const uniqueLogs = [];
+  const seen = new Set();
+  for (const log of allLogs) {
+    const key = log.timestamp + log.message;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueLogs.push(log);
+    }
+  }
+  
+  logsCount.textContent = uniqueLogs.length;
+  
+  logsContent.innerHTML = uniqueLogs.slice(-50).reverse().map(log => 
+    `<div style="margin: 8px 0; padding: 8px; border-bottom: 1px solid #222; border-left: 3px solid #0f0;">
+      <div style="display: flex; gap: 10px; margin-bottom: 4px;">
+        <span style="color: #888; font-size: 10px;">[${log.time}]</span>
+        <span style="color: #0f0; font-weight: 600;">${escapeHtml(log.message)}</span>
+      </div>
+      ${log.data ? `<pre style="color: #aaa; margin: 5px 0; font-size: 10px; background: #111; padding: 8px; border-radius: 4px; overflow-x: auto; max-width: 100%;">${escapeHtml(log.data)}</pre>` : ''}
+    </div>`
+  ).join('');
+  
+  // Автоскролл вниз
+  logsContent.scrollTop = logsContent.scrollHeight;
+};
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Инициализация debug UI
+function initDebugUI() {
+  if (!DEBUG_ENABLED) return;
+  
+  // Создаем debug-кнопку
+  const btn = document.createElement('button');
+  btn.id = 'debug-btn';
+  btn.textContent = '🐛';
+  btn.title = 'Debug Logs';
+  btn.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 10000;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(0, 255, 0, 0.2);
+    border: 2px solid #0f0;
+    color: #0f0;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+    transition: all 0.3s;
+  `;
+  
+  btn.addEventListener('mouseenter', () => {
+    btn.style.background = 'rgba(0, 255, 0, 0.4)';
+    btn.style.transform = 'scale(1.1)';
+  });
+  
+  btn.addEventListener('mouseleave', () => {
+    btn.style.background = 'rgba(0, 255, 0, 0.2)';
+    btn.style.transform = 'scale(1)';
+  });
+  
+  // Создаем модальное окно
+  const modal = createDebugModal();
+  
+  // Открываем модальное окно при клике на кнопку
+  btn.addEventListener('click', () => {
+    modal.style.display = 'block';
+    updateDebugModal();
+  });
+  
+  // Добавляем кнопку в DOM после загрузки (с задержкой для надежности)
+  function addDebugButton() {
+    if (document.body) {
+      // Проверяем, не добавлена ли уже кнопка
+      if (!document.getElementById('debug-btn')) {
+        document.body.appendChild(btn);
+      }
+    } else {
+      setTimeout(addDebugButton, 100);
+    }
+  }
+  
+  // Пробуем добавить сразу, если body готов
+  if (document.body) {
+    addDebugButton();
+  } else {
+    // Ждем загрузки DOM
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', addDebugButton);
+    } else {
+      setTimeout(addDebugButton, 100);
+    }
+  }
+  
+  addDebugLog('🐛 Debug UI инициализирован');
 }
 
 // Now we can safely use addDebugLog
