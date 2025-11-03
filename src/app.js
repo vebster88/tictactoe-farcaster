@@ -553,8 +553,27 @@ authBtn?.addEventListener("click", async () => {
     const lang = getLanguage();
     const username = session?.farcaster?.username || session?.address?.slice(0, 6) || (lang === "ru" ? 'пользователь' : 'user');
     
+    // Останавливаем синхронизацию матчей
+    try {
+      stopSyncing();
+      clearCurrentMatch();
+    } catch (error) {
+      addDebugLog('⚠️ Ошибка при очистке состояния матча:', error);
+    }
+    
+    // Выходим из системы
     signOut();
+    
+    // Обновляем UI
     refreshUserLabel();
+    
+    // Очищаем таймер и скрываем UI матча
+    if (timerContainer) {
+      timerContainer.style.display = "none";
+    }
+    
+    // Сбрасываем игровое состояние
+    resetBoard(true);
     
     const msg = lang === "ru" 
       ? `👋 Вы вышли из аккаунта\n\n${username}`
@@ -564,6 +583,17 @@ authBtn?.addEventListener("click", async () => {
   }
   
   addDebugLog('🔍 Начинаем процесс авторизации...');
+  
+  // Проверяем, не авторизован ли уже пользователь
+  const currentSession = getSession();
+  if (currentSession?.farcaster?.fid || currentSession?.address) {
+    const lang = getLanguage();
+    const msg = lang === "ru"
+      ? `ℹ️ Вы уже авторизованы\n\nИспользуйте кнопку "Выйти" для смены аккаунта.`
+      : `ℹ️ You are already signed in\n\nUse "Sign Out" button to change account.`;
+    alert(msg);
+    return;
+  }
   
   // В Mini App используем SDK, а не кошелек
   // Проверяем окружение сначала (не зависит от загрузки SDK)
@@ -657,6 +687,7 @@ authBtn?.addEventListener("click", async () => {
       
       // Обновляем UI перед показом alert
       refreshUserLabel();
+      updateUIForMode();
       
       addDebugLog('✅ Farcaster Mini App пользователь авторизован!', farcasterProfile);
       addDebugLog('👤 Имя пользователя должно отображаться', { 
@@ -739,8 +770,22 @@ authBtn?.addEventListener("click", async () => {
   }
   
   try { 
-    await signInWithWallet(); 
-    addDebugLog('✅ Авторизация через кошелек успешна');
+    const session = await signInWithWallet();
+    addDebugLog('✅ Авторизация через кошелек успешна', session);
+    
+    // Убираем флаг автоматической авторизации (если был)
+    localStorage.removeItem('auto_auth_started');
+    
+    // Обновляем UI
+    refreshUserLabel();
+    updateUIForMode();
+    
+    const lang = getLanguage();
+    const username = session?.farcaster?.username || session?.address?.slice(0, 6) + "…" + session?.address?.slice(-4) || 'user';
+    const msg = lang === "ru"
+      ? `✅ Успешная авторизация!\n\n${session?.farcaster?.username ? '@' + session.farcaster.username : username}`
+      : `✅ Signed in successfully!\n\n${session?.farcaster?.username ? '@' + session.farcaster.username : username}`;
+    alert(msg);
   } catch (e) { 
     addDebugLog('❌ Ошибка авторизации через кошелек', {
       message: e?.message || String(e),
@@ -754,13 +799,16 @@ authBtn?.addEventListener("click", async () => {
       msg = lang === "ru"
         ? `📱 Кошелек недоступен на мобильном устройстве\n\nДля игры на мобильном устройстве:\n1. Откройте Warpcast\n2. Найдите эту игру в Mini Apps\n3. Авторизация произойдет автоматически\n\nИли используйте приложение на компьютере.`
         : `📱 Wallet not available on mobile device\n\nTo play on mobile:\n1. Open Warpcast\n2. Find this game in Mini Apps\n3. Sign in will happen automatically\n\nOr use the app on your computer.`;
+    } else if (e?.message?.includes('rejected') || e?.message?.includes('denied')) {
+      msg = lang === "ru"
+        ? "Авторизация отменена пользователем"
+        : "Authentication cancelled by user";
     } else {
       msg = lang === "ru"
         ? "Не удалось войти: " + (e?.message || e)
         : "Failed to sign in: " + (e?.message || e);
     }
-    alert(msg); 
-  } finally { 
+    alert(msg);
     refreshUserLabel(); 
   }
 });

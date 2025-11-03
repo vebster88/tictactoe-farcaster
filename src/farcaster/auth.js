@@ -61,5 +61,12 @@ export async function signInWithWallet() {
 }
 
 export function signOut() {
+  // Удаляем сессию
   localStorage.removeItem(SESSION_KEY);
+  
+  // Очищаем дополнительные данные авторизации
+  localStorage.removeItem('auto_auth_started');
+  
+  // Возвращаем null для явного указания отсутствия сессии
+  return null;
 }
