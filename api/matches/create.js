@@ -27,6 +27,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "player1Fid is required" });
     }
 
+    // Normalize FID to number for consistency
+    const normalizedPlayer1Fid = typeof player1Fid === 'string' ? parseInt(player1Fid, 10) : player1Fid;
+    
+    if (isNaN(normalizedPlayer1Fid)) {
+      return res.status(400).json({ error: "player1Fid must be a valid number" });
+    }
+
     // Check if match already exists
     const { getMatch } = await import("./kv-helper.js");
     const existingMatch = await getMatch(matchId);
@@ -36,7 +43,7 @@ export default async function handler(req, res) {
 
     const match = await saveMatch({
       matchId,
-      player1Fid,
+      player1Fid: normalizedPlayer1Fid,
       player2Fid: null,
       status: MATCH_STATUS.PENDING,
       rules: rules || { firstMove: "random" },

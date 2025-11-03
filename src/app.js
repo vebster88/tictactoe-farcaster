@@ -568,9 +568,27 @@ authBtn?.addEventListener("click", async () => {
   // В Mini App используем SDK, а не кошелек
   // Проверяем окружение сначала (не зависит от загрузки SDK)
   const isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
-  addDebugLog('🌍 Проверка Mini App окружения', { result: isMiniAppEnv });
   
-  if (isMiniAppEnv) {
+  // Дополнительная проверка для надежности
+  const additionalMiniAppCheck = !!(
+    window.farcaster ||
+    (window.parent !== window && window.parent.location?.origin !== window.location.origin) ||
+    document.referrer?.includes('farcaster') ||
+    document.referrer?.includes('warpcast') ||
+    window.location.search.includes('miniApp=true')
+  );
+  
+  const finalMiniAppCheck = isMiniAppEnv || additionalMiniAppCheck;
+  addDebugLog('🌍 Проверка Mini App окружения', { 
+    result: finalMiniAppCheck,
+    isMiniAppEnv,
+    additionalMiniAppCheck,
+    windowFarcaster: !!window.farcaster,
+    isInIframe: window.parent !== window,
+    referrer: document.referrer
+  });
+  
+  if (finalMiniAppCheck) {
     addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
     addDebugLog('📊 Проверка окружения', {
       windowFarcaster: !!window.farcaster,
@@ -634,6 +652,9 @@ authBtn?.addEventListener("click", async () => {
       
       localStorage.setItem("fc_session", JSON.stringify(session));
       
+      // Убираем флаг автоматической авторизации (если был)
+      localStorage.removeItem('auto_auth_started');
+      
       // Обновляем UI перед показом alert
       refreshUserLabel();
       
@@ -680,13 +701,40 @@ authBtn?.addEventListener("click", async () => {
   const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
                          (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
   
-  if (isMobileDevice && !window.ethereum) {
+  // Проверяем, не происходит ли уже автоматическая авторизация
+  // (автоматическая авторизация запускается при загрузке страницы)
+  const autoAuthInProgress = localStorage.getItem('auto_auth_started') === 'true';
+  
+  if (isMobileDevice && !window.ethereum && !finalMiniAppCheck && !autoAuthInProgress) {
     const lang = getLanguage();
     const msg = lang === "ru"
       ? `📱 Мобильное устройство обнаружено\n\nДля авторизации откройте игру через Warpcast Mini App.\n\nВ обычном мобильном браузере авторизация через кошелек недоступна.`
       : `📱 Mobile device detected\n\nTo sign in, please open the game through Warpcast Mini App.\n\nWallet authentication is not available in regular mobile browsers.`;
     alert(msg);
     refreshUserLabel();
+    return;
+  }
+  
+  // Если это Mini App, но SDK еще не загрузился, ждем немного
+  if (isMobileDevice && finalMiniAppCheck && !window.ethereum) {
+    addDebugLog('📱 Mini App окружение обнаружено, но SDK еще не загружен. Ждем...');
+    
+    // Не показываем ошибку сразу - даем время для автоматической авторизации
+    // Автоматическая авторизация обычно происходит в течение 1-2 секунд
+    setTimeout(() => {
+      const session = getSession();
+      if (!session?.farcaster?.fid && !session?.address) {
+        const lang = getLanguage();
+        const msg = lang === "ru"
+          ? `🔄 Авторизация занимает больше времени...\n\nЕсли авторизация не произошла автоматически, попробуйте обновить страницу.`
+          : `🔄 Authentication is taking longer...\n\nIf sign in didn't happen automatically, try refreshing the page.`;
+        addDebugLog('⏱️ Автоматическая авторизация не завершилась, показываем сообщение');
+        alert(msg);
+        refreshUserLabel();
+      } else {
+        addDebugLog('✅ Автоматическая авторизация завершилась успешно');
+      }
+    }, 3000);
     return;
   }
   
@@ -975,6 +1023,12 @@ refreshUserLabel();
 
         (async () => {
           try {
+            // Mark that auto-auth has started if we're in Mini App environment
+            const isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
+            if (isMiniAppEnv) {
+              localStorage.setItem('auto_auth_started', 'true');
+            }
+            
             // Call ready() FIRST to hide splash screen, even if auto-load fails
             await farcasterSDK.ready();
             
@@ -1019,6 +1073,9 @@ refreshUserLabel();
                 };
                 
                 localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+                
+                // Убираем флаг автоматической авторизации
+                localStorage.removeItem('auto_auth_started');
                 
                 // Обновляем UI для отображения имени пользователя
                 refreshUserLabel();

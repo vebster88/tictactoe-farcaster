@@ -3,10 +3,16 @@ import { listPlayerMatches, acceptMatch } from "../farcaster/match-api.js";
 import { loadMatch } from "../game/match-state.js";
 
 export async function loadMatchesList(container, playerFid) {
-  if (!container || !playerFid) return;
+  if (!container || !playerFid) {
+    console.warn('[MatchesList] Missing container or playerFid', { container: !!container, playerFid });
+    return;
+  }
 
+  console.log('[MatchesList] Loading matches for player FID:', playerFid, typeof playerFid);
+  
   try {
     const matches = await listPlayerMatches(playerFid);
+    console.log('[MatchesList] Received matches:', matches.length, matches);
     renderMatchesList(container, matches, playerFid);
   } catch (error) {
     const lang = localStorage.getItem("language") || "en";
@@ -83,13 +89,13 @@ function renderMatchesList(container, matches, playerFid) {
     }
 
     matchCard.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-        <div>
-          <div style="font-weight: 600; margin-bottom: 4px;">${lang === "ru" ? "Противник" : "Opponent"}: ${opponentDisplay}</div>
-          <div style="font-size: 0.875rem; color: var(--muted);">${lang === "ru" ? "Статус" : "Status"}: ${statusText}</div>
-          ${timeDisplay ? `<div style="font-size: 0.875rem; color: ${isExpired ? 'var(--lose)' : 'var(--fg)'}; margin-top: 4px;">${lang === "ru" ? "Время" : "Time"}: ${timeDisplay}</div>` : ""}
+      <div style="margin-bottom: 8px;">
+        <div style="font-weight: 600; margin-bottom: 4px;">${lang === "ru" ? "Противник" : "Opponent"}: ${opponentDisplay}</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem; color: var(--muted);">
+          <span>${lang === "ru" ? "Статус" : "Status"}: ${statusText}</span>
+          <span style="font-size: 0.75rem;">Match: ${match.matchId.slice(0, 8)}...</span>
         </div>
-        <div style="font-size: 0.75rem; color: var(--muted);">Match: ${match.matchId.slice(0, 8)}...</div>
+        ${timeDisplay ? `<div style="font-size: 0.875rem; color: ${isExpired ? 'var(--lose)' : 'var(--fg)'}; margin-top: 4px;">${lang === "ru" ? "Время" : "Time"}: ${timeDisplay}</div>` : ""}
       </div>
       ${match.status === "pending" && !isPlayer1 ? `<button class="btn accept-match-btn" data-match-id="${match.matchId}" style="margin-top: 8px;">${lang === "ru" ? "Принять вызов" : "Accept Challenge"}</button>` : ""}
       ${match.status === "active" ? `<button class="btn continue-match-btn" data-match-id="${match.matchId}" style="margin-top: 8px;">${lang === "ru" ? "Продолжить" : "Continue"}</button>` : ""}

@@ -23,12 +23,22 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "fid is required" });
     }
 
-    const allMatches = await getPlayerMatches(fid);
+    // Convert fid to number for consistency (FID is always a number)
+    const playerFid = typeof fid === 'string' ? parseInt(fid, 10) : fid;
+    
+    if (isNaN(playerFid)) {
+      return res.status(400).json({ error: "fid must be a valid number" });
+    }
+
+    console.log(`[list] Getting matches for player FID: ${playerFid}`);
+    const allMatches = await getPlayerMatches(playerFid);
+    console.log(`[list] Found ${allMatches.length} total matches for player ${playerFid}`);
 
     // Filter to only pending and active matches
     const activeMatches = allMatches.filter(
-      match => match.status === MATCH_STATUS.PENDING || match.status === MATCH_STATUS.ACTIVE
+      match => match && (match.status === MATCH_STATUS.PENDING || match.status === MATCH_STATUS.ACTIVE)
     );
+    console.log(`[list] Filtered to ${activeMatches.length} active/pending matches`);
 
     // Sort by updatedAt descending (most recent first)
     activeMatches.sort((a, b) => {

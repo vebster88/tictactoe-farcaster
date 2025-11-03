@@ -165,11 +165,18 @@ export const farcasterSDK = {
   
   // Alternative: check environment without SDK dependency
   checkMiniAppEnvironment() {
-    return !!(
-      window.farcaster ||
-      (window.parent !== window) ||
-      document.referrer?.includes('farcaster') ||
-      (window.location !== window.parent.location)
-    );
+    // More comprehensive check for Mini App environment
+    const checks = [
+      !!window.farcaster,
+      window.parent !== window && window.parent.location.origin !== window.location.origin,
+      document.referrer?.includes('farcaster'),
+      document.referrer?.includes('warpcast'),
+      window.location.search.includes('miniApp=true'),
+      window.location.hash.includes('miniApp=true'),
+      // Check for common Mini App indicators in user agent or other properties
+      navigator.userAgent?.includes('Farcaster') || navigator.userAgent?.includes('Warpcast')
+    ];
+    
+    return checks.some(check => check === true);
   }
 };

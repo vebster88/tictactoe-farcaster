@@ -83,18 +83,24 @@ export async function saveMatch(match) {
     if (useMemoryStore) {
       memoryStore.set(key, matchData);
       
-      // Also index by players
+      // Also index by players (normalize FID to number)
       if (match.player1Fid) {
-        if (!playerMatchesStore.has(match.player1Fid)) {
-          playerMatchesStore.set(match.player1Fid, new Set());
+        const normalizedFid1 = typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid;
+        if (!isNaN(normalizedFid1)) {
+          if (!playerMatchesStore.has(normalizedFid1)) {
+            playerMatchesStore.set(normalizedFid1, new Set());
+          }
+          playerMatchesStore.get(normalizedFid1).add(match.matchId);
         }
-        playerMatchesStore.get(match.player1Fid).add(match.matchId);
       }
       if (match.player2Fid) {
-        if (!playerMatchesStore.has(match.player2Fid)) {
-          playerMatchesStore.set(match.player2Fid, new Set());
+        const normalizedFid2 = typeof match.player2Fid === 'string' ? parseInt(match.player2Fid, 10) : match.player2Fid;
+        if (!isNaN(normalizedFid2)) {
+          if (!playerMatchesStore.has(normalizedFid2)) {
+            playerMatchesStore.set(normalizedFid2, new Set());
+          }
+          playerMatchesStore.get(normalizedFid2).add(match.matchId);
         }
-        playerMatchesStore.get(match.player2Fid).add(match.matchId);
       }
       
       return matchData;
@@ -102,12 +108,18 @@ export async function saveMatch(match) {
 
     await kv.set(key, matchData);
 
-    // Also index by players
+    // Also index by players (normalize FID to number)
     if (match.player1Fid) {
-      await kv.sadd(`${PLAYER_MATCHES_PREFIX}${match.player1Fid}`, match.matchId);
+      const normalizedFid1 = typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid;
+      if (!isNaN(normalizedFid1)) {
+        await kv.sadd(`${PLAYER_MATCHES_PREFIX}${normalizedFid1}`, match.matchId);
+      }
     }
     if (match.player2Fid) {
-      await kv.sadd(`${PLAYER_MATCHES_PREFIX}${match.player2Fid}`, match.matchId);
+      const normalizedFid2 = typeof match.player2Fid === 'string' ? parseInt(match.player2Fid, 10) : match.player2Fid;
+      if (!isNaN(normalizedFid2)) {
+        await kv.sadd(`${PLAYER_MATCHES_PREFIX}${normalizedFid2}`, match.matchId);
+      }
     }
 
     return matchData;
@@ -122,17 +134,24 @@ export async function saveMatch(match) {
       });
       memoryStore.set(key, matchData);
       
+      // Also index by players (normalize FID to number)
       if (match.player1Fid) {
-        if (!playerMatchesStore.has(match.player1Fid)) {
-          playerMatchesStore.set(match.player1Fid, new Set());
+        const normalizedFid1 = typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid;
+        if (!isNaN(normalizedFid1)) {
+          if (!playerMatchesStore.has(normalizedFid1)) {
+            playerMatchesStore.set(normalizedFid1, new Set());
+          }
+          playerMatchesStore.get(normalizedFid1).add(match.matchId);
         }
-        playerMatchesStore.get(match.player1Fid).add(match.matchId);
       }
       if (match.player2Fid) {
-        if (!playerMatchesStore.has(match.player2Fid)) {
-          playerMatchesStore.set(match.player2Fid, new Set());
+        const normalizedFid2 = typeof match.player2Fid === 'string' ? parseInt(match.player2Fid, 10) : match.player2Fid;
+        if (!isNaN(normalizedFid2)) {
+          if (!playerMatchesStore.has(normalizedFid2)) {
+            playerMatchesStore.set(normalizedFid2, new Set());
+          }
+          playerMatchesStore.get(normalizedFid2).add(match.matchId);
         }
-        playerMatchesStore.get(match.player2Fid).add(match.matchId);
       }
       
       return matchData;
@@ -198,16 +217,29 @@ export async function getPlayerMatches(fid) {
   await initKV();
   
   try {
+    // Normalize FID to number for consistency (FID is always a number)
+    const normalizedFid = typeof fid === 'string' ? parseInt(fid, 10) : fid;
+    
+    if (isNaN(normalizedFid)) {
+      console.warn(`[getPlayerMatches] Invalid FID: ${fid}`);
+      return [];
+    }
+    
     let matchIds = [];
     
     if (useMemoryStore) {
-      const playerMatches = playerMatchesStore.get(fid);
+      // Try both string and number keys for backwards compatibility
+      const playerMatches = playerMatchesStore.get(normalizedFid) || playerMatchesStore.get(String(normalizedFid)) || playerMatchesStore.get(fid);
       if (!playerMatches) {
         return [];
       }
       matchIds = Array.from(playerMatches);
     } else {
-      matchIds = await kv.smembers(`${PLAYER_MATCHES_PREFIX}${fid}`);
+      // Try both normalized and original FID for backwards compatibility
+      matchIds = await kv.smembers(`${PLAYER_MATCHES_PREFIX}${normalizedFid}`);
+      if (!matchIds || matchIds.length === 0) {
+        matchIds = await kv.smembers(`${PLAYER_MATCHES_PREFIX}${fid}`) || [];
+      }
     }
     
     if (!matchIds || matchIds.length === 0) {
@@ -229,7 +261,11 @@ export async function getPlayerMatches(fid) {
     // Fallback to memory store if KV fails
     if (!useMemoryStore) {
       useMemoryStore = true;
-      const playerMatches = playerMatchesStore.get(fid);
+      // Try both normalized and original FID for backwards compatibility
+      const normalizedFid = typeof fid === 'string' ? parseInt(fid, 10) : fid;
+      const playerMatches = playerMatchesStore.get(normalizedFid) || 
+                           playerMatchesStore.get(String(normalizedFid)) || 
+                           playerMatchesStore.get(fid);
       if (!playerMatches) {
         return [];
       }
