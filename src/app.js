@@ -869,23 +869,26 @@ function checkDevAccess() {
   return isAuthorized;
 }
 authBtn?.addEventListener("click", async () => {
-  // Логируем начало обработки
-  addDebugLog('🖱️ Кнопка "Войти" нажата');
-  addDebugLog('📋 Состояние кнопки', {
-    signedIn: authBtn?.dataset?.signedIn,
-    text: authBtn?.textContent,
-    exists: !!authBtn,
-    id: authBtn?.id
-  });
-  
-  // Проверяем, что кнопка существует
-  if (!authBtn) {
-    addDebugLog('❌ Кнопка authBtn не найдена!');
-    alert('Ошибка: кнопка авторизации не найдена');
-    return;
-  }
-  
-  if (authBtn.dataset.signedIn === "true") {
+  try {
+    // Логируем начало обработки
+    addDebugLog('🖱️ Кнопка "Войти" нажата');
+    addDebugLog('📋 Состояние кнопки', {
+      signedIn: authBtn?.dataset?.signedIn,
+      text: authBtn?.textContent,
+      exists: !!authBtn,
+      id: authBtn?.id
+    });
+    
+    // Проверяем, что кнопка существует
+    if (!authBtn) {
+      addDebugLog('❌ Кнопка authBtn не найдена!');
+      alert('Ошибка: кнопка авторизации не найдена');
+      return;
+    }
+    
+    addDebugLog('✅ Кнопка найдена, проверяем статус авторизации...');
+    
+    if (authBtn.dataset.signedIn === "true") {
     addDebugLog('🚪 Выход из системы...');
     
     const session = getSession();
@@ -921,32 +924,74 @@ authBtn?.addEventListener("click", async () => {
     return;
   }
   
-  addDebugLog('🔍 Начинаем процесс авторизации...');
-  
-  // В Mini App используем SDK, а не кошелек
-  // Проверяем окружение сначала (не зависит от загрузки SDK)
-  const isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
-  
-  // Дополнительная проверка для надежности
-  const additionalMiniAppCheck = !!(
-    window.farcaster ||
-    (window.parent !== window && window.parent.location?.origin !== window.location.origin) ||
-    document.referrer?.includes('farcaster') ||
-    document.referrer?.includes('warpcast') ||
-    window.location.search.includes('miniApp=true')
-  );
-  
-  const finalMiniAppCheck = isMiniAppEnv || additionalMiniAppCheck;
-  addDebugLog('🌍 Проверка Mini App окружения', { 
-    result: finalMiniAppCheck,
-    isMiniAppEnv,
-    additionalMiniAppCheck,
-    windowFarcaster: !!window.farcaster,
-    isInIframe: window.parent !== window,
-    referrer: document.referrer
-  });
-  
-  if (finalMiniAppCheck) {
+    addDebugLog('✅ Пользователь не авторизован, начинаем процесс авторизации...');
+    
+    // В Mini App используем SDK, а не кошелек
+    // Проверяем окружение сначала (не зависит от загрузки SDK)
+    addDebugLog('🔍 Вызываем checkMiniAppEnvironment()...');
+    let isMiniAppEnv = false;
+    try {
+      isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
+      addDebugLog('✅ checkMiniAppEnvironment() завершен', { result: isMiniAppEnv });
+    } catch (error) {
+      addDebugLog('❌ Ошибка в checkMiniAppEnvironment()', {
+        message: error?.message || String(error),
+        stack: error?.stack,
+        name: error?.name
+      });
+      // Продолжаем с false, если ошибка
+      isMiniAppEnv = false;
+    }
+    
+    // Дополнительная проверка для надежности
+    addDebugLog('🔍 Выполняем дополнительные проверки Mini App...');
+    let additionalMiniAppCheck = false;
+    try {
+      // Безопасная проверка для кросс-доменных iframe
+      const isInIframe = window.parent !== window;
+      let sameOrigin = true;
+      try {
+        sameOrigin = window.parent.location.origin === window.location.origin;
+      } catch (e) {
+        // SecurityError при кросс-доменном доступе - это нормально для Mini App
+        sameOrigin = false;
+      }
+      
+      additionalMiniAppCheck = !!(
+        window.farcaster ||
+        (isInIframe && !sameOrigin) ||
+        document.referrer?.includes('farcaster') ||
+        document.referrer?.includes('warpcast') ||
+        window.location.search.includes('miniApp=true')
+      );
+      addDebugLog('✅ Дополнительные проверки завершены', { result: additionalMiniAppCheck });
+    } catch (error) {
+      addDebugLog('❌ Ошибка в дополнительных проверках', {
+        message: error?.message || String(error),
+        stack: error?.stack,
+        name: error?.name
+      });
+      // Безопасный fallback без проверки origin
+      additionalMiniAppCheck = !!(
+        window.farcaster ||
+        (window.parent !== window) ||
+        document.referrer?.includes('farcaster') ||
+        document.referrer?.includes('warpcast') ||
+        window.location.search.includes('miniApp=true')
+      );
+    }
+    
+    const finalMiniAppCheck = isMiniAppEnv || additionalMiniAppCheck;
+    addDebugLog('🌍 Проверка Mini App окружения', { 
+      result: finalMiniAppCheck,
+      isMiniAppEnv,
+      additionalMiniAppCheck,
+      windowFarcaster: !!window.farcaster,
+      isInIframe: window.parent !== window,
+      referrer: document.referrer
+    });
+    
+    if (finalMiniAppCheck) {
     addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
     addDebugLog('📊 Проверка окружения', {
       windowFarcaster: !!window.farcaster,
@@ -1167,7 +1212,23 @@ authBtn?.addEventListener("click", async () => {
         : "Failed to sign in: " + (e?.message || e);
     }
     alert(msg);
-    refreshUserLabel(); 
+    refreshUserLabel();
+  } 
+  } catch (error) {
+    // Критическая ошибка в обработчике - логируем все детали
+    addDebugLog('❌ КРИТИЧЕСКАЯ ОШИБКА в обработчике Sign In', {
+      message: error?.message || String(error),
+      stack: error?.stack,
+      name: error?.name,
+      cause: error?.cause,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+    console.error('❌ КРИТИЧЕСКАЯ ОШИБКА в обработчике Sign In:', error);
+    const lang = getLanguage();
+    alert(lang === "ru" 
+      ? `Критическая ошибка при авторизации: ${error?.message || String(error)}\n\nПроверьте debug логи для деталей.`
+      : `Critical authentication error: ${error?.message || String(error)}\n\nCheck debug logs for details.`
+    );
   }
 });
 
