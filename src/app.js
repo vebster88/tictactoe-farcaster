@@ -663,7 +663,7 @@ function refreshUserLabel() {
     if (userAvatar) {
       const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfp;
       if (pfpUrl) {
-        // Обработка ошибок загрузки изображения с fallback для Cloudflare Images
+        // Сначала устанавливаем обработчики ДО нормализации и установки src
         let retryAttempts = 0;
         const maxRetries = 3;
         const originalPfpUrl = pfpUrl;
@@ -724,24 +724,13 @@ function refreshUserLabel() {
         }
         
         // Обработка URL от imagedelivery.net (Cloudflare Images)
-        // Cloudflare Images использует формат: https://imagedelivery.net/{accountHash}/{imageId}/{variant}
-        // Варианты: rectcrop1, rectcrop2, rectcrop3, avatar, public и т.д.
-        // Если URL заканчивается на вариант без расширения, нужно использовать его напрямую или добавить формат
         if (normalizedUrl && normalizedUrl.includes('imagedelivery.net')) {
-          // Если URL заканчивается на rectcrop вариант, используем его как есть (это валидный формат)
-          // Но если он не работает, пробуем добавить расширение или использовать /avatar
           const rectcropMatch = normalizedUrl.match(/\/(rectcrop\d+)\/?$/);
           if (rectcropMatch) {
-            // Пробуем сначала оригинальный URL, если не работает - попробуем варианты
-            // Не меняем URL сразу - пусть браузер попробует загрузить
             addDebugLog('📸 Обнаружен Cloudflare Images URL с rectcrop', {
               variant: rectcropMatch[1],
               originalUrl: normalizedUrl
             });
-          } else if (!normalizedUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) && !normalizedUrl.match(/\/(avatar|public|rectcrop)/)) {
-            // Если нет расширения и нет известного варианта, пробуем /avatar
-            addDebugLog('⚠️ Cloudflare Images URL без варианта, пробуем /avatar');
-            normalizedUrl = normalizedUrl + (normalizedUrl.endsWith('/') ? '' : '/') + 'avatar';
           }
         }
         
@@ -751,23 +740,38 @@ function refreshUserLabel() {
           changed: normalizedUrl !== pfpUrl
         });
         
-        // Устанавливаем src только если он отличается (чтобы не вызывать повторную загрузку)
-        if (userAvatar.src !== normalizedUrl) {
-          userAvatar.src = normalizedUrl;
+        // Для Cloudflare Images убираем crossOrigin и referrerPolicy - они могут блокировать загрузку
+        // Устанавливаем атрибуты ДО установки src
+        if (normalizedUrl.includes('imagedelivery.net')) {
+          // Убираем все CORS атрибуты для Cloudflare Images
+          userAvatar.removeAttribute('crossorigin');
+          userAvatar.removeAttribute('referrerpolicy');
+          userAvatar.crossOrigin = null;
+          userAvatar.referrerPolicy = null;
+          userAvatar.loading = "lazy";
+          addDebugLog('🔓 Убраны CORS ограничения для Cloudflare Images');
+        } else {
+          // Для других доменов оставляем настройки
+          userAvatar.loading = "lazy";
+          userAvatar.crossOrigin = "anonymous";
+          userAvatar.referrerPolicy = "no-referrer";
         }
         
-        // Добавляем атрибуты для лучшей загрузки на мобильных
-        userAvatar.loading = "lazy";
-        userAvatar.crossOrigin = "anonymous";
-        userAvatar.referrerPolicy = "no-referrer";
         userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
         userAvatar.style.display = "block";
         
-        addDebugLog('🖼️ Загружаем аватарку пользователя', { 
-          url: pfpUrl,
-          hasSrc: !!userAvatar.src,
-          display: userAvatar.style.display
-        });
+        // УСТАНАВЛИВАЕМ src ПОСЛЕДНИМ, после всех обработчиков и атрибутов
+        if (userAvatar.src !== normalizedUrl) {
+          userAvatar.src = normalizedUrl;
+          addDebugLog('🖼️ Загружаем аватарку пользователя', { 
+            url: normalizedUrl,
+            hasSrc: !!userAvatar.src,
+            display: userAvatar.style.display,
+            crossOrigin: userAvatar.crossOrigin,
+            referrerPolicy: userAvatar.referrerPolicy,
+            loading: userAvatar.loading
+          });
+        }
       } else {
         userAvatar.style.display = "none";
         addDebugLog('ℹ️ Нет URL аватарки в сессии', { 
