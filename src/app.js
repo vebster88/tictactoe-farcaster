@@ -673,10 +673,25 @@ function refreshUserLabel() {
           addDebugLog('✅ Аватарка успешно загружена', { url: pfpUrl });
         };
         
+        // Нормализуем URL (добавляем https если нужно)
+        let normalizedUrl = pfpUrl;
+        if (pfpUrl && !pfpUrl.startsWith('http://') && !pfpUrl.startsWith('https://')) {
+          normalizedUrl = 'https://' + pfpUrl;
+        } else if (pfpUrl && pfpUrl.startsWith('//')) {
+          normalizedUrl = 'https:' + pfpUrl;
+        }
+        
         // Устанавливаем src только если он отличается (чтобы не вызывать повторную загрузку)
-        if (userAvatar.src !== pfpUrl) {
+        if (userAvatar.src !== normalizedUrl && normalizedUrl !== pfpUrl) {
+          userAvatar.src = normalizedUrl;
+        } else if (userAvatar.src !== pfpUrl) {
           userAvatar.src = pfpUrl;
         }
+        
+        // Добавляем атрибуты для лучшей загрузки на мобильных
+        userAvatar.loading = "lazy";
+        userAvatar.crossOrigin = "anonymous";
+        userAvatar.referrerPolicy = "no-referrer";
         userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
         userAvatar.style.display = "block";
         
