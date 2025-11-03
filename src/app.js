@@ -848,6 +848,9 @@ function refreshUserLabel() {
     if (userAvatar) {
       userAvatar.style.display = "none";
     }
+    if (userAvatarSquare) {
+      userAvatarSquare.style.display = "none";
+    }
     authBtn.textContent = t.signIn;
     authBtn.dataset.signedIn = "false";
   }
