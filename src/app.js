@@ -663,12 +663,38 @@ function refreshUserLabel() {
     if (userAvatar) {
       const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfp;
       if (pfpUrl) {
-        userAvatar.src = pfpUrl;
+        // Обработка ошибок загрузки изображения
+        userAvatar.onerror = () => {
+          addDebugLog('⚠️ Ошибка загрузки аватарки', { url: pfpUrl });
+          userAvatar.style.display = "none";
+        };
+        
+        userAvatar.onload = () => {
+          addDebugLog('✅ Аватарка успешно загружена', { url: pfpUrl });
+        };
+        
+        // Устанавливаем src только если он отличается (чтобы не вызывать повторную загрузку)
+        if (userAvatar.src !== pfpUrl) {
+          userAvatar.src = pfpUrl;
+        }
         userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
         userAvatar.style.display = "block";
+        
+        addDebugLog('🖼️ Загружаем аватарку пользователя', { 
+          url: pfpUrl,
+          hasSrc: !!userAvatar.src,
+          display: userAvatar.style.display
+        });
       } else {
         userAvatar.style.display = "none";
+        addDebugLog('ℹ️ Нет URL аватарки в сессии', { 
+          farcaster: !!s.farcaster,
+          pfp_url: s.farcaster?.pfp_url,
+          pfp: s.farcaster?.pfp
+        });
       }
+    } else {
+      addDebugLog('⚠️ Элемент user-avatar не найден в DOM');
     }
     
     authBtn.textContent = t.signOut;
