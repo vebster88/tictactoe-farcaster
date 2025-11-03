@@ -48,6 +48,7 @@
         <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Show logo"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="App version">v1.21</span> <button id="btn-settings" class="btn btn-settings-inline" type="button" aria-label="Settings" title="Settings">⚙️</button></h1>
         <nav class="top-actions" aria-label="Actions">
           <button id="btn-new" class="btn" type="button">New Game</button>
+          <button id="btn-matches" class="btn" type="button" style="display: none;">My Matches</button>
           <button id="btn-dev-toggle" class="btn" type="button" title="Developer mode" style="display: none;">🔧</button>
           <div class="auth-group">
             <button id="btn-auth" class="btn" type="button">Sign In</button>
@@ -58,7 +59,7 @@
       
       <nav class="game-actions" aria-label="Game Actions">
         <!-- Основные игровые кнопки -->
-        <button id="btn-invite" class="btn" type="button" style="display: none;">Create Match</button>
+        <button id="btn-invite" class="btn" type="button" style="display: none;">Invite Player</button>
         <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish Result</button>
         
         <!-- Технические кнопки (скрыты по умолчанию) -->
@@ -90,6 +91,7 @@
       </section>
 
       <section class="status" aria-live="polite" id="status">Ход: X</section>
+      <div id="timer-container" style="display: none;"></div>
     </main>
 
     <div id="toasts" class="toasts" aria-live="polite" aria-atomic="true"></div>
@@ -128,6 +130,15 @@
             </select>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Matches Modal -->
+    <div id="matches-modal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="matches-modal-title">
+      <div class="modal-content" style="padding: 24px; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <button class="modal-close" aria-label="Close">&times;</button>
+        <h2 id="matches-modal-title" style="position: static; margin: 0 0 20px 0; padding: 0; background: none; font-size: 1.5rem;">My Matches</h2>
+        <div id="matches-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
       </div>
     </div>
 

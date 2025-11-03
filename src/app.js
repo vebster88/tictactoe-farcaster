@@ -5,6 +5,10 @@ import { bestMoveMinimax } from "./ai/minimax.js";
 import { getSession, signInWithWallet, signOut } from "./farcaster/auth.js";
 import { sendInvite } from "./farcaster/matchmaking.js";
 import { listThreadReplies, publishMatchResult } from "./farcaster/client.js";
+import { getMatch, acceptMatch, sendMove, listPlayerMatches } from "./farcaster/match-api.js";
+import { setCurrentMatch, loadMatch, clearCurrentMatch, handleMove as handleMatchMove, isMyTurn, getMySymbol, getOpponentFid, startSyncing, stopSyncing, getCurrentMatch } from "./game/match-state.js";
+import { TurnTimer } from "./ui/Timer.js";
+import { loadMatchesList } from "./ui/MatchesList.js";
 import { createSignedKey } from "./farcaster/signer.js";
 import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
@@ -28,6 +32,10 @@ const createSignerBtn = document.getElementById("btn-create-signer");
 const checkRepliesBtn = document.getElementById("btn-check-replies");
 const inviteBtn = document.getElementById("btn-invite");
 const publishBtn = document.getElementById("btn-publish-result");
+const matchesBtn = document.getElementById("btn-matches");
+const matchesModal = document.getElementById("matches-modal");
+const matchesList = document.getElementById("matches-list");
+const timerContainer = document.getElementById("timer-container");
 const cells = [...boardEl.querySelectorAll(".cell")];
 
 // Settings modal elements
@@ -61,6 +69,36 @@ function t(_key, dict) {
   return lang === "ru" ? dict.ru : dict.en;
 }
 function showStatus(msg) { statusEl.textContent = msg; }
+
+function showToast(message, type = "info") {
+  const toastsContainer = document.getElementById("toasts");
+  if (!toastsContainer) return;
+  
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    background: ${type === "error" ? "rgba(239, 68, 68, 0.9)" : type === "success" ? "rgba(16, 185, 129, 0.9)" : type === "warning" ? "rgba(245, 158, 11, 0.9)" : "rgba(59, 130, 246, 0.9)"};
+    color: white;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    box-shadow: var(--shadow-lg);
+    animation: toastSlide 0.3s ease-out;
+  `;
+  
+  toastsContainer.appendChild(toast);
+  
+  // Auto remove after 3 seconds
+  setTimeout(() => {
+    toast.style.animation = "toastSlideOut 0.3s ease-out";
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }, 3000);
+}
 
 function render() {
   cells.forEach((btn, i) => {
@@ -193,11 +231,61 @@ settingsMode?.addEventListener("change", () => {
   updateUIForMode();
 });
 
-boardEl.addEventListener("click", (e) => {
+let isMakingMove = false;
+
+boardEl.addEventListener("click", async (e) => {
   const btn = e.target.closest(".cell");
   if (!btn) return;
+  
+  // Prevent clicks during move processing
+  if (isMakingMove) return;
+  
   const idx = Number(btn.dataset.cell);
-  handleMove(idx);
+  
+  // Check if we're in PvP Farcaster mode with active match
+  const currentMatch = getCurrentMatch();
+  if (mode === "pvp-farcaster" && currentMatch.matchState) {
+    // PvP match - use API
+    if (!isMyTurn()) {
+      const lang = getLanguage();
+      showToast(lang === "ru" ? "Не ваш ход" : "Not your turn", "warning");
+      return;
+    }
+    
+    isMakingMove = true;
+    btn.disabled = true;
+    btn.style.opacity = "0.5";
+    
+    try {
+      const match = await handleMatchMove(idx);
+      state = match.gameState;
+      if (state.finished) {
+        if (state.winner) scores[state.winner] += 1; else scores.draw += 1;
+        stopSyncing();
+        const lang = getLanguage();
+        const isWinner = (match.player1Symbol === state.winner && match.player1Fid === currentMatch.playerFid) ||
+                         (match.player2Symbol === state.winner && match.player2Fid === currentMatch.playerFid);
+        showToast(
+          isWinner 
+            ? (lang === "ru" ? "🎉 Вы победили!" : "🎉 You won!")
+            : (lang === "ru" ? "😔 Вы проиграли" : "😔 You lost"),
+          isWinner ? "success" : "error"
+        );
+      }
+      render();
+      updateMatchUI();
+    } catch (error) {
+      const lang = getLanguage();
+      showToast(lang === "ru" ? `Ошибка хода: ${error.message}` : `Move error: ${error.message}`, "error");
+    } finally {
+      isMakingMove = false;
+      btn.disabled = false;
+      btn.style.opacity = "1";
+    }
+  } else {
+    // Local game or PvE
+    handleMove(idx);
+  }
 });
 boardEl.addEventListener("keydown", (e) => {
   const index = cells.indexOf(document.activeElement);
@@ -249,6 +337,50 @@ function refreshUserLabel() {
   updateUIForMode();
 }
 
+// Matches button handler
+matchesBtn?.addEventListener("click", async () => {
+  if (matchesModal && matchesList) {
+    matchesModal.setAttribute("aria-hidden", "false");
+    const session = getSession();
+    const playerFid = session?.farcaster?.fid || session?.fid;
+    if (playerFid) {
+      await loadMatchesList(matchesList, playerFid);
+    } else {
+      const lang = getLanguage();
+      matchesList.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted);">${lang === "ru" ? "Войдите через Farcaster" : "Sign in with Farcaster"}</div>`;
+    }
+  }
+});
+
+// Close matches modal
+if (matchesModal) {
+  matchesModal.addEventListener("click", (e) => {
+    if (e.target === matchesModal) {
+      matchesModal.setAttribute("aria-hidden", "true");
+    }
+  });
+}
+
+// Handle match loaded event
+window.addEventListener("match-loaded", async (e) => {
+  const { matchId } = e.detail;
+  if (matchId) {
+    await loadMatch(matchId);
+    mode = "pvp-farcaster";
+    if (settingsMode) settingsMode.value = "pvp-farcaster";
+    updateUIForMode();
+    updateMatchUI();
+  }
+});
+
+// Cleanup on mode change
+settingsMode?.addEventListener("change", () => {
+  if (mode !== "pvp-farcaster") {
+    clearCurrentMatch();
+    updateMatchUI();
+  }
+});
+
 function updateUIForMode() {
   const isFarcasterMode = mode === "pvp-farcaster";
   const isSignedIn = authBtn?.dataset.signedIn === "true";
@@ -258,6 +390,11 @@ function updateUIForMode() {
   // Показываем Farcaster кнопки только в Farcaster режиме
   if (inviteBtn) {
     inviteBtn.style.display = isFarcasterMode && isSignedIn ? "inline-block" : "none";
+  }
+  
+  // Показываем кнопку списка матчей в Farcaster режиме для авторизованных пользователей
+  if (matchesBtn) {
+    matchesBtn.style.display = isFarcasterMode && isSignedIn ? "inline-block" : "none";
   }
   
   if (publishBtn) {
@@ -273,6 +410,97 @@ function updateUIForMode() {
   const devControls = document.getElementById("dev-controls");
   if (devControls) {
     devControls.style.display = (devMode && isAuthorizedDev) ? "block" : "none";
+  }
+}
+
+let matchTimer = null;
+let lastSyncTurn = 0;
+
+function updateMatchUI() {
+  const currentMatch = getCurrentMatch();
+  if (!currentMatch.matchState) {
+    if (timerContainer) timerContainer.style.display = "none";
+    if (matchTimer) {
+      matchTimer.destroy();
+      matchTimer = null;
+    }
+    stopSyncing();
+    lastSyncTurn = 0;
+    return;
+  }
+
+  const match = currentMatch.matchState;
+  
+  // Check if opponent made a move
+  const currentTurn = match.gameState.turn;
+  if (currentTurn > lastSyncTurn && lastSyncTurn > 0) {
+    // New move detected - show notification
+    const lang = getLanguage();
+    const msg = lang === "ru" ? "Противник сделал ход!" : "Opponent made a move!";
+    showToast(msg, "info");
+  }
+  lastSyncTurn = currentTurn;
+  
+  // Update board state from match
+  state = match.gameState;
+  render();
+
+  // Show timer if match is active
+  if (match.status === "active" && !match.gameState.finished && timerContainer) {
+    timerContainer.style.display = "block";
+    
+    if (!matchTimer || matchTimer.lastMoveAt !== match.lastMoveAt) {
+      if (matchTimer) {
+        matchTimer.destroy();
+      }
+      matchTimer = new TurnTimer(timerContainer, {
+        timeoutMs: match.turnTimeout,
+        lastMoveAt: match.lastMoveAt,
+        onTimeout: () => {
+          // Refresh match state when timeout occurs
+          syncMatch().then(result => {
+            if (result) updateMatchUI();
+          });
+        }
+      });
+    }
+    matchTimer.start(match.lastMoveAt);
+
+    // Start syncing if not already
+    import("./game/match-state.js").then(({ getSyncInterval }) => {
+      if (!getSyncInterval()) {
+        startSyncing(5000, (syncResult) => {
+          updateMatchUI();
+        });
+      }
+    });
+  } else {
+    if (timerContainer) timerContainer.style.display = "none";
+    if (match.gameState.finished) {
+      stopSyncing();
+    }
+  }
+
+  // Update status message
+  const lang = getLanguage();
+  if (match.gameState.finished) {
+    if (match.gameState.winner) {
+      const winnerSymbol = match.gameState.winner;
+      const isWinner = (match.player1Symbol === winnerSymbol && match.player1Fid === currentMatch.playerFid) ||
+                       (match.player2Symbol === winnerSymbol && match.player2Fid === currentMatch.playerFid);
+      showStatus(isWinner 
+        ? (lang === "ru" ? `Победа: ${winnerSymbol}` : `You win: ${winnerSymbol}`)
+        : (lang === "ru" ? `Поражение: ${winnerSymbol}` : `You lose: ${winnerSymbol}`));
+    } else {
+      showStatus(lang === "ru" ? "Ничья" : "Draw");
+    }
+  } else {
+    const mySymbol = getMySymbol();
+    if (isMyTurn()) {
+      showStatus(lang === "ru" ? `Ваш ход: ${mySymbol}` : `Your turn: ${mySymbol}`);
+    } else {
+      showStatus(lang === "ru" ? `Ожидание хода противника...` : `Waiting for opponent...`);
+    }
   }
 }
 
@@ -447,6 +675,21 @@ authBtn?.addEventListener("click", async () => {
   
   // Для обычного браузера используем кошелек
   addDebugLog('💼 Не Mini App окружение, пробуем авторизацию через кошелек...');
+  
+  // Проверяем, мобильное ли это устройство
+  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                         (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+  
+  if (isMobileDevice && !window.ethereum) {
+    const lang = getLanguage();
+    const msg = lang === "ru"
+      ? `📱 Мобильное устройство обнаружено\n\nДля авторизации откройте игру через Warpcast Mini App.\n\nВ обычном мобильном браузере авторизация через кошелек недоступна.`
+      : `📱 Mobile device detected\n\nTo sign in, please open the game through Warpcast Mini App.\n\nWallet authentication is not available in regular mobile browsers.`;
+    alert(msg);
+    refreshUserLabel();
+    return;
+  }
+  
   try { 
     await signInWithWallet(); 
     addDebugLog('✅ Авторизация через кошелек успешна');
@@ -456,9 +699,18 @@ authBtn?.addEventListener("click", async () => {
       stack: e?.stack
     }); 
     const lang = getLanguage();
-    const msg = lang === "ru"
-      ? "Не удалось войти: " + (e?.message || e)
-      : "Failed to sign in: " + (e?.message || e);
+    
+    // Улучшенное сообщение об ошибке для мобильных устройств
+    let msg;
+    if (isMobileDevice && (!window.ethereum || e?.message?.includes('window.ethereum'))) {
+      msg = lang === "ru"
+        ? `📱 Кошелек недоступен на мобильном устройстве\n\nДля игры на мобильном устройстве:\n1. Откройте Warpcast\n2. Найдите эту игру в Mini Apps\n3. Авторизация произойдет автоматически\n\nИли используйте приложение на компьютере.`
+        : `📱 Wallet not available on mobile device\n\nTo play on mobile:\n1. Open Warpcast\n2. Find this game in Mini Apps\n3. Sign in will happen automatically\n\nOr use the app on your computer.`;
+    } else {
+      msg = lang === "ru"
+        ? "Не удалось войти: " + (e?.message || e)
+        : "Failed to sign in: " + (e?.message || e);
+    }
     alert(msg); 
   } finally { 
     refreshUserLabel(); 
@@ -467,22 +719,36 @@ authBtn?.addEventListener("click", async () => {
 
 inviteBtn?.addEventListener("click", async () => {
   if (mode !== "pvp-farcaster") {
-    alert("Выберите режим: PvP — Farcaster");
+    const lang = getLanguage();
+    alert(lang === "ru" ? "Выберите режим: PvP — Farcaster" : "Select mode: PvP — Farcaster");
     return;
   }
   const session = getSession();
-  if (!session?.address) {
-    alert("Сначала войдите через кошелёк.");
+  if (!session?.farcaster?.fid && !session?.address) {
+    const lang = getLanguage();
+    alert(lang === "ru" ? "Сначала войдите через Farcaster." : "Please sign in with Farcaster first.");
     return;
   }
-  const visibility = confirm("Публиковать публично? OK — public, Cancel — private") ? "public" : "private";
+  
+  const lang = getLanguage();
+  const visibility = confirm(
+    lang === "ru" 
+      ? "Публиковать публично? OK — public, Cancel — private"
+      : "Publish publicly? OK — public, Cancel — private"
+  ) ? "public" : "private";
+  
   try {
-    const { payload, res } = await sendInvite(session, { visibility });
-    console.log("invite payload:", payload, "result:", res);
-    alert("Инвайт создан (мок): " + (res.castId || "ok") + "\nmatchId: " + payload.matchId);
+    const { payload, res, matchCreated } = await sendInvite(session, { visibility });
+    const msg = lang === "ru"
+      ? `Инвайт создан!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch в API: ${matchCreated ? "да" : "нет"}`
+      : `Invite created!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch in API: ${matchCreated ? "yes" : "no"}`;
+    alert(msg);
   } catch (e) {
-    console.error(e);
-    alert("Не удалось создать инвайт: " + (e?.message || e));
+    const lang = getLanguage();
+    const errorMsg = lang === "ru" 
+      ? `Не удалось создать инвайт: ${e?.message || e}`
+      : `Failed to create invite: ${e?.message || e}`;
+    alert(errorMsg);
   }
 });
 
@@ -602,6 +868,15 @@ function initializeUITexts() {
     newBtn.textContent = lang === "ru" ? "Новая игра" : "New Game";
   }
   
+  // Update Farcaster buttons
+  if (inviteBtn) {
+    inviteBtn.textContent = lang === "ru" ? "Пригласить игрока" : "Invite Player";
+  }
+  
+  if (matchesBtn) {
+    matchesBtn.textContent = lang === "ru" ? "Мои матчи" : "My Matches";
+  }
+  
   // Update mode select options (now in settings)
   if (settingsMode) {
     const options = settingsMode.querySelectorAll("option");
@@ -673,6 +948,24 @@ if (versionEl) {
 
 render();
 refreshUserLabel();
+
+// Check for active match on load
+(async () => {
+  const session = getSession();
+  const playerFid = session?.farcaster?.fid || session?.fid;
+  if (playerFid && mode === "pvp-farcaster") {
+    try {
+      const matches = await listPlayerMatches(playerFid);
+      const activeMatch = matches.find(m => m.status === "active" && !m.gameState.finished);
+      if (activeMatch) {
+        await loadMatch(activeMatch.matchId);
+        updateMatchUI();
+      }
+    } catch (error) {
+      // Silent fail - match loading is optional
+    }
+  }
+})();
 
 // Инициализация Farcaster Mini App SDK
 // Following official documentation: https://miniapps.farcaster.xyz/docs/getting-started

@@ -394,6 +394,11 @@ h1 .btn-settings-inline {
   to { transform: translateX(0); opacity: 1; }
 }
 
+@keyframes toastSlideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
 /* Логотип в хедере */
 .logo-btn {
   width: 40px;
@@ -599,4 +604,38 @@ h1 .btn-settings-inline {
 /* Скрытые кнопки */
 .btn[style*="display: none"] {
   display: none !important;
+}
+
+/* Timer display */
+.timer-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(20px);
+}
+
+.timer-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.timer-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-display.expired .timer-value {
+  color: var(--lose);
+}
+
+.timer-display.warning .timer-value {
+  color: #f59e0b;
 }

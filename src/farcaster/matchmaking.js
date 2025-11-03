@@ -1,5 +1,6 @@
 ﻿import { v4 as uuid } from "uuid";
 import { publishInvite } from "./client.js";
+import { createMatch } from "./match-api.js";
 
 export function buildInvitePayload(session, opts = {}) {
   const matchId = opts.matchId || uuid();
@@ -11,7 +12,7 @@ export function buildInvitePayload(session, opts = {}) {
     schemaVersion: "1.0.0",
     type: "tictactoe/invite",
     matchId,
-    fromFid: session?.fid ?? null,
+    fromFid: session?.farcaster?.fid ?? session?.fid ?? null,
     rules: { firstMove },
     visibility,
     expiresAt
@@ -20,6 +21,26 @@ export function buildInvitePayload(session, opts = {}) {
 
 export async function sendInvite(session, opts = {}) {
   const payload = buildInvitePayload(session, opts);
+  
+  // Create match in backend API
+  let matchCreated = false;
+  try {
+    const player1Fid = session?.farcaster?.fid || session?.fid;
+    if (player1Fid) {
+      await createMatch({
+        matchId: payload.matchId,
+        player1Fid: player1Fid,
+        rules: payload.rules
+      });
+      matchCreated = true;
+    }
+  } catch (error) {
+    // Continue even if match creation fails - invite can still be published
+    console.warn("Failed to create match in API:", error);
+  }
+
+  // Publish invite to Farcaster
   const res = await publishInvite(payload);
-  return { payload, res };
+  
+  return { payload, res, matchCreated };
 }
