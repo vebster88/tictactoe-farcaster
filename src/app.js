@@ -800,14 +800,22 @@ function refreshUserLabel() {
   // Вычисляем центр кнопки для точного выравнивания имени пользователя
   // Делаем это ПОСЛЕ установки текста кнопки и имени пользователя
   if (authBtn && authWrapper && userLabel.textContent) {
-    // Используем requestAnimationFrame для гарантии, что DOM обновился
+    // Используем двойной requestAnimationFrame для гарантии полного обновления DOM
     requestAnimationFrame(() => {
-      const btnRect = authBtn.getBoundingClientRect();
-      const wrapperRect = authWrapper.getBoundingClientRect();
-      // Вычисляем смещение: центр кнопки относительно начала wrapper
-      const btnCenter = btnRect.left - wrapperRect.left + btnRect.width / 2;
-      // Устанавливаем CSS переменную для точного позиционирования
-      authWrapper.style.setProperty('--btn-center', `${btnCenter}px`);
+      requestAnimationFrame(() => {
+        const btnRect = authBtn.getBoundingClientRect();
+        const wrapperRect = authWrapper.getBoundingClientRect();
+        // Вычисляем смещение: центр кнопки относительно начала wrapper
+        const btnCenter = btnRect.left - wrapperRect.left + btnRect.width / 2;
+        // Устанавливаем CSS переменную для точного позиционирования
+        authWrapper.style.setProperty('--btn-center', `${btnCenter}px`);
+        addDebugLog('🎯 Центрирование имени пользователя', {
+          btnCenter: btnCenter,
+          btnWidth: btnRect.width,
+          btnLeft: btnRect.left - wrapperRect.left,
+          wrapperLeft: wrapperRect.left
+        });
+      });
     });
   }
   
