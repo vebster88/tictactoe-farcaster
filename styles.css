@@ -170,8 +170,10 @@ h1 .btn-settings-inline {
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.3);
@@ -179,6 +181,9 @@ h1 .btn-settings-inline {
   transition: var(--transition);
   cursor: pointer;
   margin-left: 8px;
+  /* Оптимизация рендеринга для мобильных */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 .user-avatar:hover {
@@ -540,8 +545,10 @@ h1 .btn-settings-inline {
   }
   
   .user-avatar {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
     margin-left: 6px;
   }
   
