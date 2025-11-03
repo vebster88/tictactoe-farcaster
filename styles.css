@@ -149,16 +149,21 @@ h1 .btn-settings-inline {
   flex-wrap: wrap;
 }
 
-.auth-group {
+.auth-wrapper {
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+}
+
+.auth-group {
+  /* Не используется в новой структуре, оставлено для совместимости */
+  display: none;
 }
 
 .user-label {
+  position: absolute;
+  top: calc(100% + 4px);
   font-size: 0.75rem;
   color: var(--muted);
   display: block;
@@ -167,6 +172,12 @@ h1 .btn-settings-inline {
   line-height: 1.2;
   white-space: nowrap;
   margin: 0;
+  pointer-events: none;
+  /* Точное центрирование относительно центра кнопки Sign In/Out */
+  /* Используем CSS переменную --btn-center, которая вычисляется через JS */
+  left: var(--btn-center, 37px);
+  transform: translateX(-50%);
+  width: max-content;
 }
 
 .user-avatar {
@@ -178,7 +189,7 @@ h1 .btn-settings-inline {
   background: rgba(255, 255, 255, 0.1);
   transition: var(--transition);
   cursor: pointer;
-  margin-left: 8px;
+  margin: 0;
 }
 
 .user-avatar:hover {
@@ -531,20 +542,15 @@ h1 .btn-settings-inline {
     flex-wrap: wrap;
   }
   
-  .auth-group {
-    align-items: center;
-    gap: 3px;
-  }
-  
   .user-label {
     font-size: 0.7rem;
-    text-align: center;
+    /* Убираем margin-top, так как позиционирование через top */
+    top: calc(100% + 3px);
   }
   
   .user-avatar {
-    width: 28px;
-    height: 28px;
-    margin-left: 6px;
+    width: 36px;
+    height: 36px;
   }
   
   .game-actions {

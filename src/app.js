@@ -641,8 +641,10 @@ function refreshUserLabel() {
   };
   const t = texts[lang] || texts.en;
   
-  // Получаем элемент аватарки
+  // Получаем элементы
   const userAvatar = document.getElementById("user-avatar");
+  const authBtn = document.getElementById("btn-auth");
+  const authWrapper = authBtn?.closest('.auth-wrapper');
   
   if (isAuthorized) {
     // Приоритет: отображаем Farcaster username, если есть
@@ -793,6 +795,20 @@ function refreshUserLabel() {
     }
     authBtn.textContent = t.signIn;
     authBtn.dataset.signedIn = "false";
+  }
+  
+  // Вычисляем центр кнопки для точного выравнивания имени пользователя
+  // Делаем это ПОСЛЕ установки текста кнопки и имени пользователя
+  if (authBtn && authWrapper && userLabel.textContent) {
+    // Используем requestAnimationFrame для гарантии, что DOM обновился
+    requestAnimationFrame(() => {
+      const btnRect = authBtn.getBoundingClientRect();
+      const wrapperRect = authWrapper.getBoundingClientRect();
+      // Вычисляем смещение: центр кнопки относительно начала wrapper
+      const btnCenter = btnRect.left - wrapperRect.left + btnRect.width / 2;
+      // Устанавливаем CSS переменную для точного позиционирования
+      authWrapper.style.setProperty('--btn-center', `${btnCenter}px`);
+    });
   }
   
   updateUIForMode();
@@ -1140,7 +1156,29 @@ authBtn?.addEventListener("click", async () => {
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
                            (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
     
-    if (finalMiniAppCheck || (isMobileDevice && !window.ethereum)) {
+    // Определяем, является ли это localhost (локальная разработка)
+    const isLocalhost = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' ||
+                        window.location.hostname === '0.0.0.0';
+    
+    // Используем Mini App авторизацию только если:
+    // 1. Это точно Mini App окружение (finalMiniAppCheck === true) И НЕ localhost в обычном браузере, ИЛИ
+    // 2. Это мобильное устройство БЕЗ window.ethereum (кошелек недоступен)
+    // НО НЕ если это десктоп браузер с кошельком - там используем кошелек!
+    // НО НЕ если это localhost и есть window.ethereum - используем кошелек!
+    const shouldUseMiniApp = (finalMiniAppCheck && (!isLocalhost || window.farcaster)) || 
+                             (isMobileDevice && !window.ethereum && !isLocalhost);
+    
+    addDebugLog('🔍 Решение о методе авторизации', {
+      finalMiniAppCheck,
+      isMobileDevice,
+      isLocalhost,
+      hasEthereum: !!window.ethereum,
+      hasWindowFarcaster: !!window.farcaster,
+      shouldUseMiniApp
+    });
+    
+    if (shouldUseMiniApp) {
       // Если на мобильном и нет кошелька, предполагаем Mini App
       if (isMobileDevice && !window.ethereum && !finalMiniAppCheck) {
         addDebugLog('📱 Мобильное устройство без кошелька - предполагаем Mini App окружение');
@@ -1160,29 +1198,18 @@ authBtn?.addEventListener("click", async () => {
       const backendOrigin = window.location.origin;
       addDebugLog('🌐 Backend origin', backendOrigin);
       
-      addDebugLog('🔐 Начинаем Quick Auth...');
+      // Пробуем сначала getUser() - это более надежный способ для Mini App
+      // Quick Auth может не работать в локальной разработке или если SDK внутренне падает
       let fullUserData = null;
+      let usedQuickAuth = false;
+      
+      // Сначала пробуем getUser() - основной метод
       try {
-        fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-        addDebugLog('✅ Quick Auth успешен!', fullUserData);
-      } catch (error) {
-        console.error('❌ Quick Auth ошибка:', error);
-        addDebugLog('❌ Quick Auth ошибка', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
+        addDebugLog('👤 Пробуем получить пользователя через SDK.getUser()...');
+        const user = await farcasterSDK.getUser();
+        addDebugLog('👤 SDK.getUser() результат', user);
         
-        // Если Quick Auth не работает, пробуем через getUser() как fallback
-        try {
-          addDebugLog('🔄 Пробуем через getUser() как fallback...');
-          const user = await farcasterSDK.getUser();
-          addDebugLog('👤 SDK.getUser() результат', user);
-          
-          if (!user || !user.fid) {
-            throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
-          }
-          
+        if (user && user.fid) {
           // Преобразуем user в формат fullUserData
           fullUserData = {
             fid: user.fid,
@@ -1190,11 +1217,42 @@ authBtn?.addEventListener("click", async () => {
             displayName: user.display_name || user.displayName,
             pfp: user.pfp_url || user.pfp
           };
-          addDebugLog('✅ getUser() fallback успешен!', fullUserData);
-        } catch (fallbackError) {
-          console.error('❌ getUser() fallback тоже не сработал:', fallbackError);
-          // Если оба метода не работают, выбрасываем исходную ошибку Quick Auth
-          throw new Error(`Quick Auth недоступен: ${error.message}`);
+          addDebugLog('✅ getUser() успешен!', fullUserData);
+        } else {
+          throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
+        }
+      } catch (getUserError) {
+        console.error('❌ getUser() ошибка:', getUserError);
+        addDebugLog('❌ getUser() ошибка', {
+          message: getUserError.message,
+          stack: getUserError.stack,
+          name: getUserError.name
+        });
+        
+        // Если getUser() не работает, пробуем Quick Auth как fallback
+        // НО только если это не localhost (Quick Auth может не работать локально)
+        const isLocalhost = backendOrigin.includes('localhost') || backendOrigin.includes('127.0.0.1');
+        
+        if (isLocalhost) {
+          addDebugLog('⚠️ Localhost обнаружен - Quick Auth может не работать. Пропускаем.');
+          throw new Error(`SDK недоступен в локальном окружении. Откройте приложение через Warpcast Mini App или используйте кошелек на production домене.`);
+        }
+        
+        try {
+          addDebugLog('🔐 Пробуем Quick Auth как fallback...');
+          fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
+          usedQuickAuth = true;
+          addDebugLog('✅ Quick Auth успешен!', fullUserData);
+        } catch (quickAuthError) {
+          console.error('❌ Quick Auth тоже не сработал:', quickAuthError);
+          addDebugLog('❌ Quick Auth ошибка', {
+            message: quickAuthError.message,
+            stack: quickAuthError.stack,
+            name: quickAuthError.name
+          });
+          
+          // Если оба метода не работают, выбрасываем понятную ошибку
+          throw new Error(`Не удалось получить данные пользователя через Mini App SDK. Ошибка: ${getUserError.message}`);
         }
       }
       
