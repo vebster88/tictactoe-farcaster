@@ -661,7 +661,16 @@ function refreshUserLabel() {
     
     // Отображаем аватарку, если есть
     if (userAvatar) {
-      const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfp;
+      // Проверяем все возможные поля для URL аватарки
+      const pfpUrl = s.farcaster?.pfp_url || 
+                     s.farcaster?.pfpUrl || 
+                     s.farcaster?.pfpURL || 
+                     s.farcaster?.pfp ||
+                     s.farcaster?.avatar ||
+                     s.farcaster?.avatarUrl ||
+                     s.farcaster?.avatar_url ||
+                     s.farcaster?.profilePicture ||
+                     s.farcaster?.profile_picture;
       if (pfpUrl) {
         // Сначала устанавливаем обработчики ДО нормализации и установки src
         let retryAttempts = 0;
@@ -680,18 +689,21 @@ function refreshUserLabel() {
             const currentSrc = userAvatar.src;
             let nextUrl = null;
             
-            if (currentSrc.match(/\/rectcrop\d+\/?$/)) {
-              // Пробуем вариант 1: добавить /public
+            // Пробуем варианты в порядке надежности для мобильных
+            if (currentSrc.match(/\/rectcrop\d+\/public\/?$/)) {
+              // Вариант 1: используем /avatar вместо rectcrop/public
+              const baseUrl = currentSrc.replace(/\/rectcrop\d+\/public\/?$/, '');
+              nextUrl = baseUrl + '/avatar';
+              addDebugLog('🔄 Пробуем вариант /avatar (вместо rectcrop/public)', { newUrl: nextUrl });
+            } else if (currentSrc.match(/\/avatar\/?$/)) {
+              // Вариант 2: используем /public напрямую
+              const baseUrl = currentSrc.replace(/\/avatar\/?$/, '');
+              nextUrl = baseUrl + '/public';
+              addDebugLog('🔄 Пробуем вариант /public', { newUrl: nextUrl });
+            } else if (currentSrc.match(/\/rectcrop\d+\/?$/)) {
+              // Вариант 3: добавить /public (на случай если изначально не преобразовали)
               nextUrl = currentSrc.replace(/\/(rectcrop\d+)\/?$/, '/$1/public');
               addDebugLog('🔄 Пробуем вариант с /public', { newUrl: nextUrl });
-            } else if (currentSrc.match(/\/rectcrop\d+\/public\/?$/)) {
-              // Пробуем вариант 2: использовать /avatar вместо rectcrop
-              nextUrl = currentSrc.replace(/\/rectcrop\d+\/public\/?$/, '/avatar');
-              addDebugLog('🔄 Пробуем вариант /avatar', { newUrl: nextUrl });
-            } else if (currentSrc.match(/\/avatar\/?$/)) {
-              // Пробуем вариант 3: использовать /public напрямую
-              nextUrl = currentSrc.replace(/\/avatar\/?$/, '/public');
-              addDebugLog('🔄 Пробуем вариант /public', { newUrl: nextUrl });
             }
             
             if (nextUrl && nextUrl !== currentSrc) {
@@ -724,12 +736,27 @@ function refreshUserLabel() {
         }
         
         // Обработка URL от imagedelivery.net (Cloudflare Images)
+        // На мобильных приложениях rectcrop без /public может не работать
+        // Поэтому сразу преобразуем в более надежный вариант
         if (normalizedUrl && normalizedUrl.includes('imagedelivery.net')) {
           const rectcropMatch = normalizedUrl.match(/\/(rectcrop\d+)\/?$/);
           if (rectcropMatch) {
-            addDebugLog('📸 Обнаружен Cloudflare Images URL с rectcrop', {
+            // Сразу преобразуем rectcrop в вариант с /public для лучшей совместимости
+            // Формат: /rectcrop3 -> /rectcrop3/public
+            normalizedUrl = normalizedUrl.replace(/\/(rectcrop\d+)\/?$/, '/$1/public');
+            addDebugLog('📸 Cloudflare Images: преобразуем rectcrop в вариант с /public', {
+              original: pfpUrl,
               variant: rectcropMatch[1],
-              originalUrl: normalizedUrl
+              transformed: normalizedUrl
+            });
+          } else if (normalizedUrl.match(/\/rectcrop\d+\/public\/?$/)) {
+            // Уже имеет /public, оставляем как есть
+            addDebugLog('📸 Cloudflare Images: URL уже содержит /public');
+          } else if (!normalizedUrl.match(/\/(avatar|public|rectcrop)/)) {
+            // Если нет известного варианта, пробуем /avatar
+            normalizedUrl = normalizedUrl + (normalizedUrl.endsWith('/') ? '' : '/') + 'avatar';
+            addDebugLog('📸 Cloudflare Images: добавляем вариант /avatar', {
+              transformed: normalizedUrl
             });
           }
         }
@@ -1002,8 +1029,8 @@ function checkDevAccess() {
 authBtn?.addEventListener("click", async () => {
   try {
     // Логируем начало обработки
-    addDebugLog('🖱️ Кнопка "Войти" нажата');
-    addDebugLog('📋 Состояние кнопки', {
+  addDebugLog('🖱️ Кнопка "Войти" нажата');
+  addDebugLog('📋 Состояние кнопки', {
       signedIn: authBtn?.dataset?.signedIn,
       text: authBtn?.textContent,
       exists: !!authBtn,
@@ -1018,8 +1045,8 @@ authBtn?.addEventListener("click", async () => {
     }
     
     addDebugLog('✅ Кнопка найдена, проверяем статус авторизации...');
-    
-    if (authBtn.dataset.signedIn === "true") {
+  
+  if (authBtn.dataset.signedIn === "true") {
     addDebugLog('🚪 Выход из системы...');
     
     const session = getSession();
@@ -1056,9 +1083,9 @@ authBtn?.addEventListener("click", async () => {
   }
   
     addDebugLog('✅ Пользователь не авторизован, начинаем процесс авторизации...');
-    
-    // В Mini App используем SDK, а не кошелек
-    // Проверяем окружение сначала (не зависит от загрузки SDK)
+  
+  // В Mini App используем SDK, а не кошелек
+  // Проверяем окружение сначала (не зависит от загрузки SDK)
     addDebugLog('🔍 Вызываем checkMiniAppEnvironment()...');
     let isMiniAppEnv = false;
     try {
@@ -1146,7 +1173,7 @@ authBtn?.addEventListener("click", async () => {
         addDebugLog('📱 Мобильное устройство без кошелька - предполагаем Mini App окружение');
       }
       
-      addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
+    addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
     addDebugLog('📊 Проверка окружения', {
       windowFarcaster: !!window.farcaster,
       parentWindow: window.parent !== window,
@@ -1194,7 +1221,7 @@ authBtn?.addEventListener("click", async () => {
         } catch (fallbackError) {
           console.error('❌ getUser() fallback тоже не сработал:', fallbackError);
           // Если оба метода не работают, выбрасываем исходную ошибку Quick Auth
-          throw new Error(`Quick Auth недоступен: ${error.message}`);
+        throw new Error(`Quick Auth недоступен: ${error.message}`);
         }
       }
       
@@ -1392,11 +1419,11 @@ authBtn?.addEventListener("click", async () => {
         : "Authentication cancelled by user";
     } else {
       msg = lang === "ru"
-        ? "Не удалось войти: " + (e?.message || e)
-        : "Failed to sign in: " + (e?.message || e);
+      ? "Не удалось войти: " + (e?.message || e)
+      : "Failed to sign in: " + (e?.message || e);
     }
-    alert(msg);
-    refreshUserLabel();
+    alert(msg); 
+    refreshUserLabel(); 
   } 
   } catch (error) {
     // Критическая ошибка в обработчике - логируем все детали
