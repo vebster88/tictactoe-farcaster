@@ -663,7 +663,20 @@ function refreshUserLabel() {
     
     // Отображаем аватарку, если есть
     if (userAvatar) {
-      const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfp;
+      // Проверяем все возможные поля для аватарки (как при создании сессии)
+      const possiblePfpFields = [
+        s.farcaster?.pfp,
+        s.farcaster?.pfpUrl,
+        s.farcaster?.pfp_url,
+        s.farcaster?.pfpURL,
+        s.farcaster?.avatar,
+        s.farcaster?.avatarUrl,
+        s.farcaster?.avatar_url,
+        s.farcaster?.profilePicture,
+        s.farcaster?.profile_picture
+      ];
+      const pfpUrl = possiblePfpFields.find(url => url && typeof url === 'string' && url.trim().length > 0) || null;
+      
       if (pfpUrl) {
         // Сначала устанавливаем обработчики ДО нормализации и установки src
         let retryAttempts = 0;
@@ -1169,20 +1182,40 @@ authBtn?.addEventListener("click", async () => {
                         window.location.hostname === '127.0.0.1' ||
                         window.location.hostname === '0.0.0.0';
     
+    // КРИТИЧНО: Проверяем реальные признаки Mini App окружения
+    // checkMiniAppEnvironmentAsync() может давать ложные срабатывания, так как SDK может быть в сборке
+    // Реальные признаки: window.farcaster, iframe, referrer, или мобильное устройство без кошелька
+    const hasRealMiniAppIndicators = !!(
+      window.farcaster ||
+      (window.parent !== window) ||
+      document.referrer?.includes('farcaster') ||
+      document.referrer?.includes('warpcast')
+    );
+    
     // Используем Mini App авторизацию только если:
-    // 1. Это точно Mini App окружение (finalMiniAppCheck === true) И НЕ localhost в обычном браузере, ИЛИ
+    // 1. Есть РЕАЛЬНЫЕ признаки Mini App (window.farcaster, iframe, referrer) ИЛИ
     // 2. Это мобильное устройство БЕЗ window.ethereum (кошелек недоступен)
-    // НО НЕ если это десктоп браузер с кошельком - там используем кошелек!
-    // НО НЕ если это localhost и есть window.ethereum - используем кошелек!
-    const shouldUseMiniApp = (finalMiniAppCheck && (!isLocalhost || window.farcaster)) || 
+    // КРИТИЧНО: Если есть window.ethereum и это НЕ мобильное - ВСЕГДА используем кошелек!
+    // НЕ используем Mini App только на основе checkMiniAppEnvironmentAsync() - это может быть ложное срабатывание
+    const shouldUseMiniApp = hasRealMiniAppIndicators || 
                              (isMobileDevice && !window.ethereum && !isLocalhost);
+    
+    // Дополнительная проверка: если есть window.ethereum и нет реальных признаков Mini App - используем кошелек
+    if (window.ethereum && !hasRealMiniAppIndicators && !isMobileDevice) {
+      addDebugLog('💼 Обнаружен кошелек на десктопе без признаков Mini App - используем кошелек');
+    }
     
     addDebugLog('🔍 Решение о методе авторизации', {
       finalMiniAppCheck,
+      isMiniAppEnv,
+      additionalMiniAppCheck,
+      hasRealMiniAppIndicators,
       isMobileDevice,
       isLocalhost,
       hasEthereum: !!window.ethereum,
       hasWindowFarcaster: !!window.farcaster,
+      isInIframe: window.parent !== window,
+      referrer: document.referrer,
       shouldUseMiniApp
     });
     
