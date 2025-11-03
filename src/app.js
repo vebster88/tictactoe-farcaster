@@ -1481,7 +1481,17 @@ authBtn?.addEventListener("click", async () => {
         fid: fullUserData.fid,
         username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
         display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
-        pfp_url: pfpUrlValue
+        // Сохраняем ВСЕ варианты полей для аватарки (для мобильных устройств)
+        pfp_url: pfpUrlValue,
+        // Дополнительные поля на случай, если основной не работает
+        pfp: fullUserData.pfp,
+        pfpUrl: fullUserData.pfpUrl,
+        pfpURL: fullUserData.pfpURL,
+        avatar: fullUserData.avatar,
+        avatarUrl: fullUserData.avatarUrl,
+        avatar_url: fullUserData.avatar_url,
+        profilePicture: fullUserData.profilePicture,
+        profile_picture: fullUserData.profile_picture
       };
       
       addDebugLog('🔍 Quick Auth данные до маппинга', {

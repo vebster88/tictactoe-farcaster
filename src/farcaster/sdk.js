@@ -107,30 +107,47 @@ export const farcasterSDK = {
       throw new Error('SDK недоступен (fallback mode) - не в Mini App окружении');
     }
     
-    // SDK provides user via sdk.context.user, not sdk.user()
-    // context can be a Promise or an object
-    try {
-      // Resolve context (might be a Promise)
-      const context = await Promise.resolve(sdk.context);
-      
-      if (!context) {
-        throw new Error('SDK.context вернул null/undefined');
+    // Для мобильных устройств: добавляем retry с ожиданием инициализации context
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const maxRetries = isMobile ? 3 : 1;
+    let lastError = null;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Resolve context (might be a Promise)
+        const context = await Promise.resolve(sdk.context);
+        
+        if (!context) {
+          throw new Error('SDK.context вернул null/undefined');
+        }
+        
+        if (!context.user) {
+          // На мобильных устройствах context.user может инициализироваться с задержкой
+          if (isMobile && attempt < maxRetries - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+            continue;
+          }
+          throw new Error('SDK.context.user недоступен - пользователь не найден в контексте');
+        }
+        
+        const user = context.user;
+        
+        if (!user.fid) {
+          throw new Error('SDK.context.user вернул user без fid');
+        }
+        
+        return user;
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries - 1 && isMobile) {
+          // Продолжаем попытки на мобильных
+          continue;
+        }
+        throw error;
       }
-      
-      if (!context.user) {
-        throw new Error('SDK.context.user недоступен - пользователь не найден в контексте');
-      }
-      
-      const user = context.user;
-      
-      if (!user.fid) {
-        throw new Error('SDK.context.user вернул user без fid');
-      }
-      
-      return user;
-    } catch (error) {
-      throw error;
     }
+    
+    throw lastError || new Error('Не удалось получить пользователя после всех попыток');
   },
   
   async getContext() {
