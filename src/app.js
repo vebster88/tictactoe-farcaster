@@ -85,18 +85,18 @@ if (DEBUG_ENABLED) {
     localStorage: localStorage.getItem("debug-enabled") === "true",
     urlParam: window.location.search.includes("debug=true")
   });
-  
-  // Загружаем сохраненные логи из localStorage
-  try {
-    const savedLogs = JSON.parse(localStorage.getItem('debug-logs') || '[]');
-    debugLogs = savedLogs.slice(-MAX_DEBUG_LOGS);
-  } catch (e) {
-    debugLogs = [];
-  }
-  
-  // Инициализируем debug UI
-  initDebugUI();
 }
+
+// Загружаем сохраненные логи из localStorage (даже если debug выключен)
+try {
+  const savedLogs = JSON.parse(localStorage.getItem('debug-logs') || '[]');
+  debugLogs = savedLogs.slice(-MAX_DEBUG_LOGS);
+} catch (e) {
+  debugLogs = [];
+}
+
+// Инициализируем debug UI (всегда, не только когда debug включен)
+initDebugUI();
 
 // Debug UI - модальное окно для просмотра логов
 function createDebugModal() {
@@ -210,15 +210,42 @@ window.updateDebugModal = function() {
   
   logsCount.textContent = uniqueLogs.length;
   
-  logsContent.innerHTML = uniqueLogs.slice(-50).reverse().map(log => 
-    `<div style="margin: 8px 0; padding: 8px; border-bottom: 1px solid #222; border-left: 3px solid #0f0;">
-      <div style="display: flex; gap: 10px; margin-bottom: 4px;">
-        <span style="color: #888; font-size: 10px;">[${log.time}]</span>
-        <span style="color: #0f0; font-weight: 600;">${escapeHtml(log.message)}</span>
+  // Показываем информацию о статусе debug режима
+  const debugStatus = DEBUG_ENABLED ? 
+    (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en")) === "ru" ? 
+      "🟢 Debug включен" : "🟢 Debug enabled" :
+    (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en")) === "ru" ? 
+      "🔴 Debug выключен" : "🔴 Debug disabled";
+  
+  const lang = (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en"));
+  
+  if (uniqueLogs.length === 0) {
+    logsContent.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: #888;">
+        <div style="font-size: 48px; margin-bottom: 20px;">📋</div>
+        <div>${lang === "ru" ? "Логов пока нет" : "No logs yet"}</div>
+        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+          ${debugStatus}<br/>
+          ${lang === "ru" ? "Логи появятся здесь при включенном debug режиме" : "Logs will appear here when debug mode is enabled"}
+        </div>
       </div>
-      ${log.data ? `<pre style="color: #aaa; margin: 5px 0; font-size: 10px; background: #111; padding: 8px; border-radius: 4px; overflow-x: auto; max-width: 100%;">${escapeHtml(log.data)}</pre>` : ''}
-    </div>`
-  ).join('');
+    `;
+  } else {
+    logsContent.innerHTML = `
+      <div style="margin-bottom: 10px; padding: 8px; background: #111; border-radius: 4px; font-size: 11px; color: #888;">
+        ${debugStatus}
+      </div>
+      ${uniqueLogs.slice(-50).reverse().map(log => 
+        `<div style="margin: 8px 0; padding: 8px; border-bottom: 1px solid #222; border-left: 3px solid #0f0;">
+          <div style="display: flex; gap: 10px; margin-bottom: 4px;">
+            <span style="color: #888; font-size: 10px;">[${log.time}]</span>
+            <span style="color: #0f0; font-weight: 600;">${escapeHtml(log.message)}</span>
+          </div>
+          ${log.data ? `<pre style="color: #aaa; margin: 5px 0; font-size: 10px; background: #111; padding: 8px; border-radius: 4px; overflow-x: auto; max-width: 100%;">${escapeHtml(log.data)}</pre>` : ''}
+        </div>`
+      ).join('')}
+    `;
+  }
   
   // Автоскролл вниз
   logsContent.scrollTop = logsContent.scrollHeight;
@@ -232,8 +259,7 @@ function escapeHtml(text) {
 
 // Инициализация debug UI
 function initDebugUI() {
-  if (!DEBUG_ENABLED) return;
-  
+  // Кнопка всегда доступна, но логи пишутся только если DEBUG_ENABLED
   // Создаем debug-кнопку
   const btn = document.createElement('button');
   btn.id = 'debug-btn';
@@ -257,12 +283,12 @@ function initDebugUI() {
   `;
   
   btn.addEventListener('mouseenter', () => {
-    btn.style.background = 'rgba(0, 255, 0, 0.4)';
+    btn.style.background = isDebugEnabled ? 'rgba(0, 255, 0, 0.4)' : 'rgba(255, 255, 255, 0.2)';
     btn.style.transform = 'scale(1.1)';
   });
   
   btn.addEventListener('mouseleave', () => {
-    btn.style.background = 'rgba(0, 255, 0, 0.2)';
+    btn.style.background = isDebugEnabled ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 255, 255, 0.1)';
     btn.style.transform = 'scale(1)';
   });
   
@@ -299,7 +325,27 @@ function initDebugUI() {
     }
   }
   
-  addDebugLog('🐛 Debug UI инициализирован');
+  if (DEBUG_ENABLED) {
+    addDebugLog('🐛 Debug UI инициализирован (debug режим включен)');
+  } else {
+    // Добавляем начальный лог даже если debug выключен
+    const lang = (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en"));
+    const initialLog = {
+      time: new Date().toLocaleTimeString(),
+      message: lang === "ru" ? "🐛 Debug UI инициализирован (debug режим выключен)" : "🐛 Debug UI initialized (debug mode disabled)",
+      data: null,
+      timestamp: new Date().toISOString()
+    };
+    debugLogs.push(initialLog);
+    try {
+      const storedLogs = JSON.parse(localStorage.getItem('debug-logs') || '[]');
+      storedLogs.push(initialLog);
+      if (storedLogs.length > MAX_STORED_LOGS) {
+        storedLogs.shift();
+      }
+      localStorage.setItem('debug-logs', JSON.stringify(storedLogs));
+    } catch (e) {}
+  }
 }
 
 // Now we can safely use addDebugLog
