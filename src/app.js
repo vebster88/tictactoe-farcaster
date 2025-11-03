@@ -735,57 +735,29 @@ function refreshUserLabel() {
           normalizedUrl = 'https:' + pfpUrl;
         }
         
-        // Определяем мобильное устройство
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                         (window.innerWidth <= 768);
-        
         // Обработка URL от imagedelivery.net (Cloudflare Images)
-        // Оптимизируем размер изображения через URL параметры для лучшей загрузки
+        // На мобильных приложениях rectcrop без /public может не работать
+        // Поэтому сразу преобразуем в более надежный вариант
         if (normalizedUrl && normalizedUrl.includes('imagedelivery.net')) {
-          // Извлекаем базовый URL (до варианта)
-          // Формат: https://imagedelivery.net/{accountHash}/{imageId}/{variant}
-          const baseMatch = normalizedUrl.match(/^(https:\/\/[^\/]+\/[^\/]+\/[^\/]+)(\/.*)?$/);
-          
-          if (baseMatch) {
-            const baseUrl = baseMatch[1];
-            const existingVariant = baseMatch[2] || '';
-            
-            // Определяем целевой размер с учетом retina дисплеев
-            // Умножаем на devicePixelRatio для четкости на retina экранах
-            const pixelRatio = window.devicePixelRatio || 1;
-            const targetSize = Math.ceil((isMobile ? 40 : 48) * Math.min(pixelRatio, 2)); // Максимум 2x
-            
-            // Для мобильных используем вариант /avatar с параметрами размера
-            // Формат Cloudflare Images: /avatar?w=80&h=80&fit=cover&f=webp
-            if (isMobile) {
-              // На мобильных всегда используем /avatar с явными параметрами
-              normalizedUrl = `${baseUrl}/avatar?w=${targetSize}&h=${targetSize}&fit=cover&f=webp`;
-              addDebugLog('📸 Cloudflare Images: оптимизированный URL для мобильных', {
-                original: pfpUrl,
-                optimized: normalizedUrl,
-                targetSize: targetSize,
-                pixelRatio: pixelRatio
-              });
-            } else {
-              // На десктопе пробуем сохранить оригинальный вариант, но добавляем параметры
-              if (existingVariant && existingVariant.match(/\/(rectcrop\d+|avatar|public)/)) {
-                // Если уже есть вариант, добавляем параметры размера
-                const separator = normalizedUrl.includes('?') ? '&' : '?';
-                normalizedUrl = normalizedUrl + separator + `w=${targetSize}&h=${targetSize}&fit=cover&f=webp`;
-              } else if (existingVariant && existingVariant.match(/\/rectcrop\d+\/?$/)) {
-                // Если это rectcrop без параметров, преобразуем в /avatar с параметрами
-                normalizedUrl = `${baseUrl}/avatar?w=${targetSize}&h=${targetSize}&fit=cover&f=webp`;
-              } else {
-                // Если варианта нет, используем /avatar
-                normalizedUrl = `${baseUrl}/avatar?w=${targetSize}&h=${targetSize}&fit=cover&f=webp`;
-              }
-              addDebugLog('📸 Cloudflare Images: оптимизированный URL для десктопа', {
-                original: pfpUrl,
-                optimized: normalizedUrl,
-                targetSize: targetSize,
-                pixelRatio: pixelRatio
-              });
-            }
+          const rectcropMatch = normalizedUrl.match(/\/(rectcrop\d+)\/?$/);
+          if (rectcropMatch) {
+            // Сразу преобразуем rectcrop в вариант с /public для лучшей совместимости
+            // Формат: /rectcrop3 -> /rectcrop3/public
+            normalizedUrl = normalizedUrl.replace(/\/(rectcrop\d+)\/?$/, '/$1/public');
+            addDebugLog('📸 Cloudflare Images: преобразуем rectcrop в вариант с /public', {
+              original: pfpUrl,
+              variant: rectcropMatch[1],
+              transformed: normalizedUrl
+            });
+          } else if (normalizedUrl.match(/\/rectcrop\d+\/public\/?$/)) {
+            // Уже имеет /public, оставляем как есть
+            addDebugLog('📸 Cloudflare Images: URL уже содержит /public');
+          } else if (!normalizedUrl.match(/\/(avatar|public|rectcrop)/)) {
+            // Если нет известного варианта, пробуем /avatar
+            normalizedUrl = normalizedUrl + (normalizedUrl.endsWith('/') ? '' : '/') + 'avatar';
+            addDebugLog('📸 Cloudflare Images: добавляем вариант /avatar', {
+              transformed: normalizedUrl
+            });
           }
         }
         
@@ -813,21 +785,6 @@ function refreshUserLabel() {
         }
         
         userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
-        
-        // Устанавливаем width и height атрибуты для предотвращения layout shift
-        // Размеры соответствуют CSS (48px для десктопа, 40px для мобильных)
-        if (isMobile) {
-          userAvatar.width = 40;
-          userAvatar.height = 40;
-          userAvatar.setAttribute('width', '40');
-          userAvatar.setAttribute('height', '40');
-        } else {
-          userAvatar.width = 48;
-          userAvatar.height = 48;
-          userAvatar.setAttribute('width', '48');
-          userAvatar.setAttribute('height', '48');
-        }
-        
         userAvatar.style.display = "block";
         
         // УСТАНАВЛИВАЕМ src ПОСЛЕДНИМ, после всех обработчиков и атрибутов
@@ -837,12 +794,9 @@ function refreshUserLabel() {
             url: normalizedUrl,
             hasSrc: !!userAvatar.src,
             display: userAvatar.style.display,
-            width: userAvatar.width,
-            height: userAvatar.height,
             crossOrigin: userAvatar.crossOrigin,
             referrerPolicy: userAvatar.referrerPolicy,
-            loading: userAvatar.loading,
-            isMobile: isMobile
+            loading: userAvatar.loading
           });
         }
       } else {
