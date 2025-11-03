@@ -663,169 +663,81 @@ function refreshUserLabel() {
     
     // Отображаем аватарку, если есть
     if (userAvatar) {
-      // Проверяем все возможные поля для аватарки (как при создании сессии)
-      const possiblePfpFields = [
-        s.farcaster?.pfp,
-        s.farcaster?.pfpUrl,
-        s.farcaster?.pfp_url,
-        s.farcaster?.pfpURL,
-        s.farcaster?.avatar,
-        s.farcaster?.avatarUrl,
-        s.farcaster?.avatar_url,
-        s.farcaster?.profilePicture,
-        s.farcaster?.profile_picture
-      ];
-      const pfpUrl = possiblePfpFields.find(url => url && typeof url === 'string' && url.trim().length > 0) || null;
+      const sfc = s.farcaster || {};
       
-      if (pfpUrl) {
-        // Сначала устанавливаем обработчики ДО нормализации и установки src
-        let retryAttempts = 0;
-        const maxRetries = 3;
-        const originalPfpUrl = pfpUrl;
-        
-        userAvatar.onerror = () => {
-          retryAttempts++;
-          addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${retryAttempts}/${maxRetries})`, { 
-            url: userAvatar.src,
-            originalUrl: originalPfpUrl
-          });
-          
-          // Для Cloudflare Images пробуем альтернативные форматы
-          if (userAvatar.src.includes('imagedelivery.net') && retryAttempts <= maxRetries) {
-            const currentSrc = userAvatar.src;
-            let nextUrl = null;
-            
-            if (currentSrc.match(/\/rectcrop\d+\/?$/)) {
-              // Пробуем вариант 1: добавить /public
-              nextUrl = currentSrc.replace(/\/(rectcrop\d+)\/?$/, '/$1/public');
-              addDebugLog('🔄 Пробуем вариант с /public', { newUrl: nextUrl });
-            } else if (currentSrc.match(/\/rectcrop\d+\/public\/?$/)) {
-              // Пробуем вариант 2: использовать /avatar вместо rectcrop
-              nextUrl = currentSrc.replace(/\/rectcrop\d+\/public\/?$/, '/avatar');
-              addDebugLog('🔄 Пробуем вариант /avatar', { newUrl: nextUrl });
-            } else if (currentSrc.match(/\/avatar\/?$/)) {
-              // Пробуем вариант 3: использовать /public напрямую
-              nextUrl = currentSrc.replace(/\/avatar\/?$/, '/public');
-              addDebugLog('🔄 Пробуем вариант /public', { newUrl: nextUrl });
-            }
-            
-            if (nextUrl && nextUrl !== currentSrc) {
-              userAvatar.src = nextUrl;
-              return; // Продолжаем попытки
-            }
-          }
-          
-          // Если все попытки исчерпаны, скрываем аватарку
-          if (retryAttempts >= maxRetries) {
-            addDebugLog('❌ Все попытки загрузки аватарки исчерпаны');
-            userAvatar.style.display = "none";
-          }
-        };
-        
-        userAvatar.onload = () => {
-          // Убеждаемся, что аватарка видна после загрузки
-          userAvatar.style.display = "block";
-          userAvatar.style.visibility = "visible";
-          userAvatar.style.opacity = "1";
-          addDebugLog('✅ Аватарка успешно загружена', { 
-            url: userAvatar.src,
-            attempts: retryAttempts + 1,
-            display: userAvatar.style.display,
-            computedDisplay: window.getComputedStyle(userAvatar).display,
-            width: userAvatar.width,
-            height: userAvatar.height
-          });
-          retryAttempts = 0; // Сбрасываем счетчик при успешной загрузке
-        };
-        
-        // Нормализуем URL (добавляем https если нужно)
-        let normalizedUrl = pfpUrl;
-        if (pfpUrl && !pfpUrl.startsWith('http://') && !pfpUrl.startsWith('https://')) {
-          normalizedUrl = 'https://' + pfpUrl;
-        } else if (pfpUrl && pfpUrl.startsWith('//')) {
-          normalizedUrl = 'https:' + pfpUrl;
-        }
-        
-        // Обработка URL от imagedelivery.net (Cloudflare Images)
-        if (normalizedUrl && normalizedUrl.includes('imagedelivery.net')) {
-          const rectcropMatch = normalizedUrl.match(/\/(rectcrop\d+)\/?$/);
-          if (rectcropMatch) {
-            addDebugLog('📸 Обнаружен Cloudflare Images URL с rectcrop', {
-              variant: rectcropMatch[1],
-              originalUrl: normalizedUrl
-            });
-          }
+      // Проверяем все возможные поля для аватарки
+      const possiblePfpFields = [
+        sfc.pfp, sfc.pfpUrl, sfc.pfp_url, sfc.pfpURL,
+        sfc.avatar, sfc.avatarUrl, sfc.avatar_url,
+        sfc.profilePicture, sfc.profile_picture
+      ];
+      
+      const pfpUrlRaw = possiblePfpFields.find(u => typeof u === 'string' && u.trim().length > 0) || null;
+      
+      if (!pfpUrlRaw) {
+        userAvatar.style.display = "none";
+        addDebugLog('ℹ️ Нет URL аватарки в сессии', { farcaster: !!s.farcaster });
+      } else {
+        // Нормализация URL
+        let normalizedUrl = pfpUrlRaw.trim();
+        if (!/^https?:\/\//i.test(normalizedUrl)) {
+          normalizedUrl = 'https://' + normalizedUrl;
         }
         
         addDebugLog('🔧 Нормализация URL аватарки', {
-          original: pfpUrl,
-          normalized: normalizedUrl,
-          changed: normalizedUrl !== pfpUrl
+          original: pfpUrlRaw,
+          normalized: normalizedUrl
         });
         
-        // Для Cloudflare Images убираем crossOrigin и referrerPolicy - они могут блокировать загрузку
-        // Устанавливаем атрибуты ДО установки src
+        // CORS для Cloudflare Images
         if (normalizedUrl.includes('imagedelivery.net')) {
-          // Убираем все CORS атрибуты для Cloudflare Images
-          userAvatar.removeAttribute('crossorigin');
-          userAvatar.removeAttribute('referrerpolicy');
           userAvatar.crossOrigin = null;
           userAvatar.referrerPolicy = null;
-          userAvatar.loading = "lazy";
           addDebugLog('🔓 Убраны CORS ограничения для Cloudflare Images');
         } else {
-          // Для других доменов оставляем настройки
-          userAvatar.loading = "lazy";
           userAvatar.crossOrigin = "anonymous";
           userAvatar.referrerPolicy = "no-referrer";
         }
         
-        userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
+        userAvatar.loading = "lazy";
+        userAvatar.alt = sfc.display_name || sfc.username || "User avatar";
         
-        // ЯВНО показываем аватарку ПЕРЕД установкой src
-        userAvatar.style.display = "block";
-        userAvatar.style.visibility = "visible";
-        userAvatar.style.opacity = "1";
+        // Retry логика только для Cloudflare Images
+        let attempts = 0;
+        const MAX_RETRIES = 3;
         
-        // УСТАНАВЛИВАЕМ src ПОСЛЕДНИМ, после всех обработчиков и атрибутов
-        if (userAvatar.src !== normalizedUrl) {
-          userAvatar.src = normalizedUrl;
-          addDebugLog('🖼️ Загружаем аватарку пользователя', { 
-            url: normalizedUrl,
-            hasSrc: !!userAvatar.src,
-            display: userAvatar.style.display,
-            visibility: userAvatar.style.visibility,
-            opacity: userAvatar.style.opacity,
-            crossOrigin: userAvatar.crossOrigin,
-            referrerPolicy: userAvatar.referrerPolicy,
-            loading: userAvatar.loading,
-            computedDisplay: window.getComputedStyle(userAvatar).display,
-            computedVisibility: window.getComputedStyle(userAvatar).visibility
+        userAvatar.onerror = () => {
+          attempts++;
+          addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${attempts}/${MAX_RETRIES})`, { 
+            url: userAvatar.src
           });
           
-          // Дополнительная проверка после установки src
-          setTimeout(() => {
-            const computedStyle = window.getComputedStyle(userAvatar);
-            if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
-              addDebugLog('⚠️ Аватарка скрыта после установки src', {
-                computedDisplay: computedStyle.display,
-                computedVisibility: computedStyle.visibility,
-                inlineDisplay: userAvatar.style.display,
-                inlineVisibility: userAvatar.style.visibility
-              });
-              // Принудительно показываем
-              userAvatar.style.display = "block";
-              userAvatar.style.visibility = "visible";
+          if (attempts < MAX_RETRIES && normalizedUrl.includes('imagedelivery.net')) {
+            const variants = [
+              normalizedUrl.replace(/\/rectcrop\d+\/?$/, '/rectcrop3/public'),
+              normalizedUrl.replace(/\/rectcrop\d+\/?$/, '/avatar'),
+              normalizedUrl.replace(/\/rectcrop\d+\/?$/, '/public')
+            ];
+            const next = variants[attempts - 1];
+            if (next) {
+              addDebugLog('🔄 Пробуем вариант', { newUrl: next });
+              setTimeout(() => { userAvatar.src = next; }, 300);
+              return;
             }
-          }, 100);
-        }
-      } else {
-        userAvatar.style.display = "none";
-        addDebugLog('ℹ️ Нет URL аватарки в сессии', { 
-          farcaster: !!s.farcaster,
-          checkedFields: possiblePfpFields,
-          farcasterObject: s.farcaster
-        });
+          }
+          
+          userAvatar.style.display = "none";
+          addDebugLog('❌ Все попытки загрузки аватарки исчерпаны');
+        };
+        
+        userAvatar.onload = () => {
+          userAvatar.style.display = "block";
+          addDebugLog('✅ Аватарка успешно загружена', { url: userAvatar.src });
+        };
+        
+        // Устанавливаем src
+        userAvatar.style.display = "block";
+        userAvatar.src = normalizedUrl;
       }
     } else {
       addDebugLog('⚠️ Элемент user-avatar не найден в DOM');
