@@ -682,13 +682,15 @@ function refreshUserLabel() {
         }
         
         // Обработка URL от imagedelivery.net (Cloudflare Images)
-        // Если URL заканчивается на rectcrop3 без расширения, добавляем параметры
+        // Cloudflare Images использует формат: https://imagedelivery.net/{accountHash}/{imageId}/{variant}
+        // Для получения изображения нужно добавить /public или формат
         if (normalizedUrl && normalizedUrl.includes('imagedelivery.net')) {
-          if (normalizedUrl.endsWith('/rectcrop3') || normalizedUrl.endsWith('/rectcrop3/')) {
-            // Добавляем параметры для получения изображения в формате webp нужного размера
-            normalizedUrl = normalizedUrl.replace(/\/rectcrop3\/?$/, '/rectcrop3/public');
-          } else if (!normalizedUrl.includes('?') && !normalizedUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
-            // Если нет расширения и нет параметров, добавляем /public
+          // Если URL заканчивается на вариант без /public (например, /rectcrop3)
+          if (normalizedUrl.match(/\/rectcrop\d+\/?$/)) {
+            // Заменяем на формат с /public для получения изображения
+            normalizedUrl = normalizedUrl.replace(/\/(rectcrop\d+)\/?$/, '/$1/public');
+          } else if (!normalizedUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) && !normalizedUrl.endsWith('/public')) {
+            // Если нет расширения и нет /public, добавляем /public
             normalizedUrl = normalizedUrl + (normalizedUrl.endsWith('/') ? '' : '/') + 'public';
           }
         }
