@@ -167,6 +167,24 @@ h1 .btn-settings-inline {
   position: absolute;
   top: calc(100% + 3px);
   left: 50%;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  transition: var(--transition);
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.user-avatar:hover {
+  border-color: var(--accent);
+  transform: scale(1.05);
+  box-shadow: var(--shadow);
   transform: translateX(-50%);
 }
 
@@ -520,6 +538,12 @@ h1 .btn-settings-inline {
   
   .user-label {
     text-align: center;
+  }
+  
+  .user-avatar {
+    width: 28px;
+    height: 28px;
+    margin-left: 6px;
   }
   
   .game-actions {
