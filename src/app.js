@@ -641,6 +641,9 @@ function refreshUserLabel() {
   };
   const t = texts[lang] || texts.en;
   
+  // Получаем элемент аватарки
+  const userAvatar = document.getElementById("user-avatar");
+  
   if (isAuthorized) {
     // Приоритет: отображаем Farcaster username, если есть
     if (s.farcaster?.username) {
@@ -656,10 +659,25 @@ function refreshUserLabel() {
       userLabel.textContent = t.signedIn;
     }
     
+    // Отображаем аватарку, если есть
+    if (userAvatar) {
+      const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfp;
+      if (pfpUrl) {
+        userAvatar.src = pfpUrl;
+        userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
+        userAvatar.style.display = "block";
+      } else {
+        userAvatar.style.display = "none";
+      }
+    }
+    
     authBtn.textContent = t.signOut;
     authBtn.dataset.signedIn = "true";
   } else {
     userLabel.textContent = "";
+    if (userAvatar) {
+      userAvatar.style.display = "none";
+    }
     authBtn.textContent = t.signIn;
     authBtn.dataset.signedIn = "false";
   }
