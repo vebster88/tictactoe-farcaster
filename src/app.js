@@ -1132,14 +1132,45 @@ authBtn?.addEventListener("click", async () => {
       
       // Quick Auth возвращает: { fid, username, displayName, pfp, ... }
       // Маппим в наш формат: { fid, username, display_name, pfp_url }
+      // Проверяем все возможные поля для аватарки
+      const possiblePfpFields = [
+        fullUserData.pfp,
+        fullUserData.pfpUrl,
+        fullUserData.pfp_url,
+        fullUserData.pfpURL,
+        fullUserData.avatar,
+        fullUserData.avatarUrl,
+        fullUserData.avatar_url,
+        fullUserData.profilePicture,
+        fullUserData.profile_picture
+      ];
+      
+      const pfpUrlValue = possiblePfpFields.find(url => url && typeof url === 'string' && url.trim().length > 0) || null;
+      
       const farcasterProfile = {
         fid: fullUserData.fid,
         username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
         display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
-        pfp_url: fullUserData.pfp || fullUserData.pfpUrl || fullUserData.pfp_url || null
+        pfp_url: pfpUrlValue
       };
       
-      addDebugLog('🔍 Quick Auth данные до маппинга', fullUserData);
+      addDebugLog('🔍 Quick Auth данные до маппинга', {
+        fid: fullUserData.fid,
+        username: fullUserData.username,
+        displayName: fullUserData.displayName,
+        allPfpFields: {
+          pfp: fullUserData.pfp,
+          pfpUrl: fullUserData.pfpUrl,
+          pfp_url: fullUserData.pfp_url,
+          pfpURL: fullUserData.pfpURL,
+          avatar: fullUserData.avatar,
+          avatarUrl: fullUserData.avatarUrl,
+          avatar_url: fullUserData.avatar_url,
+          profilePicture: fullUserData.profilePicture,
+          profile_picture: fullUserData.profile_picture
+        },
+        foundPfpUrl: pfpUrlValue
+      });
       
       addDebugLog('👤 Создаём профиль пользователя', farcasterProfile);
       
