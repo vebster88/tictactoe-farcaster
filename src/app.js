@@ -683,15 +683,23 @@ function refreshUserLabel() {
         
         // Обработка URL от imagedelivery.net (Cloudflare Images)
         // Cloudflare Images использует формат: https://imagedelivery.net/{accountHash}/{imageId}/{variant}
-        // Для получения изображения нужно добавить /public или формат
+        // Варианты: rectcrop1, rectcrop2, rectcrop3, avatar, public и т.д.
+        // Если URL заканчивается на вариант без расширения, нужно использовать его напрямую или добавить формат
         if (normalizedUrl && normalizedUrl.includes('imagedelivery.net')) {
-          // Если URL заканчивается на вариант без /public (например, /rectcrop3)
-          if (normalizedUrl.match(/\/rectcrop\d+\/?$/)) {
-            // Заменяем на формат с /public для получения изображения
-            normalizedUrl = normalizedUrl.replace(/\/(rectcrop\d+)\/?$/, '/$1/public');
-          } else if (!normalizedUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) && !normalizedUrl.endsWith('/public')) {
-            // Если нет расширения и нет /public, добавляем /public
-            normalizedUrl = normalizedUrl + (normalizedUrl.endsWith('/') ? '' : '/') + 'public';
+          // Если URL заканчивается на rectcrop вариант, используем его как есть (это валидный формат)
+          // Но если он не работает, пробуем добавить расширение или использовать /avatar
+          const rectcropMatch = normalizedUrl.match(/\/(rectcrop\d+)\/?$/);
+          if (rectcropMatch) {
+            // Пробуем сначала оригинальный URL, если не работает - попробуем варианты
+            // Не меняем URL сразу - пусть браузер попробует загрузить
+            addDebugLog('📸 Обнаружен Cloudflare Images URL с rectcrop', {
+              variant: rectcropMatch[1],
+              originalUrl: normalizedUrl
+            });
+          } else if (!normalizedUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) && !normalizedUrl.match(/\/(avatar|public|rectcrop)/)) {
+            // Если нет расширения и нет известного варианта, пробуем /avatar
+            addDebugLog('⚠️ Cloudflare Images URL без варианта, пробуем /avatar');
+            normalizedUrl = normalizedUrl + (normalizedUrl.endsWith('/') ? '' : '/') + 'avatar';
           }
         }
         
