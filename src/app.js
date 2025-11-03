@@ -681,11 +681,27 @@ function refreshUserLabel() {
           normalizedUrl = 'https:' + pfpUrl;
         }
         
+        // Обработка URL от imagedelivery.net (Cloudflare Images)
+        // Если URL заканчивается на rectcrop3 без расширения, добавляем параметры
+        if (normalizedUrl && normalizedUrl.includes('imagedelivery.net')) {
+          if (normalizedUrl.endsWith('/rectcrop3') || normalizedUrl.endsWith('/rectcrop3/')) {
+            // Добавляем параметры для получения изображения в формате webp нужного размера
+            normalizedUrl = normalizedUrl.replace(/\/rectcrop3\/?$/, '/rectcrop3/public');
+          } else if (!normalizedUrl.includes('?') && !normalizedUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+            // Если нет расширения и нет параметров, добавляем /public
+            normalizedUrl = normalizedUrl + (normalizedUrl.endsWith('/') ? '' : '/') + 'public';
+          }
+        }
+        
+        addDebugLog('🔧 Нормализация URL аватарки', {
+          original: pfpUrl,
+          normalized: normalizedUrl,
+          changed: normalizedUrl !== pfpUrl
+        });
+        
         // Устанавливаем src только если он отличается (чтобы не вызывать повторную загрузку)
-        if (userAvatar.src !== normalizedUrl && normalizedUrl !== pfpUrl) {
+        if (userAvatar.src !== normalizedUrl) {
           userAvatar.src = normalizedUrl;
-        } else if (userAvatar.src !== pfpUrl) {
-          userAvatar.src = pfpUrl;
         }
         
         // Добавляем атрибуты для лучшей загрузки на мобильных
