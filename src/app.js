@@ -773,7 +773,11 @@ function refreshUserLabel() {
         }
         
         userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
+        
+        // ЯВНО показываем аватарку ПЕРЕД установкой src
         userAvatar.style.display = "block";
+        userAvatar.style.visibility = "visible";
+        userAvatar.style.opacity = "1";
         
         // УСТАНАВЛИВАЕМ src ПОСЛЕДНИМ, после всех обработчиков и атрибутов
         if (userAvatar.src !== normalizedUrl) {
@@ -782,10 +786,30 @@ function refreshUserLabel() {
             url: normalizedUrl,
             hasSrc: !!userAvatar.src,
             display: userAvatar.style.display,
+            visibility: userAvatar.style.visibility,
+            opacity: userAvatar.style.opacity,
             crossOrigin: userAvatar.crossOrigin,
             referrerPolicy: userAvatar.referrerPolicy,
-            loading: userAvatar.loading
+            loading: userAvatar.loading,
+            computedDisplay: window.getComputedStyle(userAvatar).display,
+            computedVisibility: window.getComputedStyle(userAvatar).visibility
           });
+          
+          // Дополнительная проверка после установки src
+          setTimeout(() => {
+            const computedStyle = window.getComputedStyle(userAvatar);
+            if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+              addDebugLog('⚠️ Аватарка скрыта после установки src', {
+                computedDisplay: computedStyle.display,
+                computedVisibility: computedStyle.visibility,
+                inlineDisplay: userAvatar.style.display,
+                inlineVisibility: userAvatar.style.visibility
+              });
+              // Принудительно показываем
+              userAvatar.style.display = "block";
+              userAvatar.style.visibility = "visible";
+            }
+          }, 100);
         }
       } else {
         userAvatar.style.display = "none";
