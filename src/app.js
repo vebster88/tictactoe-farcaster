@@ -723,9 +723,17 @@ function refreshUserLabel() {
         };
         
         userAvatar.onload = () => {
+          // Убеждаемся, что аватарка видна после загрузки
+          userAvatar.style.display = "block";
+          userAvatar.style.visibility = "visible";
+          userAvatar.style.opacity = "1";
           addDebugLog('✅ Аватарка успешно загружена', { 
             url: userAvatar.src,
-            attempts: retryAttempts + 1
+            attempts: retryAttempts + 1,
+            display: userAvatar.style.display,
+            computedDisplay: window.getComputedStyle(userAvatar).display,
+            width: userAvatar.width,
+            height: userAvatar.height
           });
           retryAttempts = 0; // Сбрасываем счетчик при успешной загрузке
         };
