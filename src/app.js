@@ -702,37 +702,99 @@ function refreshUserLabel() {
         userAvatar.loading = "lazy";
         userAvatar.alt = sfc.display_name || sfc.username || "User avatar";
         
-        // Retry логика только для Cloudflare Images
+        // Расширенная retry логика для Cloudflare Images (согласно рекомендациям ChatGPT)
         let attempts = 0;
-        const MAX_RETRIES = 3;
+        const MAX_RETRIES = 6; // Увеличено для больше вариантов
+        
+        // Функция для генерации вариантов URL (согласно рекомендациям ChatGPT)
+        const generateVariants = (url) => {
+          const variants = [];
+          
+          // Если URL содержит rectcropN, пробуем разные варианты
+          if (url.match(/\/rectcrop\d+\/?$/)) {
+            // 1. Добавить /public к rectcrop
+            variants.push(url.replace(/\/rectcrop(\d+)\/?$/, '/rectcrop$1/public'));
+            // 2. Заменить на /public
+            variants.push(url.replace(/\/rectcrop\d+\/?$/, '/public'));
+            // 3. Заменить на /avatar
+            variants.push(url.replace(/\/rectcrop\d+\/?$/, '/avatar'));
+            // 4. Убрать variant полностью (базовый URL без variant)
+            variants.push(url.replace(/\/rectcrop\d+\/?$/, ''));
+            // 5. Попробовать /rectcrop3/public (если был другой номер)
+            variants.push(url.replace(/\/rectcrop\d+\/?$/, '/rectcrop3/public'));
+          } else if (url.match(/\/rectcrop\d+\/public\/?$/)) {
+            // Если уже /rectcropN/public, пробуем:
+            // 1. /avatar
+            variants.push(url.replace(/\/rectcrop\d+\/public\/?$/, '/avatar'));
+            // 2. /public
+            variants.push(url.replace(/\/rectcrop\d+\/public\/?$/, '/public'));
+            // 3. Убрать /public
+            variants.push(url.replace(/\/rectcrop(\d+)\/public\/?$/, '/rectcrop$1'));
+            // 4. Убрать variant полностью
+            variants.push(url.replace(/\/rectcrop\d+\/public\/?$/, ''));
+          } else if (url.match(/\/avatar\/?$/)) {
+            // Если уже /avatar, пробуем:
+            // 1. /public
+            variants.push(url.replace(/\/avatar\/?$/, '/public'));
+            // 2. Убрать /avatar
+            variants.push(url.replace(/\/avatar\/?$/, ''));
+          } else if (url.match(/\/public\/?$/)) {
+            // Если уже /public, пробуем:
+            // 1. /avatar
+            variants.push(url.replace(/\/public\/?$/, '/avatar'));
+            // 2. Убрать /public
+            variants.push(url.replace(/\/public\/?$/, ''));
+          }
+          
+          // Убираем дубликаты и текущий URL
+          return [...new Set(variants)].filter(v => v && v !== url);
+        };
+        
+        const triedUrls = new Set([normalizedUrl]);
         
         userAvatar.onerror = () => {
           attempts++;
+          const currentUrl = userAvatar.src;
+          
           addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${attempts}/${MAX_RETRIES})`, { 
-            url: userAvatar.src
+            url: currentUrl,
+            attempts: attempts,
+            isCloudflare: currentUrl.includes('imagedelivery.net')
           });
           
           if (attempts < MAX_RETRIES && normalizedUrl.includes('imagedelivery.net')) {
-            const variants = [
-              normalizedUrl.replace(/\/rectcrop\d+\/?$/, '/rectcrop3/public'),
-              normalizedUrl.replace(/\/rectcrop\d+\/?$/, '/avatar'),
-              normalizedUrl.replace(/\/rectcrop\d+\/?$/, '/public')
-            ];
-            const next = variants[attempts - 1];
-            if (next) {
-              addDebugLog('🔄 Пробуем вариант', { newUrl: next });
-              setTimeout(() => { userAvatar.src = next; }, 300);
+            const variants = generateVariants(normalizedUrl).filter(v => !triedUrls.has(v));
+            
+            if (variants.length > 0) {
+              const next = variants[0];
+              triedUrls.add(next);
+              addDebugLog('🔄 Пробуем вариант Cloudflare Images', { 
+                attempt: attempts,
+                newUrl: next,
+                totalVariants: variants.length
+              });
+              setTimeout(() => { userAvatar.src = next; }, 300 * attempts);
               return;
             }
           }
           
+          // Финальный fallback
           userAvatar.style.display = "none";
-          addDebugLog('❌ Все попытки загрузки аватарки исчерпаны');
+          addDebugLog('❌ Все попытки загрузки аватарки исчерпаны', {
+            totalAttempts: attempts,
+            triedUrls: Array.from(triedUrls),
+            suggestion: 'Проверьте в Cloudflare Dashboard валидность variant и публичность изображения'
+          });
         };
         
         userAvatar.onload = () => {
           userAvatar.style.display = "block";
-          addDebugLog('✅ Аватарка успешно загружена', { url: userAvatar.src });
+          addDebugLog('✅ Аватарка успешно загружена', { 
+            url: userAvatar.src,
+            attempts: attempts + 1
+          });
+          attempts = 0;
+          triedUrls.clear();
         };
         
         // Устанавливаем src
