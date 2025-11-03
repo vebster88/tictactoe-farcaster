@@ -154,18 +154,18 @@ h1 .btn-settings-inline {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .user-label {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--muted);
-  display: inline-block;
+  display: block;
   text-align: center;
   padding: 0;
-  line-height: 1.5;
+  line-height: 1.2;
   white-space: nowrap;
-  position: static;
   margin: 0;
 }
 
@@ -533,11 +533,11 @@ h1 .btn-settings-inline {
   
   .auth-group {
     align-items: center;
-    gap: 6px;
+    gap: 3px;
   }
   
   .user-label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-align: center;
   }
   
