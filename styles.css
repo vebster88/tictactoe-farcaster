@@ -185,7 +185,6 @@ h1 .btn-settings-inline {
   border-color: var(--accent);
   transform: scale(1.05);
   box-shadow: var(--shadow);
-  transform: translateX(-50%);
 }
 
 .game-actions {
