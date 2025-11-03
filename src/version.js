@@ -1,6 +1,6 @@
 // Application version
 // Format: major.minor (e.g., 1.0, 1.01, 1.02)
 // Increment by 0.01 for each update/deployment
-// Current version: 1.29
-export const APP_VERSION = '1.29';
+// Current version: 1.30
+export const APP_VERSION = '1.30';
 

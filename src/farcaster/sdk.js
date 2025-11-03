@@ -178,5 +178,33 @@ export const farcasterSDK = {
     ];
     
     return checks.some(check => check === true);
+  },
+  
+  // Async check: try to import SDK to determine if we're in Mini App
+  async checkMiniAppEnvironmentAsync() {
+    // First try synchronous checks
+    if (this.checkMiniAppEnvironment()) {
+      return true;
+    }
+    
+    // If SDK already loaded and not fallback, we're in Mini App
+    if (sdkInstance && !fallbackOnly) {
+      return true;
+    }
+    
+    // Try to import SDK - if it succeeds and not fallback, we're in Mini App
+    try {
+      const module = await import('@farcaster/miniapp-sdk');
+      const testSdk = module.sdk || module.default || module;
+      // If SDK has real methods (not fallback), we're in Mini App
+      if (testSdk && testSdk.quickAuth && testSdk.actions) {
+        return true;
+      }
+    } catch (error) {
+      // Import failed - not in Mini App
+      return false;
+    }
+    
+    return false;
   }
 };

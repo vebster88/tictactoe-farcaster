@@ -932,7 +932,20 @@ authBtn?.addEventListener("click", async () => {
     let isMiniAppEnv = false;
     try {
       isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
-      addDebugLog('✅ checkMiniAppEnvironment() завершен', { result: isMiniAppEnv });
+      addDebugLog('✅ checkMiniAppEnvironment() завершен (синхронная проверка)', { result: isMiniAppEnv });
+      
+      // Если синхронная проверка не прошла, пробуем асинхронную (проверка через SDK)
+      if (!isMiniAppEnv) {
+        addDebugLog('🔍 Синхронная проверка не прошла, пробуем асинхронную проверку через SDK...');
+        try {
+          isMiniAppEnv = await farcasterSDK.checkMiniAppEnvironmentAsync();
+          addDebugLog('✅ checkMiniAppEnvironmentAsync() завершен', { result: isMiniAppEnv });
+        } catch (asyncError) {
+          addDebugLog('⚠️ Ошибка в асинхронной проверке (но это может быть нормально)', {
+            message: asyncError?.message || String(asyncError)
+          });
+        }
+      }
     } catch (error) {
       addDebugLog('❌ Ошибка в checkMiniAppEnvironment()', {
         message: error?.message || String(error),
@@ -991,8 +1004,18 @@ authBtn?.addEventListener("click", async () => {
       referrer: document.referrer
     });
     
-    if (finalMiniAppCheck) {
-    addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
+    // Для мобильных устройств: если все проверки false, но это мобильное устройство,
+    // всё равно попробуем Mini App авторизацию (мобильное приложение может не показывать признаки)
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                           (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+    
+    if (finalMiniAppCheck || (isMobileDevice && !window.ethereum)) {
+      // Если на мобильном и нет кошелька, предполагаем Mini App
+      if (isMobileDevice && !window.ethereum && !finalMiniAppCheck) {
+        addDebugLog('📱 Мобильное устройство без кошелька - предполагаем Mini App окружение');
+      }
+      
+      addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
     addDebugLog('📊 Проверка окружения', {
       windowFarcaster: !!window.farcaster,
       parentWindow: window.parent !== window,
@@ -1131,9 +1154,8 @@ authBtn?.addEventListener("click", async () => {
   // Для обычного браузера используем кошелек
   addDebugLog('💼 Не Mini App окружение, пробуем авторизацию через кошелек...');
   
-  // Проверяем, мобильное ли это устройство
-  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                         (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+  // Проверяем, мобильное ли это устройство (используем уже определенную переменную выше)
+  // isMobileDevice уже определено выше, используем её
   
   // Проверяем, не происходит ли уже автоматическая авторизация
   // (автоматическая авторизация запускается при загрузке страницы)
