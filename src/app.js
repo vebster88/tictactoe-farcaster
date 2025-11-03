@@ -1284,13 +1284,50 @@ authBtn?.addEventListener("click", async () => {
         
         if (user && user.fid) {
           // Преобразуем user в формат fullUserData
+          // Проверяем все возможные поля для аватарки из ответа SDK
+          const userPfpFields = [
+            user.pfp,
+            user.pfpUrl,
+            user.pfp_url,
+            user.pfpURL,
+            user.avatar,
+            user.avatarUrl,
+            user.avatar_url,
+            user.profilePicture,
+            user.profile_picture
+          ];
+          const userPfpValue = userPfpFields.find(url => url && typeof url === 'string' && url.trim().length > 0) || null;
+          
           fullUserData = {
             fid: user.fid,
             username: user.username,
             displayName: user.display_name || user.displayName,
-            pfp: user.pfp_url || user.pfp
+            pfp: userPfpValue,
+            // Сохраняем все возможные варианты для дальнейшего маппинга
+            pfpUrl: user.pfpUrl,
+            pfp_url: user.pfp_url,
+            avatar: user.avatar,
+            avatarUrl: user.avatarUrl,
+            avatar_url: user.avatar_url,
+            profilePicture: user.profilePicture,
+            profile_picture: user.profile_picture
           };
-          addDebugLog('✅ getUser() успешен!', fullUserData);
+          addDebugLog('✅ getUser() успешен!', {
+            fid: fullUserData.fid,
+            username: fullUserData.username,
+            displayName: fullUserData.displayName,
+            foundPfp: fullUserData.pfp,
+            allUserPfpFields: {
+              pfp: user.pfp,
+              pfpUrl: user.pfpUrl,
+              pfp_url: user.pfp_url,
+              avatar: user.avatar,
+              avatarUrl: user.avatarUrl,
+              avatar_url: user.avatar_url,
+              profilePicture: user.profilePicture,
+              profile_picture: user.profile_picture
+            }
+          });
         } else {
           throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
         }
