@@ -643,6 +643,7 @@ function refreshUserLabel() {
   
   // Получаем элементы
   const userAvatar = document.getElementById("user-avatar");
+  const userAvatarSquare = document.getElementById("user-avatar-square");
   const authBtn = document.getElementById("btn-auth");
   const authWrapper = authBtn?.closest('.auth-wrapper');
   
@@ -661,8 +662,8 @@ function refreshUserLabel() {
       userLabel.textContent = t.signedIn;
     }
     
-    // Отображаем аватарку, если есть
-    if (userAvatar) {
+    // Отображаем аватарку, если есть (круглая и квадратная)
+    if (userAvatar || userAvatarSquare) {
       const sfc = s.farcaster || {};
       
       // Проверяем все возможные поля для аватарки
@@ -689,18 +690,29 @@ function refreshUserLabel() {
           normalized: normalizedUrl
         });
         
-        // CORS для Cloudflare Images
-        if (normalizedUrl.includes('imagedelivery.net')) {
-          userAvatar.crossOrigin = null;
-          userAvatar.referrerPolicy = null;
-          addDebugLog('🔓 Убраны CORS ограничения для Cloudflare Images');
-        } else {
-          userAvatar.crossOrigin = "anonymous";
-          userAvatar.referrerPolicy = "no-referrer";
-        }
+        // Функция для установки атрибутов изображения
+        const setupImageAttributes = (img) => {
+          if (!img) return;
+          
+          // CORS для Cloudflare Images
+          if (normalizedUrl.includes('imagedelivery.net')) {
+            img.crossOrigin = null;
+            img.referrerPolicy = null;
+          } else {
+            img.crossOrigin = "anonymous";
+            img.referrerPolicy = "no-referrer";
+          }
+          
+          img.loading = "lazy";
+          img.alt = sfc.display_name || sfc.username || "User avatar";
+        };
         
-        userAvatar.loading = "lazy";
-        userAvatar.alt = sfc.display_name || sfc.username || "User avatar";
+        setupImageAttributes(userAvatar);
+        setupImageAttributes(userAvatarSquare);
+        
+        if (normalizedUrl.includes('imagedelivery.net')) {
+          addDebugLog('🔓 Убраны CORS ограничения для Cloudflare Images');
+        }
         
         // Расширенная retry логика для Cloudflare Images (согласно рекомендациям ChatGPT)
         let attempts = 0;
@@ -752,54 +764,76 @@ function refreshUserLabel() {
         
         const triedUrls = new Set([normalizedUrl]);
         
-        userAvatar.onerror = () => {
-          attempts++;
-          const currentUrl = userAvatar.src;
+        // Функция для установки обработчиков событий
+        const setupImageHandlers = (img) => {
+          if (!img) return;
           
-          addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${attempts}/${MAX_RETRIES})`, { 
-            url: currentUrl,
-            attempts: attempts,
-            isCloudflare: currentUrl.includes('imagedelivery.net')
-          });
-          
-          if (attempts < MAX_RETRIES && normalizedUrl.includes('imagedelivery.net')) {
-            const variants = generateVariants(normalizedUrl).filter(v => !triedUrls.has(v));
+          img.onerror = () => {
+            attempts++;
+            const currentUrl = img.src;
             
-            if (variants.length > 0) {
-              const next = variants[0];
-              triedUrls.add(next);
-              addDebugLog('🔄 Пробуем вариант Cloudflare Images', { 
-                attempt: attempts,
-                newUrl: next,
-                totalVariants: variants.length
-              });
-              setTimeout(() => { userAvatar.src = next; }, 300 * attempts);
-              return;
+            addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${attempts}/${MAX_RETRIES})`, { 
+              url: currentUrl,
+              attempts: attempts,
+              isCloudflare: currentUrl.includes('imagedelivery.net'),
+              element: img.id
+            });
+            
+            if (attempts < MAX_RETRIES && normalizedUrl.includes('imagedelivery.net')) {
+              const variants = generateVariants(normalizedUrl).filter(v => !triedUrls.has(v));
+              
+              if (variants.length > 0) {
+                const next = variants[0];
+                triedUrls.add(next);
+                addDebugLog('🔄 Пробуем вариант Cloudflare Images', { 
+                  attempt: attempts,
+                  newUrl: next,
+                  totalVariants: variants.length
+                });
+                
+                // Обновляем оба изображения
+                setTimeout(() => {
+                  if (userAvatar) userAvatar.src = next;
+                  if (userAvatarSquare) userAvatarSquare.src = next;
+                }, 300 * attempts);
+                return;
+              }
             }
-          }
+            
+            // Финальный fallback
+            img.style.display = "none";
+            addDebugLog('❌ Все попытки загрузки аватарки исчерпаны', {
+              totalAttempts: attempts,
+              triedUrls: Array.from(triedUrls),
+              element: img.id,
+              suggestion: 'Проверьте в Cloudflare Dashboard валидность variant и публичность изображения'
+            });
+          };
           
-          // Финальный fallback
-          userAvatar.style.display = "none";
-          addDebugLog('❌ Все попытки загрузки аватарки исчерпаны', {
-            totalAttempts: attempts,
-            triedUrls: Array.from(triedUrls),
-            suggestion: 'Проверьте в Cloudflare Dashboard валидность variant и публичность изображения'
-          });
+          img.onload = () => {
+            img.style.display = "block";
+            addDebugLog('✅ Аватарка успешно загружена', { 
+              url: img.src,
+              attempts: attempts + 1,
+              element: img.id
+            });
+            attempts = 0;
+            triedUrls.clear();
+          };
         };
         
-        userAvatar.onload = () => {
+        setupImageHandlers(userAvatar);
+        setupImageHandlers(userAvatarSquare);
+        
+        // Устанавливаем src для обоих изображений
+        if (userAvatar) {
           userAvatar.style.display = "block";
-          addDebugLog('✅ Аватарка успешно загружена', { 
-            url: userAvatar.src,
-            attempts: attempts + 1
-          });
-          attempts = 0;
-          triedUrls.clear();
-        };
-        
-        // Устанавливаем src
-        userAvatar.style.display = "block";
-        userAvatar.src = normalizedUrl;
+          userAvatar.src = normalizedUrl;
+        }
+        if (userAvatarSquare) {
+          userAvatarSquare.style.display = "block";
+          userAvatarSquare.src = normalizedUrl;
+        }
       }
     } else {
       addDebugLog('⚠️ Элемент user-avatar не найден в DOM');
