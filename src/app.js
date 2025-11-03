@@ -791,8 +791,8 @@ function refreshUserLabel() {
         userAvatar.style.display = "none";
         addDebugLog('ℹ️ Нет URL аватарки в сессии', { 
           farcaster: !!s.farcaster,
-          pfp_url: s.farcaster?.pfp_url,
-          pfp: s.farcaster?.pfp
+          checkedFields: possiblePfpFields,
+          farcasterObject: s.farcaster
         });
       }
     } else {
