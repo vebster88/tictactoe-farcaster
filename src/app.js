@@ -584,17 +584,6 @@ authBtn?.addEventListener("click", async () => {
   
   addDebugLog('🔍 Начинаем процесс авторизации...');
   
-  // Проверяем, не авторизован ли уже пользователь
-  const currentSession = getSession();
-  if (currentSession?.farcaster?.fid || currentSession?.address) {
-    const lang = getLanguage();
-    const msg = lang === "ru"
-      ? `ℹ️ Вы уже авторизованы\n\nИспользуйте кнопку "Выйти" для смены аккаунта.`
-      : `ℹ️ You are already signed in\n\nUse "Sign Out" button to change account.`;
-    alert(msg);
-    return;
-  }
-  
   // В Mini App используем SDK, а не кошелек
   // Проверяем окружение сначала (не зависит от загрузки SDK)
   const isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
@@ -628,32 +617,47 @@ authBtn?.addEventListener("click", async () => {
     });
     
     try {
-      addDebugLog('👤 Запрос пользователя через SDK...');
-      // Пытаемся получить пользователя через SDK
-      const user = await farcasterSDK.getUser();
-      addDebugLog('👤 SDK.getUser() результат', user);
-      
-      if (!user || !user.fid) {
-        throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
-      }
-      
+      // Сначала пытаемся получить пользователя через Quick Auth напрямую
+      // Это более надежный способ для Mini App
       const backendOrigin = window.location.origin;
       addDebugLog('🌐 Backend origin', backendOrigin);
       
-      // Пытаемся получить полные данные через Quick Auth
       addDebugLog('🔐 Начинаем Quick Auth...');
       let fullUserData = null;
       try {
         fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
         addDebugLog('✅ Quick Auth успешен!', fullUserData);
       } catch (error) {
+        console.error('❌ Quick Auth ошибка:', error);
         addDebugLog('❌ Quick Auth ошибка', {
           message: error.message,
           stack: error.stack,
           name: error.name
         });
-        // Не используем fallback - если Quick Auth не работает, это проблема
-        throw new Error(`Quick Auth недоступен: ${error.message}`);
+        
+        // Если Quick Auth не работает, пробуем через getUser() как fallback
+        try {
+          addDebugLog('🔄 Пробуем через getUser() как fallback...');
+          const user = await farcasterSDK.getUser();
+          addDebugLog('👤 SDK.getUser() результат', user);
+          
+          if (!user || !user.fid) {
+            throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
+          }
+          
+          // Преобразуем user в формат fullUserData
+          fullUserData = {
+            fid: user.fid,
+            username: user.username,
+            displayName: user.display_name || user.displayName,
+            pfp: user.pfp_url || user.pfp
+          };
+          addDebugLog('✅ getUser() fallback успешен!', fullUserData);
+        } catch (fallbackError) {
+          console.error('❌ getUser() fallback тоже не сработал:', fallbackError);
+          // Если оба метода не работают, выбрасываем исходную ошибку Quick Auth
+          throw new Error(`Quick Auth недоступен: ${error.message}`);
+        }
       }
       
       if (!fullUserData || !fullUserData.fid) {
@@ -705,6 +709,7 @@ authBtn?.addEventListener("click", async () => {
       return;
       
     } catch (error) {
+      console.error('❌ Ошибка авторизации Mini App:', error);
       addDebugLog('❌ Ошибка авторизации Mini App', {
         message: error.message,
         stack: error.stack,
@@ -712,15 +717,29 @@ authBtn?.addEventListener("click", async () => {
         cause: error.cause
       });
       
-      // Показываем пользователю детальную ошибку
+      // Показываем пользователю детальную ошибку с инструкциями
       const lang = getLanguage();
-      const errorMsg = lang === "ru"
-        ? `Не удалось подключиться к Farcaster:\n\n${error.message}`
-        : `Failed to connect to Farcaster:\n\n${error.message}`;
+      let errorMsg;
+      
+      if (error.message?.includes('SDK недоступен') || error.message?.includes('fallback')) {
+        errorMsg = lang === "ru"
+          ? `❌ Farcaster SDK недоступен\n\nЭто означает, что вы не находитесь в Mini App окружении.\n\nДля авторизации:\n1. Откройте приложение через Warpcast\n2. Или используйте кошелек на компьютере`
+          : `❌ Farcaster SDK unavailable\n\nThis means you're not in a Mini App environment.\n\nTo sign in:\n1. Open the app through Warpcast\n2. Or use wallet on desktop`;
+      } else if (error.message?.includes('Quick Auth')) {
+        errorMsg = lang === "ru"
+          ? `❌ Ошибка Quick Auth\n\n${error.message}\n\nПроверьте, что API сервер запущен и доступен.`
+          : `❌ Quick Auth error\n\n${error.message}\n\nMake sure API server is running and accessible.`;
+      } else {
+        errorMsg = lang === "ru"
+          ? `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПопробуйте обновить страницу или проверить консоль браузера для деталей.`
+          : `Failed to connect to Farcaster:\n\n${error.message}\n\nTry refreshing the page or check browser console for details.`;
+      }
+      
       alert(errorMsg);
       
       // НЕ используем кошелек как fallback в Mini App - это ошибка конфигурации
       addDebugLog('🚫 Не используем кошелек как fallback в Mini App');
+      refreshUserLabel();
       return;
     }
   }
