@@ -36,10 +36,12 @@ export async function signInWithWallet() {
   try {
     const userData = await getUserByAddress(address);
     if (userData?.user) {
+      const pfpUrl = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || null;
       farcasterProfile = {
         fid: userData.user.fid,
         username: userData.user.username,
-        display_name: userData.user.display_name
+        display_name: userData.user.display_name,
+        pfp_url: pfpUrl
       };
     }
   } catch (error) {

@@ -642,6 +642,7 @@ function refreshUserLabel() {
   const authBtn = document.getElementById("btn-auth");
   const authWrapper = authBtn?.closest('.auth-wrapper');
   const userLabel = document.getElementById("user-label");
+  const userAvatar = document.getElementById("user-avatar");
   
   // Проверяем, что userLabel существует
   if (!userLabel) {
@@ -671,6 +672,35 @@ function refreshUserLabel() {
     userLabel.style.visibility = "visible";
     userLabel.style.opacity = "1";
     
+    // Загружаем и отображаем аватарку, если есть
+    if (userAvatar) {
+      const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp;
+      if (pfpUrl && typeof pfpUrl === 'string' && pfpUrl.trim().length > 0) {
+        // Нормализация URL
+        let normalizedUrl = pfpUrl.trim();
+        if (!/^https?:\/\//i.test(normalizedUrl)) {
+          normalizedUrl = 'https://' + normalizedUrl;
+        }
+        
+        userAvatar.src = normalizedUrl;
+        userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
+        userAvatar.style.display = "block";
+        userAvatar.crossOrigin = "anonymous";
+        userAvatar.loading = "lazy";
+        
+        // Обработка ошибок загрузки
+        userAvatar.onerror = () => {
+          userAvatar.style.display = "none";
+        };
+        
+        userAvatar.onload = () => {
+          userAvatar.style.display = "block";
+        };
+      } else {
+        userAvatar.style.display = "none";
+      }
+    }
+    
     if (authBtn) {
       authBtn.textContent = t.signOut;
       authBtn.dataset.signedIn = "true";
@@ -678,6 +708,9 @@ function refreshUserLabel() {
   } else {
     if (userLabel) {
       userLabel.textContent = "";
+    }
+    if (userAvatar) {
+      userAvatar.style.display = "none";
     }
     if (authBtn) {
       authBtn.textContent = t.signIn;
@@ -1014,10 +1047,13 @@ authBtn?.addEventListener("click", async () => {
       try {
         const user = await farcasterSDK.getUser();
         if (user && user.fid) {
+          // Проверяем все возможные поля для аватарки
+          const pfpUrl = user.pfp_url || user.pfpUrl || user.pfp || user.profile_picture || null;
           fullUserData = {
             fid: user.fid,
             username: user.username,
-            displayName: user.display_name || user.displayName
+            displayName: user.display_name || user.displayName,
+            pfp_url: pfpUrl
           };
         } else {
           throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
@@ -1040,10 +1076,14 @@ authBtn?.addEventListener("click", async () => {
         throw new Error('Не удалось получить данные пользователя');
       }
       
+      // Проверяем все возможные поля для аватарки из fullUserData
+      const pfpUrl = fullUserData.pfp_url || fullUserData.pfpUrl || fullUserData.pfp || fullUserData.profile_picture || null;
+      
       const farcasterProfile = {
         fid: fullUserData.fid,
         username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
-        display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`
+        display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
+        pfp_url: pfpUrl
       };
       
       if (DEBUG_ENABLED) {
@@ -1478,12 +1518,14 @@ refreshUserLabel();
                   return;
                 }
                 
-                // Quick Auth возвращает: { fid, username, displayName, ... }
-                // Маппим в наш формат: { fid, username, display_name }
+                // Quick Auth возвращает: { fid, username, displayName, pfp_url, ... }
+                // Маппим в наш формат: { fid, username, display_name, pfp_url }
+                const pfpUrl = fullUserData.pfp_url || fullUserData.pfpUrl || fullUserData.pfp || null;
                 const farcasterProfile = {
                   fid: fullUserData.fid,
                   username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
-                  display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`
+                  display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
+                  pfp_url: pfpUrl
                 };
                 
                 const session = getSession() || {};
