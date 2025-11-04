@@ -671,27 +671,6 @@ function refreshUserLabel() {
     userLabel.style.visibility = "visible";
     userLabel.style.opacity = "1";
     
-    // Отладка
-    if (DEBUG_ENABLED) {
-      addDebugLog('✅ Имя пользователя установлено', {
-        text: displayText,
-        session: {
-          hasFarcaster: !!s.farcaster,
-          hasAddress: !!s.address,
-          username: s.farcaster?.username,
-          display_name: s.farcaster?.display_name,
-          fid: s.farcaster?.fid
-        },
-        element: {
-          exists: !!userLabel,
-          textContent: userLabel.textContent,
-          display: window.getComputedStyle(userLabel).display,
-          visibility: window.getComputedStyle(userLabel).visibility,
-          opacity: window.getComputedStyle(userLabel).opacity
-        }
-      });
-    }
-    
     if (authBtn) {
       authBtn.textContent = t.signOut;
       authBtn.dataset.signedIn = "true";
@@ -716,14 +695,7 @@ function refreshUserLabel() {
         const wrapperRect = authWrapper.getBoundingClientRect();
         // Вычисляем смещение: центр кнопки относительно начала wrapper
         const btnCenter = btnRect.left - wrapperRect.left + btnRect.width / 2;
-        // Устанавливаем CSS переменную для точного позиционирования
         authWrapper.style.setProperty('--btn-center', `${btnCenter}px`);
-        addDebugLog('🎯 Центрирование имени пользователя', {
-          btnCenter: btnCenter,
-          btnWidth: btnRect.width,
-          btnLeft: btnRect.left - wrapperRect.left,
-          wrapperLeft: wrapperRect.left
-        });
       });
     });
   }
@@ -934,99 +906,59 @@ function checkDevAccess() {
 }
 authBtn?.addEventListener("click", async () => {
   try {
-    // Логируем начало обработки
-    addDebugLog('🖱️ Кнопка "Войти" нажата');
-    addDebugLog('📋 Состояние кнопки', {
-      signedIn: authBtn?.dataset?.signedIn,
-      text: authBtn?.textContent,
-      exists: !!authBtn,
-      id: authBtn?.id
-    });
-    
-    // Проверяем, что кнопка существует
     if (!authBtn) {
-      addDebugLog('❌ Кнопка authBtn не найдена!');
       alert('Ошибка: кнопка авторизации не найдена');
       return;
     }
     
-    addDebugLog('✅ Кнопка найдена, проверяем статус авторизации...');
-    
     if (authBtn.dataset.signedIn === "true") {
-    addDebugLog('🚪 Выход из системы...');
-    
-    const session = getSession();
-    const lang = getLanguage();
-    const username = session?.farcaster?.username || session?.address?.slice(0, 6) || (lang === "ru" ? 'пользователь' : 'user');
-    
-    // Останавливаем синхронизацию матчей
-    try {
-      stopSyncing();
-      clearCurrentMatch();
-    } catch (error) {
-      addDebugLog('⚠️ Ошибка при очистке состояния матча:', error);
+      // Выход из системы
+      const session = getSession();
+      
+      // Останавливаем синхронизацию матчей
+      try {
+        stopSyncing();
+        clearCurrentMatch();
+      } catch (error) {
+        if (DEBUG_ENABLED) {
+          addDebugLog('⚠️ Ошибка при очистке состояния матча', { error: error.message });
+        }
+      }
+      
+      signOut();
+      refreshUserLabel();
+      
+      if (timerContainer) {
+        timerContainer.style.display = "none";
+      }
+      
+      resetBoard(true);
+      return;
     }
     
-    // Выходим из системы
-    signOut();
-    
-    // Обновляем UI
-    refreshUserLabel();
-    
-    // Очищаем таймер и скрываем UI матча
-    if (timerContainer) {
-      timerContainer.style.display = "none";
-    }
-    
-    // Сбрасываем игровое состояние
-    resetBoard(true);
-    
-    return;
-  }
-  
-    addDebugLog('✅ Пользователь не авторизован, начинаем процесс авторизации...');
-    
-    // В Mini App используем SDK, а не кошелек
-    // Проверяем окружение сначала (не зависит от загрузки SDK)
-    addDebugLog('🔍 Вызываем checkMiniAppEnvironment()...');
+    // Проверка Mini App окружения
     let isMiniAppEnv = false;
     try {
       isMiniAppEnv = farcasterSDK.checkMiniAppEnvironment();
-      addDebugLog('✅ checkMiniAppEnvironment() завершен (синхронная проверка)', { result: isMiniAppEnv });
-      
-      // Если синхронная проверка не прошла, пробуем асинхронную (проверка через SDK)
       if (!isMiniAppEnv) {
-        addDebugLog('🔍 Синхронная проверка не прошла, пробуем асинхронную проверку через SDK...');
         try {
           isMiniAppEnv = await farcasterSDK.checkMiniAppEnvironmentAsync();
-          addDebugLog('✅ checkMiniAppEnvironmentAsync() завершен', { result: isMiniAppEnv });
         } catch (asyncError) {
-          addDebugLog('⚠️ Ошибка в асинхронной проверке (но это может быть нормально)', {
-            message: asyncError?.message || String(asyncError)
-          });
+          // Игнорируем ошибку асинхронной проверки
         }
       }
     } catch (error) {
-      addDebugLog('❌ Ошибка в checkMiniAppEnvironment()', {
-        message: error?.message || String(error),
-        stack: error?.stack,
-        name: error?.name
-      });
-      // Продолжаем с false, если ошибка
       isMiniAppEnv = false;
     }
     
     // Дополнительная проверка для надежности
-    addDebugLog('🔍 Выполняем дополнительные проверки Mini App...');
     let additionalMiniAppCheck = false;
     try {
-      // Безопасная проверка для кросс-доменных iframe
       const isInIframe = window.parent !== window;
       let sameOrigin = true;
       try {
         sameOrigin = window.parent.location.origin === window.location.origin;
       } catch (e) {
-        // SecurityError при кросс-доменном доступе - это нормально для Mini App
         sameOrigin = false;
       }
       
@@ -1037,14 +969,7 @@ authBtn?.addEventListener("click", async () => {
         document.referrer?.includes('warpcast') ||
         window.location.search.includes('miniApp=true')
       );
-      addDebugLog('✅ Дополнительные проверки завершены', { result: additionalMiniAppCheck });
     } catch (error) {
-      addDebugLog('❌ Ошибка в дополнительных проверках', {
-        message: error?.message || String(error),
-        stack: error?.stack,
-        name: error?.name
-      });
-      // Безопасный fallback без проверки origin
       additionalMiniAppCheck = !!(
         window.farcaster ||
         (window.parent !== window) ||
@@ -1055,156 +980,77 @@ authBtn?.addEventListener("click", async () => {
     }
     
     const finalMiniAppCheck = isMiniAppEnv || additionalMiniAppCheck;
-    addDebugLog('🌍 Проверка Mini App окружения', { 
-      result: finalMiniAppCheck,
-      isMiniAppEnv,
-      additionalMiniAppCheck,
-      windowFarcaster: !!window.farcaster,
-      isInIframe: window.parent !== window,
-      referrer: document.referrer
-    });
-    
-    // Для мобильных устройств: если все проверки false, но это мобильное устройство,
-    // всё равно попробуем Mini App авторизацию (мобильное приложение может не показывать признаки)
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
                            (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
-    
-    // Определяем, является ли это localhost (локальная разработка)
     const isLocalhost = window.location.hostname === 'localhost' || 
                         window.location.hostname === '127.0.0.1' ||
                         window.location.hostname === '0.0.0.0';
-    
-    // КРИТИЧНО: Проверяем реальные признаки Mini App окружения
-    // checkMiniAppEnvironmentAsync() может давать ложные срабатывания, так как SDK может быть в сборке
-    // Реальные признаки: window.farcaster, iframe, referrer, или мобильное устройство без кошелька
     const hasRealMiniAppIndicators = !!(
       window.farcaster ||
       (window.parent !== window) ||
       document.referrer?.includes('farcaster') ||
       document.referrer?.includes('warpcast')
     );
-    
-    // Используем Mini App авторизацию только если:
-    // 1. Есть РЕАЛЬНЫЕ признаки Mini App (window.farcaster, iframe, referrer) ИЛИ
-    // 2. Это мобильное устройство БЕЗ window.ethereum (кошелек недоступен)
-    // КРИТИЧНО: Если есть window.ethereum и это НЕ мобильное - ВСЕГДА используем кошелек!
-    // НЕ используем Mini App только на основе checkMiniAppEnvironmentAsync() - это может быть ложное срабатывание
     const shouldUseMiniApp = hasRealMiniAppIndicators || 
                              (isMobileDevice && !window.ethereum && !isLocalhost);
     
-    // Дополнительная проверка: если есть window.ethereum и нет реальных признаков Mini App - используем кошелек
-    if (window.ethereum && !hasRealMiniAppIndicators && !isMobileDevice) {
-      addDebugLog('💼 Обнаружен кошелек на десктопе без признаков Mini App - используем кошелек');
+    if (DEBUG_ENABLED) {
+      addDebugLog('🔍 Авторизация', {
+        method: shouldUseMiniApp ? 'Mini App' : 'Wallet',
+        hasRealIndicators: hasRealMiniAppIndicators,
+        isMobile: isMobileDevice,
+        hasEthereum: !!window.ethereum
+      });
     }
-    
-    addDebugLog('🔍 Решение о методе авторизации', {
-      finalMiniAppCheck,
-      isMiniAppEnv,
-      additionalMiniAppCheck,
-      hasRealMiniAppIndicators,
-      isMobileDevice,
-      isLocalhost,
-      hasEthereum: !!window.ethereum,
-      hasWindowFarcaster: !!window.farcaster,
-      isInIframe: window.parent !== window,
-      referrer: document.referrer,
-      shouldUseMiniApp
-    });
-    
-    if (shouldUseMiniApp) {
-      // Если на мобильном и нет кошелька, предполагаем Mini App
-      if (isMobileDevice && !window.ethereum && !finalMiniAppCheck) {
-        addDebugLog('📱 Мобильное устройство без кошелька - предполагаем Mini App окружение');
-      }
-      
-      addDebugLog('🔍 Пытаемся авторизоваться через Farcaster Mini App...');
-    addDebugLog('📊 Проверка окружения', {
-      windowFarcaster: !!window.farcaster,
-      parentWindow: window.parent !== window,
-      referrer: document.referrer,
-      location: window.location.href
-    });
     
     try {
       // Сначала пытаемся получить пользователя через Quick Auth напрямую
       // Это более надежный способ для Mini App
       const backendOrigin = window.location.origin;
-      addDebugLog('🌐 Backend origin', backendOrigin);
-      
-      // Пробуем сначала getUser() - это более надежный способ для Mini App
-      // Quick Auth может не работать в локальной разработке или если SDK внутренне падает
       let fullUserData = null;
-      let usedQuickAuth = false;
       
-      // Сначала пробуем getUser() - основной метод
+      // Пробуем getUser() - основной метод
       try {
-        addDebugLog('👤 Пробуем получить пользователя через SDK.getUser()...');
         const user = await farcasterSDK.getUser();
-        addDebugLog('👤 SDK.getUser() результат', user);
-        
         if (user && user.fid) {
-          // Преобразуем user в формат fullUserData
           fullUserData = {
             fid: user.fid,
             username: user.username,
             displayName: user.display_name || user.displayName
           };
-          addDebugLog('✅ getUser() успешен!', {
-            fid: fullUserData.fid,
-            username: fullUserData.username,
-            displayName: fullUserData.displayName
-          });
         } else {
           throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
         }
       } catch (getUserError) {
-        console.error('❌ getUser() ошибка:', getUserError);
-        addDebugLog('❌ getUser() ошибка', {
-          message: getUserError.message,
-          stack: getUserError.stack,
-          name: getUserError.name
-        });
-        
         // Если getUser() не работает, пробуем Quick Auth как fallback
-        // НО только если это не localhost (Quick Auth может не работать локально)
         const isLocalhost = backendOrigin.includes('localhost') || backendOrigin.includes('127.0.0.1');
-        
         if (isLocalhost) {
-          addDebugLog('⚠️ Localhost обнаружен - Quick Auth может не работать. Пропускаем.');
           throw new Error(`SDK недоступен в локальном окружении. Откройте приложение через Warpcast Mini App или используйте кошелек на production домене.`);
         }
         
         try {
-          addDebugLog('🔐 Пробуем Quick Auth как fallback...');
           fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-          usedQuickAuth = true;
-          addDebugLog('✅ Quick Auth успешен!', fullUserData);
         } catch (quickAuthError) {
-          console.error('❌ Quick Auth тоже не сработал:', quickAuthError);
-          addDebugLog('❌ Quick Auth ошибка', {
-            message: quickAuthError.message,
-            stack: quickAuthError.stack,
-            name: quickAuthError.name
-          });
-          
-          // Если оба метода не работают, выбрасываем понятную ошибку
           throw new Error(`Не удалось получить данные пользователя через Mini App SDK. Ошибка: ${getUserError.message}`);
         }
       }
       
       if (!fullUserData || !fullUserData.fid) {
-        throw new Error('Quick Auth не вернул данные пользователя');
+        throw new Error('Не удалось получить данные пользователя');
       }
       
-      // Quick Auth возвращает: { fid, username, displayName, ... }
-      // Маппим в наш формат: { fid, username, display_name }
       const farcasterProfile = {
         fid: fullUserData.fid,
         username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
         display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`
       };
       
-      addDebugLog('👤 Создаём профиль пользователя', farcasterProfile);
+      if (DEBUG_ENABLED) {
+        addDebugLog('✅ Пользователь получен', {
+          fid: farcasterProfile.fid,
+          username: farcasterProfile.username
+        });
+      }
       
       const session = {
         schemaVersion: "1.0.0",
@@ -1222,24 +1068,13 @@ authBtn?.addEventListener("click", async () => {
       refreshUserLabel();
       updateUIForMode();
       
-      addDebugLog('✅ Farcaster Mini App пользователь авторизован!', farcasterProfile);
-      addDebugLog('👤 Имя пользователя должно отображаться', { 
-        username: farcasterProfile.username,
-        display_name: farcasterProfile.display_name,
-        fid: farcasterProfile.fid
-      });
-      
       // Авторизация успешна - UI обновлен через refreshUserLabel()
       return;
       
     } catch (error) {
-      console.error('❌ Ошибка авторизации Mini App:', error);
-      addDebugLog('❌ Ошибка авторизации Mini App', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause
-      });
+      if (DEBUG_ENABLED) {
+        addDebugLog('❌ Ошибка авторизации Mini App', { message: error.message });
+      }
       
       // Показываем пользователю детальную ошибку с инструкциями
       const lang = getLanguage();
@@ -1290,10 +1125,6 @@ authBtn?.addEventListener("click", async () => {
   
   // Если это Mini App, но SDK еще не загрузился, ждем немного
   if (isMobileDevice && finalMiniAppCheck && !window.ethereum) {
-    addDebugLog('📱 Mini App окружение обнаружено, но SDK еще не загружен. Ждем...');
-    
-    // Не показываем ошибку сразу - даем время для автоматической авторизации
-    // Автоматическая авторизация обычно происходит в течение 1-2 секунд
     setTimeout(() => {
       const session = getSession();
       if (!session?.farcaster?.fid && !session?.address) {
@@ -1301,11 +1132,8 @@ authBtn?.addEventListener("click", async () => {
         const msg = lang === "ru"
           ? `🔄 Авторизация занимает больше времени...\n\nЕсли авторизация не произошла автоматически, попробуйте обновить страницу.`
           : `🔄 Authentication is taking longer...\n\nIf sign in didn't happen automatically, try refreshing the page.`;
-        addDebugLog('⏱️ Автоматическая авторизация не завершилась, показываем сообщение');
         alert(msg);
         refreshUserLabel();
-      } else {
-        addDebugLog('✅ Автоматическая авторизация завершилась успешно');
       }
     }, 3000);
     return;
@@ -1313,7 +1141,6 @@ authBtn?.addEventListener("click", async () => {
   
   try { 
     const session = await signInWithWallet();
-    addDebugLog('✅ Авторизация через кошелек успешна', session);
     
     // Убираем флаг автоматической авторизации (если был)
     localStorage.removeItem('auto_auth_started');
@@ -1324,10 +1151,9 @@ authBtn?.addEventListener("click", async () => {
     
     // Авторизация успешна - UI обновлен через refreshUserLabel()
   } catch (e) { 
-    addDebugLog('❌ Ошибка авторизации через кошелек', {
-      message: e?.message || String(e),
-      stack: e?.stack
-    }); 
+    if (DEBUG_ENABLED) {
+      addDebugLog('❌ Ошибка авторизации через кошелек', { message: e?.message || String(e) });
+    } 
     const lang = getLanguage();
     
     // Улучшенное сообщение об ошибке для мобильных устройств
@@ -1349,15 +1175,10 @@ authBtn?.addEventListener("click", async () => {
     refreshUserLabel();
   } 
   } catch (error) {
-    // Критическая ошибка в обработчике - логируем все детали
-    addDebugLog('❌ КРИТИЧЕСКАЯ ОШИБКА в обработчике Sign In', {
-      message: error?.message || String(error),
-      stack: error?.stack,
-      name: error?.name,
-      cause: error?.cause,
-      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
-    });
     console.error('❌ КРИТИЧЕСКАЯ ОШИБКА в обработчике Sign In:', error);
+    if (DEBUG_ENABLED) {
+      addDebugLog('❌ КРИТИЧЕСКАЯ ОШИБКА в обработчике Sign In', { message: error?.message || String(error) });
+    }
     const lang = getLanguage();
     alert(lang === "ru" 
       ? `Критическая ошибка при авторизации: ${error?.message || String(error)}\n\nПроверьте debug логи для деталей.`
@@ -1634,7 +1455,7 @@ refreshUserLabel();
             await farcasterSDK.ready();
             
             // Автоматически загружаем пользователя из Mini App, если доступен
-            if (farcasterSDK.checkMiniAppEnvironment()) {
+            if (isMiniAppEnv) {
               try {
                 const user = await farcasterSDK.getUser();
                 
