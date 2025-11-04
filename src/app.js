@@ -1120,10 +1120,6 @@ authBtn?.addEventListener("click", async () => {
     // Сбрасываем игровое состояние
     resetBoard(true);
     
-    const msg = lang === "ru" 
-      ? `👋 Вы вышли из аккаунта\n\n${username}`
-      : `👋 Signed out\n\n${username}`;
-    alert(msg);
     return;
   }
   
@@ -1450,12 +1446,7 @@ authBtn?.addEventListener("click", async () => {
         fid: farcasterProfile.fid
       });
       
-      // Показываем успех
-      const lang = getLanguage();
-      const msg = lang === "ru"
-        ? `✅ Успешная авторизация!\n\n@${farcasterProfile.username}\nFID: ${farcasterProfile.fid}`
-        : `✅ Signed in successfully!\n\n@${farcasterProfile.username}\nFID: ${farcasterProfile.fid}`;
-      alert(msg);
+      // Авторизация успешна - UI обновлен через refreshUserLabel()
       return;
       
     } catch (error) {
@@ -1548,12 +1539,7 @@ authBtn?.addEventListener("click", async () => {
     refreshUserLabel();
     updateUIForMode();
     
-    const lang = getLanguage();
-    const username = session?.farcaster?.username || session?.address?.slice(0, 6) + "…" + session?.address?.slice(-4) || 'user';
-    const msg = lang === "ru"
-      ? `✅ Успешная авторизация!\n\n${session?.farcaster?.username ? '@' + session.farcaster.username : username}`
-      : `✅ Signed in successfully!\n\n${session?.farcaster?.username ? '@' + session.farcaster.username : username}`;
-    alert(msg);
+    // Авторизация успешна - UI обновлен через refreshUserLabel()
   } catch (e) { 
     addDebugLog('❌ Ошибка авторизации через кошелек', {
       message: e?.message || String(e),
