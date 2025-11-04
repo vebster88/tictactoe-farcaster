@@ -1003,9 +1003,10 @@ authBtn?.addEventListener("click", async () => {
       });
     }
     
-    try {
-      // Сначала пытаемся получить пользователя через Quick Auth напрямую
-      // Это более надежный способ для Mini App
+    if (shouldUseMiniApp) {
+      try {
+        // Сначала пытаемся получить пользователя через Quick Auth напрямую
+        // Это более надежный способ для Mini App
       const backendOrigin = window.location.origin;
       let fullUserData = null;
       
@@ -1173,7 +1174,7 @@ authBtn?.addEventListener("click", async () => {
     }
     alert(msg);
     refreshUserLabel();
-  } 
+  }
   } catch (error) {
     console.error('❌ КРИТИЧЕСКАЯ ОШИБКА в обработчике Sign In:', error);
     if (DEBUG_ENABLED) {
