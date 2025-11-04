@@ -190,23 +190,6 @@ h1 .btn-settings-inline {
   z-index: 1;
 }
 
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  transition: var(--transition);
-  cursor: pointer;
-  margin: 0;
-}
-
-.user-avatar:hover {
-  border-color: var(--accent);
-  transform: scale(1.05);
-  box-shadow: var(--shadow);
-}
 
 
 .game-actions {
@@ -560,10 +543,6 @@ h1 .btn-settings-inline {
     top: calc(100% + 2px);
   }
   
-  .user-avatar {
-    width: 36px;
-    height: 36px;
-  }
   
   .game-actions {
     justify-content: flex-start;

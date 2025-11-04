@@ -39,8 +39,7 @@ export async function signInWithWallet() {
       farcasterProfile = {
         fid: userData.user.fid,
         username: userData.user.username,
-        display_name: userData.user.display_name,
-        pfp_url: userData.user.pfp_url
+        display_name: userData.user.display_name
       };
     }
   } catch (error) {

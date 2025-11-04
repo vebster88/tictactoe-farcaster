@@ -50,24 +50,19 @@ async function resolveUser(fid) {
     }
     
     // Neynar API возвращает данные в формате:
-    // { username, display_name, pfp_url, ... }
+    // { username, display_name, ... }
     // Если Neynar недоступен, используем fallback
     const username = profile?.username || null;
     const displayName = profile?.display_name || 
                         profile?.displayName || 
                         username ||
                         null;
-    const pfp = profile?.pfp_url || 
-                profile?.pfpUrl || 
-                profile?.pfp ||
-                null;
 
     return {
       fid,
       primaryAddress,
       username: username || `user_${fid}`,
       displayName: displayName || `User ${fid}`,
-      pfp: pfp || 'https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png',
       bio: profile?.bio || '',
       verified: profile?.verified || false
     };
@@ -76,8 +71,7 @@ async function resolveUser(fid) {
     return {
       fid,
       username: `user_${fid}`,
-      displayName: `User ${fid}`,
-      pfp: 'https://tiktaktoe-farcaster-dun.vercel.app/tictactoe-icon-1024.png'
+      displayName: `User ${fid}`
     };
   }
 }

@@ -32,7 +32,6 @@ export async function getUserByAddress(address) {
         fid: 12345,
         username: "vebster88",
         display_name: "Vebster88",
-        pfp_url: "https://example.com/avatar.jpg",
         verified_addresses: { eth_addresses: [address] }
       }
     };
