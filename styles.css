@@ -28,7 +28,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body { height: 50%; margin: 0; }
 body {
   background-image: url("/assets/images/hero.jpg");
   background-size: cover;
@@ -157,13 +157,22 @@ h1 .btn-settings-inline {
 }
 
 .auth-group {
-  /* Не используется в новой структуре, оставлено для совместимости */
-  display: none;
+  /* Контейнер для user-label - не занимает место в потоке */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  /* Позволяем user-label позиционироваться относительно auth-wrapper */
+  overflow: visible;
 }
 
 .user-label {
   position: absolute;
-  top: calc(100% + 4px);
+  /* Позиционирование относительно auth-wrapper (через auth-group) - ниже кнопки */
+  /* Отступ 6px от нижнего края wrapper (который соответствует нижнему краю кнопки) */
+  top: calc(100% + 6px);
   font-size: 0.75rem;
   color: var(--muted);
   display: block;
@@ -175,9 +184,10 @@ h1 .btn-settings-inline {
   pointer-events: none;
   /* Точное центрирование относительно центра кнопки Sign In/Out */
   /* Используем CSS переменную --btn-center, которая вычисляется через JS */
-  left: var(--btn-center, 37px);
+  left: var(--btn-center, 50%);
   transform: translateX(-50%);
   width: max-content;
+  z-index: 1;
 }
 
 .user-avatar {

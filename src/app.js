@@ -117,8 +117,8 @@ function createDebugModal() {
     font-family: monospace;
   `;
   
-  // Получаем язык безопасно
-  const lang = (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en"));
+  // Получаем язык
+  const lang = getLanguage();
   
   modal.innerHTML = `
     <div style="background: #1a1a1a; color: #0f0; padding: 20px; border-radius: 8px; max-width: 700px; margin: 0 auto; border: 2px solid #0f0; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);">
@@ -212,13 +212,10 @@ window.updateDebugModal = function() {
   logsCount.textContent = uniqueLogs.length;
   
   // Показываем информацию о статусе debug режима
+  const lang = getLanguage();
   const debugStatus = DEBUG_ENABLED ? 
-    (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en")) === "ru" ? 
-      "🟢 Debug включен" : "🟢 Debug enabled" :
-    (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en")) === "ru" ? 
-      "🔴 Debug выключен" : "🔴 Debug disabled";
-  
-  const lang = (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en"));
+    (lang === "ru" ? "🟢 Debug включен" : "🟢 Debug enabled") :
+    (lang === "ru" ? "🔴 Debug выключен" : "🔴 Debug disabled");
   
   if (uniqueLogs.length === 0) {
     logsContent.innerHTML = `
@@ -330,7 +327,7 @@ function initDebugUI() {
     addDebugLog('🐛 Debug UI инициализирован (debug режим включен)');
   } else {
     // Добавляем начальный лог даже если debug выключен
-    const lang = (typeof getLanguage === 'function' ? getLanguage() : (localStorage.getItem("language") || "en"));
+    const lang = getLanguage();
     const initialLog = {
       time: new Date().toLocaleTimeString(),
       message: lang === "ru" ? "🐛 Debug UI инициализирован (debug режим выключен)" : "🐛 Debug UI initialized (debug mode disabled)",
@@ -357,7 +354,7 @@ const settingsBtn = document.getElementById("btn-settings");
 const devToggleBtn = document.getElementById("btn-dev-toggle");
 const newBtn = document.getElementById("btn-new");
 const authBtn = document.getElementById("btn-auth");
-const userLabel = document.getElementById("user-label");
+// userLabel получается внутри refreshUserLabel() для избежания проблем с порядком инициализации
 const createSignerBtn = document.getElementById("btn-create-signer");
 const checkRepliesBtn = document.getElementById("btn-check-replies");
 const inviteBtn = document.getElementById("btn-invite");
@@ -645,39 +642,60 @@ function refreshUserLabel() {
   const userAvatar = document.getElementById("user-avatar");
   const authBtn = document.getElementById("btn-auth");
   const authWrapper = authBtn?.closest('.auth-wrapper');
+  const userLabel = document.getElementById("user-label");
+  
+  // Проверяем, что userLabel существует
+  if (!userLabel) {
+    console.warn("user-label элемент не найден в DOM");
+    return;
+  }
   
   if (isAuthorized) {
     // Приоритет: отображаем Farcaster username, если есть
+    let displayText = "";
     if (s.farcaster?.username) {
-      userLabel.textContent = `@${s.farcaster.username}`;
+      displayText = `@${s.farcaster.username}`;
     } else if (s.farcaster?.display_name) {
-      userLabel.textContent = s.farcaster.display_name;
+      displayText = s.farcaster.display_name;
     } else if (s.farcaster?.fid) {
-      userLabel.textContent = `FID: ${s.farcaster.fid}`;
+      displayText = `FID: ${s.farcaster.fid}`;
     } else if (s.address) {
       // Fallback на адрес кошелька
-      userLabel.textContent = s.address.slice(0, 6) + "…" + s.address.slice(-4);
+      displayText = s.address.slice(0, 6) + "…" + s.address.slice(-4);
     } else {
-      userLabel.textContent = t.signedIn;
+      displayText = t.signedIn;
+    }
+    
+    // Устанавливаем текст и принудительно показываем элемент
+    userLabel.textContent = displayText;
+    userLabel.style.display = "block";
+    userLabel.style.visibility = "visible";
+    userLabel.style.opacity = "1";
+    
+    // Отладка
+    if (DEBUG_ENABLED) {
+      addDebugLog('✅ Имя пользователя установлено', {
+        text: displayText,
+        session: {
+          hasFarcaster: !!s.farcaster,
+          hasAddress: !!s.address,
+          username: s.farcaster?.username,
+          display_name: s.farcaster?.display_name,
+          fid: s.farcaster?.fid
+        },
+        element: {
+          exists: !!userLabel,
+          textContent: userLabel.textContent,
+          display: window.getComputedStyle(userLabel).display,
+          visibility: window.getComputedStyle(userLabel).visibility,
+          opacity: window.getComputedStyle(userLabel).opacity
+        }
+      });
     }
     
     // Отображаем аватарку, если есть
     if (userAvatar) {
-      addDebugLog('🔍 ШАГ 1: Начало загрузки аватарки', {
-        userAvatarExists: !!userAvatar,
-        sessionExists: !!s,
-        farcasterExists: !!s?.farcaster
-      });
-      
       const sfc = s.farcaster || {};
-      
-      addDebugLog('🔍 ШАГ 2: Проверка сессии Farcaster', {
-        farcasterObject: sfc,
-        farcasterKeys: sfc ? Object.keys(sfc) : [],
-        hasPfp: !!sfc.pfp,
-        hasPfpUrl: !!sfc.pfpUrl,
-        hasPfp_url: !!sfc.pfp_url
-      });
       
       // Проверяем все возможные поля для аватарки
       const possiblePfpFields = [
@@ -686,82 +704,36 @@ function refreshUserLabel() {
         sfc.profilePicture, sfc.profile_picture
       ];
       
-      addDebugLog('🔍 ШАГ 3: Проверка всех полей аватарки', {
-        possiblePfpFields: possiblePfpFields.map((field, index) => ({
-          index,
-          fieldName: ['pfp', 'pfpUrl', 'pfp_url', 'pfpURL', 'avatar', 'avatarUrl', 'avatar_url', 'profilePicture', 'profile_picture'][index],
-          value: field,
-          type: typeof field,
-          isEmpty: field === null || field === undefined || (typeof field === 'string' && field.trim().length === 0)
-        }))
-      });
-      
       const pfpUrlRaw = possiblePfpFields.find(u => typeof u === 'string' && u.trim().length > 0) || null;
-      
-      addDebugLog('🔍 ШАГ 4: Найденный URL аватарки', {
-        pfpUrlRaw: pfpUrlRaw,
-        found: !!pfpUrlRaw,
-        length: pfpUrlRaw ? pfpUrlRaw.length : 0
-      });
       
       if (!pfpUrlRaw) {
         userAvatar.style.display = "none";
-        addDebugLog('❌ ШАГ 5: Нет URL аватарки в сессии', { 
-          farcaster: !!s.farcaster,
-          session: s,
-          fullSession: JSON.stringify(s, null, 2)
-        });
-      } else {
-        addDebugLog('✅ ШАГ 5: URL найден, начинаем нормализацию', { pfpUrlRaw });
-        
-        // Нормализация URL
-        let normalizedUrl = pfpUrlRaw.trim();
-        const originalUrl = normalizedUrl;
-        
-        if (!/^https?:\/\//i.test(normalizedUrl)) {
-          normalizedUrl = 'https://' + normalizedUrl;
-          addDebugLog('🔧 Добавлен протокол https://', { 
-            original: originalUrl,
-            normalized: normalizedUrl
+        if (DEBUG_ENABLED) {
+          addDebugLog('❌ Нет URL аватарки в сессии', { 
+            farcaster: !!s.farcaster,
+            sessionKeys: s ? Object.keys(s) : []
           });
         }
-        
-        addDebugLog('🔧 ШАГ 6: Нормализация URL завершена', {
-          original: pfpUrlRaw,
-          normalized: normalizedUrl,
-          changed: normalizedUrl !== pfpUrlRaw
-        });
+      } else {
+        // Нормализация URL
+        let normalizedUrl = pfpUrlRaw.trim();
+        if (!/^https?:\/\//i.test(normalizedUrl)) {
+          normalizedUrl = 'https://' + normalizedUrl;
+        }
         
         // Функция для установки атрибутов изображения
         const setupImageAttributes = (img) => {
-          if (!img) {
-            addDebugLog('⚠️ setupImageAttributes: элемент не найден');
-            return;
-          }
-          
-          addDebugLog('🔧 Настройка атрибутов изображения', { elementId: img.id });
-          
           // CORS для Cloudflare Images
           if (normalizedUrl.includes('imagedelivery.net')) {
             img.crossOrigin = null;
             img.referrerPolicy = null;
-            addDebugLog('🔓 Убраны CORS ограничения для Cloudflare Images', { elementId: img.id });
           } else {
             img.crossOrigin = "anonymous";
             img.referrerPolicy = "no-referrer";
-            addDebugLog('🔐 Установлены CORS атрибуты для обычного домена', { elementId: img.id });
           }
           
           img.loading = "lazy";
           img.alt = sfc.display_name || sfc.username || "User avatar";
-          
-          addDebugLog('✅ Атрибуты установлены', {
-            elementId: img.id,
-            crossOrigin: img.crossOrigin,
-            referrerPolicy: img.referrerPolicy,
-            loading: img.loading,
-            alt: img.alt
-          });
         };
         
         setupImageAttributes(userAvatar);
@@ -800,37 +772,16 @@ function refreshUserLabel() {
         
         // Функция для установки обработчиков событий
         const setupImageHandlers = (img) => {
-          if (!img) {
-            addDebugLog('⚠️ setupImageHandlers: элемент не найден');
-            return;
-          }
-          
-          addDebugLog('🔧 Установка обработчиков событий', { elementId: img.id });
-          
           img.onerror = () => {
             attempts++;
             const currentUrl = img.src;
             
-            addDebugLog(`⚠️ ШАГ 7: Ошибка загрузки аватарки (попытка ${attempts}/${MAX_RETRIES})`, { 
-              url: currentUrl,
-              attempts: attempts,
-              isCloudflare: currentUrl.includes('imagedelivery.net'),
-              element: img.id,
-              imgNaturalWidth: img.naturalWidth,
-              imgNaturalHeight: img.naturalHeight,
-              imgComplete: img.complete,
-              imgWidth: img.width,
-              imgHeight: img.height
-            });
-            
-            // Проверяем Network API для получения статуса ошибки
-            fetch(currentUrl, { method: 'HEAD', mode: 'no-cors' })
-              .then(() => {
-                addDebugLog('ℹ️ HEAD запрос прошел (но может быть CORS)', { url: currentUrl });
-              })
-              .catch(err => {
-                addDebugLog('❌ HEAD запрос не прошел', { url: currentUrl, error: err.message });
+            if (DEBUG_ENABLED) {
+              addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${attempts}/${MAX_RETRIES})`, { 
+                url: currentUrl,
+                attempts: attempts
               });
+            }
             
             if (attempts < MAX_RETRIES && normalizedUrl.includes('imagedelivery.net')) {
               const variants = generateVariants(normalizedUrl).filter(v => !triedUrls.has(v));
@@ -838,15 +789,8 @@ function refreshUserLabel() {
               if (variants.length > 0) {
                 const next = variants[0];
                 triedUrls.add(next);
-                addDebugLog('🔄 ШАГ 8: Пробуем вариант Cloudflare Images', { 
-                  attempt: attempts,
-                  newUrl: next,
-                  totalVariants: variants.length,
-                  allVariants: variants
-                });
                 
                 setTimeout(() => {
-                  addDebugLog('🔄 Устанавливаем новый URL', { url: next, elementId: img.id });
                   userAvatar.src = next;
                 }, 300 * attempts);
                 return;
@@ -855,26 +799,21 @@ function refreshUserLabel() {
             
             // Финальный fallback
             img.style.display = "none";
-            addDebugLog('❌ ШАГ 9: Все попытки загрузки аватарки исчерпаны', {
-              totalAttempts: attempts,
-              triedUrls: Array.from(triedUrls),
-              element: img.id,
-              finalUrl: currentUrl,
-              suggestion: 'Проверьте в Cloudflare Dashboard валидность variant и публичность изображения'
-            });
+            if (DEBUG_ENABLED) {
+              addDebugLog('❌ Все попытки загрузки аватарки исчерпаны', {
+                totalAttempts: attempts,
+                triedUrls: Array.from(triedUrls)
+              });
+            }
           };
           
           img.onload = () => {
-            addDebugLog('✅ ШАГ 10: Аватарка успешно загружена!', { 
-              url: img.src,
-              attempts: attempts + 1,
-              element: img.id,
-              naturalWidth: img.naturalWidth,
-              naturalHeight: img.naturalHeight,
-              width: img.width,
-              height: img.height,
-              complete: img.complete
-            });
+            if (DEBUG_ENABLED) {
+              addDebugLog('✅ Аватарка успешно загружена', { 
+                url: img.src,
+                attempts: attempts + 1
+              });
+            }
             img.style.display = "block";
             attempts = 0;
             triedUrls.clear();
@@ -883,58 +822,32 @@ function refreshUserLabel() {
         
         setupImageHandlers(userAvatar);
         
-        addDebugLog('🔧 ШАГ 11: Устанавливаем src для изображения', {
-          normalizedUrl: normalizedUrl,
-          userAvatarExists: !!userAvatar
-        });
-        
         // Устанавливаем src
         userAvatar.style.display = "block";
-        addDebugLog('🖼️ Устанавливаем src для аватарки', { 
-          url: normalizedUrl,
-          beforeSrc: userAvatar.src,
-          display: userAvatar.style.display
-        });
         userAvatar.src = normalizedUrl;
-        addDebugLog('🖼️ src установлен для аватарки', { 
-          afterSrc: userAvatar.src,
-          complete: userAvatar.complete
-        });
-        
-        // Дополнительная проверка через небольшую задержку
-        setTimeout(() => {
-          addDebugLog('🔍 ШАГ 12: Проверка состояния через 500ms', {
-            userAvatar: {
-              src: userAvatar?.src,
-              complete: userAvatar?.complete,
-              naturalWidth: userAvatar?.naturalWidth,
-              naturalHeight: userAvatar?.naturalHeight,
-              display: userAvatar?.style.display,
-              computedDisplay: userAvatar ? window.getComputedStyle(userAvatar).display : null
-            }
-          });
-        }, 500);
       }
-    } else {
-      addDebugLog('⚠️ Элемент user-avatar не найден в DOM', {
-        userAvatarExists: !!userAvatar
-      });
     }
     
-    authBtn.textContent = t.signOut;
-    authBtn.dataset.signedIn = "true";
+    if (authBtn) {
+      authBtn.textContent = t.signOut;
+      authBtn.dataset.signedIn = "true";
+    }
   } else {
-    userLabel.textContent = "";
+    if (userLabel) {
+      userLabel.textContent = "";
+    }
     if (userAvatar) {
       userAvatar.style.display = "none";
     }
-    authBtn.textContent = t.signIn;
-    authBtn.dataset.signedIn = "false";
+    if (authBtn) {
+      authBtn.textContent = t.signIn;
+      authBtn.dataset.signedIn = "false";
+    }
   }
   
   // Вычисляем центр кнопки для точного выравнивания имени пользователя
   // Делаем это ПОСЛЕ установки текста кнопки и имени пользователя
-  if (authBtn && authWrapper && userLabel.textContent) {
+  if (authBtn && authWrapper && userLabel && userLabel.textContent) {
     // Используем двойной requestAnimationFrame для гарантии полного обновления DOM
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
