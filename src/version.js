@@ -1,7 +1,7 @@
 // Application version
 // Format: major.minor (e.g., 1.0, 1.01, 1.02)
 // Increment by 0.01 for each update/deployment
-// Current version: 1.61
-// Changes: Removed alert popups for Sign In/Sign Out actions
-export const APP_VERSION = '1.61';
+// Current version: 1.62
+// Changes: Removed user avatar functionality completely from the project
+export const APP_VERSION = '1.62';
 

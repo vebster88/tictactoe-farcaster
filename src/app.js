@@ -639,7 +639,6 @@ function refreshUserLabel() {
   const t = texts[lang] || texts.en;
   
   // Получаем элементы
-  const userAvatar = document.getElementById("user-avatar");
   const authBtn = document.getElementById("btn-auth");
   const authWrapper = authBtn?.closest('.auth-wrapper');
   const userLabel = document.getElementById("user-label");
@@ -693,141 +692,6 @@ function refreshUserLabel() {
       });
     }
     
-    // Отображаем аватарку, если есть
-    if (userAvatar) {
-      const sfc = s.farcaster || {};
-      
-      // Проверяем все возможные поля для аватарки
-      const possiblePfpFields = [
-        sfc.pfp, sfc.pfpUrl, sfc.pfp_url, sfc.pfpURL,
-        sfc.avatar, sfc.avatarUrl, sfc.avatar_url,
-        sfc.profilePicture, sfc.profile_picture
-      ];
-      
-      const pfpUrlRaw = possiblePfpFields.find(u => typeof u === 'string' && u.trim().length > 0) || null;
-      
-      if (!pfpUrlRaw) {
-        userAvatar.style.display = "none";
-        if (DEBUG_ENABLED) {
-          addDebugLog('❌ Нет URL аватарки в сессии', { 
-            farcaster: !!s.farcaster,
-            sessionKeys: s ? Object.keys(s) : []
-          });
-        }
-      } else {
-        // Нормализация URL
-        let normalizedUrl = pfpUrlRaw.trim();
-        if (!/^https?:\/\//i.test(normalizedUrl)) {
-          normalizedUrl = 'https://' + normalizedUrl;
-        }
-        
-        // Функция для установки атрибутов изображения
-        const setupImageAttributes = (img) => {
-          // CORS для Cloudflare Images
-          if (normalizedUrl.includes('imagedelivery.net')) {
-            img.crossOrigin = null;
-            img.referrerPolicy = null;
-          } else {
-            img.crossOrigin = "anonymous";
-            img.referrerPolicy = "no-referrer";
-          }
-          
-          img.loading = "lazy";
-          img.alt = sfc.display_name || sfc.username || "User avatar";
-        };
-        
-        setupImageAttributes(userAvatar);
-        
-        // Расширенная retry логика для Cloudflare Images
-        let attempts = 0;
-        const MAX_RETRIES = 6;
-        
-        // Функция для генерации вариантов URL
-        const generateVariants = (url) => {
-          const variants = [];
-          
-          if (url.match(/\/rectcrop\d+\/?$/)) {
-            variants.push(url.replace(/\/rectcrop(\d+)\/?$/, '/rectcrop$1/public'));
-            variants.push(url.replace(/\/rectcrop\d+\/?$/, '/public'));
-            variants.push(url.replace(/\/rectcrop\d+\/?$/, '/avatar'));
-            variants.push(url.replace(/\/rectcrop\d+\/?$/, ''));
-            variants.push(url.replace(/\/rectcrop\d+\/?$/, '/rectcrop3/public'));
-          } else if (url.match(/\/rectcrop\d+\/public\/?$/)) {
-            variants.push(url.replace(/\/rectcrop\d+\/public\/?$/, '/avatar'));
-            variants.push(url.replace(/\/rectcrop\d+\/public\/?$/, '/public'));
-            variants.push(url.replace(/\/rectcrop(\d+)\/public\/?$/, '/rectcrop$1'));
-            variants.push(url.replace(/\/rectcrop\d+\/public\/?$/, ''));
-          } else if (url.match(/\/avatar\/?$/)) {
-            variants.push(url.replace(/\/avatar\/?$/, '/public'));
-            variants.push(url.replace(/\/avatar\/?$/, ''));
-          } else if (url.match(/\/public\/?$/)) {
-            variants.push(url.replace(/\/public\/?$/, '/avatar'));
-            variants.push(url.replace(/\/public\/?$/, ''));
-          }
-          
-          return [...new Set(variants)].filter(v => v && v !== url);
-        };
-        
-        const triedUrls = new Set([normalizedUrl]);
-        
-        // Функция для установки обработчиков событий
-        const setupImageHandlers = (img) => {
-          img.onerror = () => {
-            attempts++;
-            const currentUrl = img.src;
-            
-            if (DEBUG_ENABLED) {
-              addDebugLog(`⚠️ Ошибка загрузки аватарки (попытка ${attempts}/${MAX_RETRIES})`, { 
-                url: currentUrl,
-                attempts: attempts
-              });
-            }
-            
-            if (attempts < MAX_RETRIES && normalizedUrl.includes('imagedelivery.net')) {
-              const variants = generateVariants(normalizedUrl).filter(v => !triedUrls.has(v));
-              
-              if (variants.length > 0) {
-                const next = variants[0];
-                triedUrls.add(next);
-                
-                setTimeout(() => {
-                  userAvatar.src = next;
-                }, 300 * attempts);
-                return;
-              }
-            }
-            
-            // Финальный fallback
-            img.style.display = "none";
-            if (DEBUG_ENABLED) {
-              addDebugLog('❌ Все попытки загрузки аватарки исчерпаны', {
-                totalAttempts: attempts,
-                triedUrls: Array.from(triedUrls)
-              });
-            }
-          };
-          
-          img.onload = () => {
-            if (DEBUG_ENABLED) {
-              addDebugLog('✅ Аватарка успешно загружена', { 
-                url: img.src,
-                attempts: attempts + 1
-              });
-            }
-            img.style.display = "block";
-            attempts = 0;
-            triedUrls.clear();
-          };
-        };
-        
-        setupImageHandlers(userAvatar);
-        
-        // Устанавливаем src
-        userAvatar.style.display = "block";
-        userAvatar.src = normalizedUrl;
-      }
-    }
-    
     if (authBtn) {
       authBtn.textContent = t.signOut;
       authBtn.dataset.signedIn = "true";
@@ -835,9 +699,6 @@ function refreshUserLabel() {
   } else {
     if (userLabel) {
       userLabel.textContent = "";
-    }
-    if (userAvatar) {
-      userAvatar.style.display = "none";
     }
     if (authBtn) {
       authBtn.textContent = t.signIn;
@@ -1283,49 +1144,15 @@ authBtn?.addEventListener("click", async () => {
         
         if (user && user.fid) {
           // Преобразуем user в формат fullUserData
-          // Проверяем все возможные поля для аватарки из ответа SDK
-          const userPfpFields = [
-            user.pfp,
-            user.pfpUrl,
-            user.pfp_url,
-            user.pfpURL,
-            user.avatar,
-            user.avatarUrl,
-            user.avatar_url,
-            user.profilePicture,
-            user.profile_picture
-          ];
-          const userPfpValue = userPfpFields.find(url => url && typeof url === 'string' && url.trim().length > 0) || null;
-          
           fullUserData = {
             fid: user.fid,
             username: user.username,
-            displayName: user.display_name || user.displayName,
-            pfp: userPfpValue,
-            // Сохраняем все возможные варианты для дальнейшего маппинга
-            pfpUrl: user.pfpUrl,
-            pfp_url: user.pfp_url,
-            avatar: user.avatar,
-            avatarUrl: user.avatarUrl,
-            avatar_url: user.avatar_url,
-            profilePicture: user.profilePicture,
-            profile_picture: user.profile_picture
+            displayName: user.display_name || user.displayName
           };
           addDebugLog('✅ getUser() успешен!', {
             fid: fullUserData.fid,
             username: fullUserData.username,
-            displayName: fullUserData.displayName,
-            foundPfp: fullUserData.pfp,
-            allUserPfpFields: {
-              pfp: user.pfp,
-              pfpUrl: user.pfpUrl,
-              pfp_url: user.pfp_url,
-              avatar: user.avatar,
-              avatarUrl: user.avatarUrl,
-              avatar_url: user.avatar_url,
-              profilePicture: user.profilePicture,
-              profile_picture: user.profile_picture
-            }
+            displayName: fullUserData.displayName
           });
         } else {
           throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
@@ -1369,57 +1196,13 @@ authBtn?.addEventListener("click", async () => {
         throw new Error('Quick Auth не вернул данные пользователя');
       }
       
-      // Quick Auth возвращает: { fid, username, displayName, pfp, ... }
-      // Маппим в наш формат: { fid, username, display_name, pfp_url }
-      // Проверяем все возможные поля для аватарки
-      const possiblePfpFields = [
-        fullUserData.pfp,
-        fullUserData.pfpUrl,
-        fullUserData.pfp_url,
-        fullUserData.pfpURL,
-        fullUserData.avatar,
-        fullUserData.avatarUrl,
-        fullUserData.avatar_url,
-        fullUserData.profilePicture,
-        fullUserData.profile_picture
-      ];
-      
-      const pfpUrlValue = possiblePfpFields.find(url => url && typeof url === 'string' && url.trim().length > 0) || null;
-      
+      // Quick Auth возвращает: { fid, username, displayName, ... }
+      // Маппим в наш формат: { fid, username, display_name }
       const farcasterProfile = {
         fid: fullUserData.fid,
         username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
-        display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
-        // Сохраняем ВСЕ варианты полей для аватарки (для мобильных устройств)
-        pfp_url: pfpUrlValue,
-        // Дополнительные поля на случай, если основной не работает
-        pfp: fullUserData.pfp,
-        pfpUrl: fullUserData.pfpUrl,
-        pfpURL: fullUserData.pfpURL,
-        avatar: fullUserData.avatar,
-        avatarUrl: fullUserData.avatarUrl,
-        avatar_url: fullUserData.avatar_url,
-        profilePicture: fullUserData.profilePicture,
-        profile_picture: fullUserData.profile_picture
+        display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`
       };
-      
-      addDebugLog('🔍 Quick Auth данные до маппинга', {
-        fid: fullUserData.fid,
-        username: fullUserData.username,
-        displayName: fullUserData.displayName,
-        allPfpFields: {
-          pfp: fullUserData.pfp,
-          pfpUrl: fullUserData.pfpUrl,
-          pfp_url: fullUserData.pfp_url,
-          pfpURL: fullUserData.pfpURL,
-          avatar: fullUserData.avatar,
-          avatarUrl: fullUserData.avatarUrl,
-          avatar_url: fullUserData.avatar_url,
-          profilePicture: fullUserData.profilePicture,
-          profile_picture: fullUserData.profile_picture
-        },
-        foundPfpUrl: pfpUrlValue
-      });
       
       addDebugLog('👤 Создаём профиль пользователя', farcasterProfile);
       
@@ -1873,13 +1656,12 @@ refreshUserLabel();
                   return;
                 }
                 
-                // Quick Auth возвращает: { fid, username, displayName, pfp, ... }
-                // Маппим в наш формат: { fid, username, display_name, pfp_url }
+                // Quick Auth возвращает: { fid, username, displayName, ... }
+                // Маппим в наш формат: { fid, username, display_name }
                 const farcasterProfile = {
                   fid: fullUserData.fid,
                   username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
-                  display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
-                  pfp_url: fullUserData.pfp || fullUserData.pfpUrl || fullUserData.pfp_url || null
+                  display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`
                 };
                 
                 const session = getSession() || {};
