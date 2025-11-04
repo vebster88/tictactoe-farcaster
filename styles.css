@@ -171,8 +171,8 @@ h1 .btn-settings-inline {
 .user-label {
   position: absolute;
   /* Позиционирование относительно auth-wrapper (через auth-group) - ниже кнопки */
-  /* Отступ 6px от нижнего края wrapper (который соответствует нижнему краю кнопки) */
-  top: calc(100% + 6px);
+  /* Отступ 4px от нижнего края wrapper (который соответствует нижнему краю кнопки) */
+  top: calc(100% + 4px);
   font-size: 0.75rem;
   color: var(--muted);
   display: block;
@@ -556,7 +556,8 @@ h1 .btn-settings-inline {
   .user-label {
     font-size: 0.7rem;
     /* Убираем margin-top, так как позиционирование через top */
-    top: calc(100% + 3px);
+    /* На мобильных устройствах отступ чуть меньше */
+    top: calc(100% + 2px);
   }
   
   .user-avatar {
