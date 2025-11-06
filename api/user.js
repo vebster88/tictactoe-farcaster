@@ -1,5 +1,5 @@
 // User endpoint with Quick Auth validation
-import { quickAuthMiddleware } from './quick-auth-middleware.js';
+import { quickAuthMiddleware } from '../lib/auth/quick-auth-middleware.js';
 
 export default async function handler(req, res) {
   // Set CORS headers

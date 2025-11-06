@@ -130,8 +130,17 @@ tictactoe-farcaster/
 │   │   ├── list.js         # Список матчей
 │   │   ├── move.js         # Ход в матче
 │   │   ├── leaderboard.js  # Leaderboard
+│   │   ├── get.js          # Получение конкретного матча
 │   │   └── check-timeouts.js # Проверка таймаутов
-│   └── quick-auth-middleware.js
+│   ├── user.js             # Профиль пользователя через Quick Auth
+│   ├── icon-png.js         # Генерация иконок
+│   └── webhook.js          # Webhook для Farcaster
+├── lib/                    # Общие библиотеки для API и фронтенда
+│   ├── auth/
+│   │   └── quick-auth-middleware.js
+│   └── matches/
+│       ├── kv-helper.js
+│       └── schema.js
 ├── index.html
 ├── styles.css
 └── package.json

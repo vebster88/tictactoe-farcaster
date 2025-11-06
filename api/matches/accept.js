@@ -1,5 +1,5 @@
-import { getMatch, saveMatch } from "./kv-helper.js";
-import { MATCH_STATUS, TURN_TIMEOUT_MS } from "./schema.js";
+import { getMatch, saveMatch, getPlayerMatches } from "../../lib/matches/kv-helper.js";
+import { MATCH_STATUS } from "../../lib/matches/schema.js";
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -49,7 +49,6 @@ export default async function handler(req, res) {
     }
 
     // Check if player already has 2 active matches
-    const { getPlayerMatches } = await import("./kv-helper.js");
     const playerMatches = await getPlayerMatches(normalizedPlayer2Fid);
     const activeMatches = playerMatches.filter(m => m.status === MATCH_STATUS.ACTIVE);
     if (activeMatches.length >= 2) {

@@ -1,5 +1,5 @@
-import { getMatch, saveMatch } from "./kv-helper.js";
-import { MATCH_STATUS, TURN_TIMEOUT_MS } from "./schema.js";
+import { getMatch, saveMatch } from "../../lib/matches/kv-helper.js";
+import { MATCH_STATUS, TURN_TIMEOUT_MS } from "../../lib/matches/schema.js";
 
 // Game logic (copied from src/game for serverless functions)
 function cloneState(state) {

@@ -1,5 +1,5 @@
-import { saveMatch } from "./kv-helper.js";
-import { MATCH_STATUS } from "./schema.js";
+import { saveMatch, getMatch, getPlayerMatches } from "../../lib/matches/kv-helper.js";
+import { MATCH_STATUS } from "../../lib/matches/schema.js";
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -35,7 +35,6 @@ export default async function handler(req, res) {
     }
 
     // Check if match already exists
-    const { getMatch, getPlayerMatches } = await import("./kv-helper.js");
     const existingMatch = await getMatch(matchId);
     if (existingMatch) {
       return res.status(409).json({ error: "Match already exists" });

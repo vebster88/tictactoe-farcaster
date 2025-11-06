@@ -1,5 +1,5 @@
-import { getAllFinishedMatches } from "./kv-helper.js";
-import { MATCH_STATUS } from "./schema.js";
+import { getAllFinishedMatches } from "../../lib/matches/kv-helper.js";
+import { MATCH_STATUS } from "../../lib/matches/schema.js";
 
 export default async function handler(req, res) {
   // Set CORS headers

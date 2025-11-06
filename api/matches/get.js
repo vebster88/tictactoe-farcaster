@@ -1,5 +1,5 @@
-import { getMatch } from "./kv-helper.js";
-import { MATCH_STATUS, TURN_TIMEOUT_MS } from "./schema.js";
+import { getMatch, saveMatch } from "../../lib/matches/kv-helper.js";
+import { MATCH_STATUS, TURN_TIMEOUT_MS } from "../../lib/matches/schema.js";
 
 function checkMatchTimeout(match) {
   if (match.status !== MATCH_STATUS.ACTIVE || match.gameState.finished) {
@@ -61,8 +61,7 @@ export default async function handler(req, res) {
 
     // Save updated match if timeout occurred
     if (match.status === MATCH_STATUS.TIMEOUT) {
-      const { saveMatch } = await import("./kv-helper.js");
-      match = await saveMatch(match);
+    match = await saveMatch(match);
     }
 
     return res.status(200).json(match);

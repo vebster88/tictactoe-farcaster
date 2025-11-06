@@ -1,5 +1,5 @@
-import { getPlayerMatches, getAvailableMatches } from "./kv-helper.js";
-import { MATCH_STATUS } from "./schema.js";
+import { getPlayerMatches, getAvailableMatches } from "../../lib/matches/kv-helper.js";
+import { MATCH_STATUS } from "../../lib/matches/schema.js";
 
 export default async function handler(req, res) {
   console.log(`[list] Request received: ${req.method} ${req.url}`);
