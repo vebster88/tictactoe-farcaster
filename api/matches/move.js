@@ -116,13 +116,14 @@ export default async function handler(req, res) {
 
     if (timeSinceLastMove >= match.turnTimeout) {
       // Timeout occurred - opponent wins
+      const timeoutWinner = match.gameState.next === "X" ? "O" : "X";
       const updatedMatch = await saveMatch({
         ...match,
-        status: MATCH_STATUS.TIMEOUT,
+        status: MATCH_STATUS.FINISHED,
         gameState: {
           ...match.gameState,
           finished: true,
-          winner: match.gameState.next === "X" ? "O" : "X" // Opponent wins by timeout
+          winner: timeoutWinner
         },
         updatedAt: now.toISOString()
       });

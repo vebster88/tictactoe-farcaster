@@ -76,20 +76,20 @@
 
     <main class="app-main">
       <section class="score" aria-label="Счёт">
-        <div class="score-item" aria-label="Wins" title="Wins" style="display: flex; align-items: center; gap: 6px;">
+        <div class="score-item" aria-label="Wins" title="Wins" style="display: flex; align-items: center; gap: 4px;">
           <span role="img" aria-hidden="true">🏆</span>
           <span id="score-win">0</span>
         </div>
-        <div class="score-item" aria-label="Losses" title="Losses" style="display: flex; align-items: center; gap: 6px;">
+        <div class="score-item" aria-label="Losses" title="Losses" style="display: flex; align-items: center; gap: 4px;">
           <span role="img" aria-hidden="true">💔</span>
           <span id="score-loss">0</span>
         </div>
-        <div class="score-item" aria-label="Draws" title="Draws" style="display: flex; align-items: center; gap: 6px;">
+        <div class="score-item" aria-label="Draws" title="Draws" style="display: flex; align-items: center; gap: 4px;">
           <span role="img" aria-hidden="true">🤝</span>
           <span id="score-draw">0</span>
         </div>
         <div style="position: relative; display: flex; align-items: center; gap: 8px; margin-top: 8px;">
-          <img id="opponent-avatar" alt="Opponent" style="display: none; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.3);" />
+          <img id="opponent-avatar" alt="Opponent" style="display: none; width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.3);" />
           <!-- Match Switcher (показывается только при наличии 2+ активных матчей) -->
           <div id="match-switcher" style="display: none; position: relative; display: flex; align-items: center; gap: 4px;">
             <button id="match-switcher-prev" class="btn" type="button" style="padding: 4px 8px; font-size: 1.2rem; min-width: auto;" title="Previous match">←</button>

@@ -199,7 +199,6 @@ async function renderMatchesList(container, matches, playerFid) {
         <div style="font-size: 0.875rem; color: var(--muted);">
           <span>${lang === "ru" ? "Статус" : "Status"}: ${statusText}</span>
         </div>
-        ${match.status === "active" ? `<button class="btn continue-match-btn" data-match-id="${match.matchId}" style="margin-top: 8px; display: block;">${lang === "ru" ? "Продолжить" : "Continue"}</button>` : ""}
         ${timeDisplay ? `<div style="font-size: 0.875rem; color: ${isExpired ? 'var(--lose)' : 'var(--fg)'}; margin-top: 4px;">${lang === "ru" ? "Время" : "Time"}: ${timeDisplay}</div>` : ""}
       </div>
     `;
@@ -251,25 +250,6 @@ async function renderMatchesList(container, matches, playerFid) {
         }
         
         alert(errorMsg);
-      }
-    });
-  });
-
-  // Обработчики для кнопок Continue (если они есть)
-  container.querySelectorAll(".continue-match-btn").forEach(btn => {
-    const matchId = btn.dataset.matchId;
-    btn.style.display = "block"; // Показываем кнопку
-    btn.addEventListener("click", async () => {
-      try {
-        await loadMatch(matchId);
-        window.dispatchEvent(new CustomEvent("match-loaded", { detail: { matchId } }));
-        // НЕ закрываем модальное окно - пользователь может захотеть переключиться на другой матч
-        // const modal = document.getElementById("matches-modal");
-        // if (modal) modal.setAttribute("aria-hidden", "true");
-      } catch (error) {
-        console.error("Failed to load match:", error);
-        const lang = localStorage.getItem("language") || "en";
-        alert(lang === "ru" ? `Ошибка загрузки матча: ${error.message}` : `Failed to load match: ${error.message}`);
       }
     });
   });

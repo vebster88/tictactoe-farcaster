@@ -476,9 +476,9 @@ function updateScores() {
 
 function recordOutcome(result, matchId = null) {
   if (matchId !== null && matchId !== undefined) {
-    const key = String(matchId);
+    const key = `${matchId}:${result}`;
     if (recordedMatchOutcomes.has(key)) {
-      return;
+      return false;
     }
     recordedMatchOutcomes.add(key);
   }
@@ -492,6 +492,7 @@ function recordOutcome(result, matchId = null) {
   }
   
   updateScores();
+  return true;
 }
 
 function maybeBotMove() {
@@ -648,21 +649,25 @@ boardEl.addEventListener("click", async (e) => {
         const matchId = currentMatch.matchId;
         
         if (!state.winner) {
-          recordOutcome("draw", matchId);
-          showToast(
-            lang === "ru" ? "🤝 Ничья!" : "🤝 Here is a draw!",
-            "draw"
-          );
+          const recorded = recordOutcome("draw", matchId);
+          if (recorded) {
+            showToast(
+              lang === "ru" ? "🤝 Ничья!" : "🤝 Here is a draw!",
+              "draw"
+            );
+          }
         } else {
-          const isWinner = (match.player1Symbol === state.winner && match.player1Fid === currentMatch.playerFid) ||
-                           (match.player2Symbol === state.winner && match.player2Fid === currentMatch.playerFid);
-          recordOutcome(isWinner ? "win" : "loss", matchId);
-          showToast(
-            isWinner 
-              ? (lang === "ru" ? "🎉 Вы победили!" : "🎉 You won!")
-              : (lang === "ru" ? "😔 Вы проиграли" : "😔 You lost"),
-            isWinner ? "success" : "error"
-          );
+        const isWinner = (match.player1Symbol === state.winner && match.player1Fid === currentMatch.playerFid) ||
+                         (match.player2Symbol === state.winner && match.player2Fid === currentMatch.playerFid);
+          const recorded = recordOutcome(isWinner ? "win" : "loss", matchId);
+          if (recorded) {
+        showToast(
+          isWinner 
+            ? (lang === "ru" ? "🎉 Вы победили!" : "🎉 You won!")
+            : (lang === "ru" ? "😔 Вы проиграли" : "😔 You lost"),
+          isWinner ? "success" : "error"
+        );
+          }
         }
         
         // Автоматически переключаемся на другой активный матч, если он есть
@@ -790,7 +795,7 @@ function refreshUserLabel() {
     userLabel.style.display = "block";
     userLabel.style.visibility = "visible";
     userLabel.style.opacity = "1";
-    
+      
     // Загружаем и отображаем аватарку, если есть
     if (userAvatar) {
       const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp;
@@ -814,7 +819,7 @@ function refreshUserLabel() {
         
         userAvatar.onload = () => {
           userAvatar.style.display = "block";
-        };
+          };
       } else {
         userAvatar.style.display = "none";
       }
@@ -927,17 +932,20 @@ if (matchSwitcherNext) {
 // Показываем tooltip при наведении на переключатель
 if (matchSwitcher) {
   let tooltipTimeout = null;
+  let tooltipAutoHideTimeout = null;
   
   // Создаем tooltip в body, если его еще нет
   let tooltipElement = document.getElementById("match-switcher-tooltip");
   if (!tooltipElement) {
     tooltipElement = document.createElement("div");
     tooltipElement.id = "match-switcher-tooltip";
-    tooltipElement.style.cssText = "display: none; position: fixed; padding: 6px; background: rgba(0, 0, 0, 0.85); border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); z-index: 99999; min-width: 100px; max-width: 150px; text-align: center; pointer-events: none; white-space: normal; word-wrap: break-word; backdrop-filter: blur(4px);";
+    tooltipElement.style.cssText = "display: none; position: fixed; padding: 6px; background: rgba(0, 0, 0, 0.6); border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); z-index: 99999; min-width: 100px; max-width: 150px; text-align: center; pointer-events: none; white-space: normal; word-wrap: break-word; backdrop-filter: blur(4px);";
     tooltipElement.innerHTML = `
-      <img id="match-switcher-opponent-avatar" src="" alt="Opponent" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.3); margin-bottom: 4px;" />
-      <div id="match-switcher-opponent-name" style="font-weight: 600; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.5rem;"></div>
-      <div id="match-switcher-match-info" style="font-size: 0.375rem; color: var(--muted);"></div>
+      <div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 3px;">
+        <img id="match-switcher-opponent-avatar" src="" alt="Opponent" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.3);" />
+        <div id="match-switcher-opponent-name" style="font-size: 0.5625rem; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
+      </div>
+      <div id="match-switcher-match-info" style="font-size: 0.5625rem; color: #fff;"></div>
     `;
     document.body.appendChild(tooltipElement);
   }
@@ -948,6 +956,10 @@ if (matchSwitcher) {
       if (tooltipElement.parentElement !== document.body) {
         document.body.appendChild(tooltipElement);
       }
+      if (tooltipAutoHideTimeout) {
+        clearTimeout(tooltipAutoHideTimeout);
+        tooltipAutoHideTimeout = null;
+      }
       
       tooltipElement.style.display = "block";
       await updateMatchSwitcherTooltip(match);
@@ -955,32 +967,32 @@ if (matchSwitcher) {
       setTimeout(() => {
         if (tooltipElement && buttonElement) {
           const buttonRect = buttonElement.getBoundingClientRect();
-          // Левый край tooltip совпадает с левым краем кнопки, но не перекрывает её
           tooltipElement.style.left = `${buttonRect.left}px`;
           tooltipElement.style.top = `${buttonRect.top - tooltipElement.offsetHeight - 8}px`;
           tooltipElement.style.transform = "none";
           tooltipElement.style.right = "auto";
           tooltipElement.style.bottom = "auto";
           
-          // Проверяем, не выходит ли tooltip за границы экрана
           const tooltipRect = tooltipElement.getBoundingClientRect();
           const viewportWidth = window.innerWidth;
           const viewportHeight = window.innerHeight;
           
-          // Если выходит за правую границу - прижимаем к правому краю
           if (tooltipRect.right > viewportWidth) {
             tooltipElement.style.left = "auto";
             tooltipElement.style.right = "8px";
-          }
-          // Если выходит за левую границу - прижимаем к левому краю
-          else if (tooltipRect.left < 0) {
+          } else if (tooltipRect.left < 0) {
             tooltipElement.style.left = "8px";
           }
-          
-          // Если выходит за верхнюю границу - показываем снизу
           if (tooltipRect.top < 0) {
             tooltipElement.style.top = `${buttonRect.bottom + 8}px`;
           }
+          
+          if (tooltipAutoHideTimeout) {
+            clearTimeout(tooltipAutoHideTimeout);
+          }
+          tooltipAutoHideTimeout = setTimeout(() => {
+            hideTooltip();
+          }, 3000);
         }
       }, 100);
     }
@@ -990,6 +1002,10 @@ if (matchSwitcher) {
     if (tooltipTimeout) {
       clearTimeout(tooltipTimeout);
       tooltipTimeout = null;
+    }
+    if (tooltipAutoHideTimeout) {
+      clearTimeout(tooltipAutoHideTimeout);
+      tooltipAutoHideTimeout = null;
     }
     if (tooltipElement) {
       tooltipElement.style.display = "none";
@@ -1099,17 +1115,8 @@ window.addEventListener("match-synced", async () => {
       // Обновляем UI для проверки хода противника
       updateMatchUI();
       
-      // Если матч завершился, обновляем статистику и переключаемся на другой матч
+      // Если матч завершился, переключаемся на другой матч
       if (match.gameState.finished) {
-        const matchId = currentMatch.matchId;
-        if (match.gameState.winner) {
-          const isWinner = (match.player1Symbol === match.gameState.winner && match.player1Fid === currentMatch.playerFid) ||
-                           (match.player2Symbol === match.gameState.winner && match.player2Fid === currentMatch.playerFid);
-          recordOutcome(isWinner ? "win" : "loss", matchId);
-        } else {
-          recordOutcome("draw", matchId);
-        }
-        
         const storedSwitched = localStorage.getItem(`match_switched_${currentMatch.matchId}`);
         if (!storedSwitched) {
           (async () => {
@@ -1674,6 +1681,15 @@ function updateMatchUI() {
       const winnerSymbol = match.gameState.winner;
       const isWinner = (match.player1Symbol === winnerSymbol && match.player1Fid === currentMatch.playerFid) ||
                        (match.player2Symbol === winnerSymbol && match.player2Fid === currentMatch.playerFid);
+      const recorded = recordOutcome(isWinner ? "win" : "loss", currentMatch.matchId);
+      if (recorded) {
+        showToast(
+          isWinner 
+            ? (lang === "ru" ? "🎉 Вы победили!" : "🎉 You won!")
+            : (lang === "ru" ? "😔 Вы проиграли" : "😔 You lost"),
+          isWinner ? "success" : "error"
+        );
+      }
       showStatus(isWinner 
         ? (lang === "ru" ? `Победа: ${winnerSymbol}` : `You win: ${winnerSymbol}`)
         : (lang === "ru" ? `Поражение: ${winnerSymbol}` : `You lose: ${winnerSymbol}`));
@@ -1683,6 +1699,13 @@ function updateMatchUI() {
         statusEl.style.color = "";
       }
     } else {
+      const recorded = recordOutcome("draw", currentMatch.matchId);
+      if (recorded) {
+        showToast(
+          lang === "ru" ? "🤝 Ничья!" : "🤝 Here is a draw!",
+          "draw"
+        );
+      }
       // Ничья - показываем правильный текст и цвет
       showStatus(lang === "ru" ? "Ничья" : "Here is a draw");
       // Используем серый цвет для ничьей (muted)
@@ -1833,7 +1856,7 @@ authBtn?.addEventListener("click", async () => {
         hasRealIndicators: hasRealMiniAppIndicators,
         isMobile: isMobileDevice,
         hasEthereum: !!window.ethereum
-      });
+    });
     }
     
     if (shouldUseMiniApp) {
@@ -2117,7 +2140,7 @@ inviteBtn?.addEventListener("click", async () => {
               : `Failed to create invite: ${errorMsg}`;
           }
     alert(errorMsg);
-        }
+  }
         resolve();
       };
       

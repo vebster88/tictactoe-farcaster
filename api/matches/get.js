@@ -14,7 +14,7 @@ function checkMatchTimeout(match) {
     // Timeout occurred
     const updatedMatch = {
       ...match,
-      status: MATCH_STATUS.TIMEOUT,
+      status: MATCH_STATUS.FINISHED,
       gameState: {
         ...match.gameState,
         finished: true,
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
     match = checkMatchTimeout(match);
 
     // Save updated match if timeout occurred
-    if (match.status === MATCH_STATUS.TIMEOUT) {
+    if (match.status === MATCH_STATUS.FINISHED && match.gameState.finished) {
     match = await saveMatch(match);
     }
 

@@ -294,26 +294,34 @@ h1 .btn-settings-inline {
 
 .score {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 16px;
   justify-content: center;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
-.score > div {
+.score .score-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: rgba(255, 255, 255, 0.2);
-  padding: 8px 12px;
-  border-radius: calc(var(--radius) * 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(25px);
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) * 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(20px);
   transition: var(--transition);
   white-space: nowrap;
+  min-height: 30px;
 }
 
-.score > div:hover {
+.score .score-item:hover {
   background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
+}
+
+.score .score-item span[role="img"] {
+  font-size: 0.9rem;
 }
 
 .board {
