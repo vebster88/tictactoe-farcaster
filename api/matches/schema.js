@@ -6,7 +6,7 @@ export const MATCH_STATUS = {
   TIMEOUT: "timeout"
 };
 
-export const TURN_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const TURN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export function createMatchSchema(data) {
   const now = new Date().toISOString();

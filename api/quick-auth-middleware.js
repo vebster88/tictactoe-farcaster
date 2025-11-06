@@ -50,19 +50,21 @@ async function resolveUser(fid) {
     }
     
     // Neynar API возвращает данные в формате:
-    // { username, display_name, ... }
+    // { username, display_name, pfp_url, ... }
     // Если Neynar недоступен, используем fallback
     const username = profile?.username || null;
     const displayName = profile?.display_name || 
                         profile?.displayName || 
                         username ||
                         null;
+    const pfpUrl = profile?.pfp_url || profile?.pfpUrl || profile?.pfp || null;
 
     return {
       fid,
       primaryAddress,
       username: username || `user_${fid}`,
       displayName: displayName || `User ${fid}`,
+      pfp_url: pfpUrl,
       bio: profile?.bio || '',
       verified: profile?.verified || false
     };

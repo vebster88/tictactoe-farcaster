@@ -1,6 +1,7 @@
 // Matches list component
 import { listPlayerMatches, acceptMatch } from "../farcaster/match-api.js";
 import { loadMatch } from "../game/match-state.js";
+import { getUserByFid } from "../farcaster/client.js";
 
 export async function loadMatchesList(container, playerFid) {
   if (!container || !playerFid) {
@@ -13,7 +14,7 @@ export async function loadMatchesList(container, playerFid) {
   try {
     const matches = await listPlayerMatches(playerFid);
     console.log('[MatchesList] Received matches:', matches.length, matches);
-    renderMatchesList(container, matches, playerFid);
+    await renderMatchesList(container, matches, playerFid);
   } catch (error) {
     const lang = localStorage.getItem("language") || "en";
     const errorMsg = lang === "ru" 
@@ -23,7 +24,7 @@ export async function loadMatchesList(container, playerFid) {
   }
 }
 
-function renderMatchesList(container, matches, playerFid) {
+async function renderMatchesList(container, matches, playerFid) {
   const lang = localStorage.getItem("language") || "en";
 
   if (!matches || matches.length === 0) {
@@ -34,10 +35,50 @@ function renderMatchesList(container, matches, playerFid) {
     return;
   }
 
+  // Загружаем информацию о противниках асинхронно
+  const opponentInfoMap = new Map();
+  const opponentFids = new Set();
+  
+  matches.forEach(match => {
+    const normalizedPlayerFid = typeof playerFid === 'string' ? parseInt(playerFid, 10) : playerFid;
+    const normalizedPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+    const normalizedPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === 'string' ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
+    const isPlayer1 = normalizedPlayer1Fid === normalizedPlayerFid;
+    const opponentFid = isPlayer1 ? normalizedPlayer2Fid : normalizedPlayer1Fid;
+    if (opponentFid) {
+      opponentFids.add(opponentFid);
+    }
+  });
+
+  // Загружаем информацию о всех противниках параллельно
+  await Promise.all(Array.from(opponentFids).map(async (fid) => {
+    try {
+      const userData = await getUserByFid(fid);
+      if (userData?.user) {
+        opponentInfoMap.set(fid, userData.user);
+      }
+    } catch (error) {
+      console.warn(`Failed to load user info for FID ${fid}:`, error);
+    }
+  }));
+
   const matchCards = matches.map(match => {
-    const isPlayer1 = match.player1Fid === playerFid;
-    const opponentFid = isPlayer1 ? match.player2Fid : match.player1Fid;
-    const opponentDisplay = opponentFid ? `FID: ${opponentFid}` : "Waiting for opponent...";
+    // Normalize FIDs for comparison (handle string vs number)
+    const normalizedPlayerFid = typeof playerFid === 'string' ? parseInt(playerFid, 10) : playerFid;
+    const normalizedPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+    const normalizedPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === 'string' ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
+    
+    const isPlayer1 = normalizedPlayer1Fid === normalizedPlayerFid;
+    const opponentFid = isPlayer1 ? normalizedPlayer2Fid : normalizedPlayer1Fid;
+    
+    // Получаем информацию о противнике
+    const opponentInfo = opponentFid ? opponentInfoMap.get(opponentFid) : null;
+    const opponentDisplay = opponentInfo 
+      ? (opponentInfo.username ? `@${opponentInfo.username}` : opponentInfo.display_name || `FID: ${opponentFid}`)
+      : opponentFid 
+        ? `FID: ${opponentFid}` 
+        : "Waiting for opponent...";
+    const opponentAvatar = opponentInfo?.pfp_url || opponentInfo?.pfpUrl || opponentInfo?.pfp || null;
     
     const statusText = match.status === "pending" 
       ? (lang === "ru" ? "Ожидание противника" : "Waiting for opponent")
@@ -65,8 +106,16 @@ function renderMatchesList(container, matches, playerFid) {
     
     if (match.status === "active") {
       matchCard.style.cursor = "pointer";
-      matchCard.onclick = () => {
-        window.dispatchEvent(new CustomEvent("match-loaded", { detail: { matchId: match.matchId } }));
+      matchCard.onclick = async () => {
+        try {
+          await loadMatch(match.matchId);
+          window.dispatchEvent(new CustomEvent("match-loaded", { detail: { matchId: match.matchId } }));
+          // НЕ закрываем модальное окно - пользователь может захотеть переключиться на другой матч
+        } catch (error) {
+          console.error("Failed to load match:", error);
+          const lang = localStorage.getItem("language") || "en";
+          alert(lang === "ru" ? `Ошибка загрузки матча: ${error.message}` : `Failed to load match: ${error.message}`);
+        }
       };
     }
 
@@ -88,18 +137,85 @@ function renderMatchesList(container, matches, playerFid) {
       }
     }
 
+    // Создаем элемент для ID матча: текст "Match ID:" и ID в одну строку с прокруткой
+    const matchIdContainer = document.createElement("div");
+    matchIdContainer.style.cssText = "font-size: 0.75rem; color: var(--muted); margin-top: 8px; display: flex; align-items: center; gap: 8px; overflow: hidden;";
+    matchIdContainer.innerHTML = `
+      <span style="white-space: nowrap; flex-shrink: 0;">${lang === "ru" ? "Match ID" : "Match ID"}:</span>
+      <div style="
+        font-family: monospace; 
+        font-size: 0.7rem; 
+        overflow-x: auto; 
+        overflow-y: hidden;
+        white-space: nowrap;
+        padding: 4px 8px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        cursor: grab;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+        flex: 1;
+        min-width: 0;
+      " 
+      class="match-id-scroll" 
+      onmousedown="this.style.cursor='grabbing';" 
+      onmouseup="this.style.cursor='grab';" 
+      onmouseleave="this.style.cursor='grab';"
+      title="${lang === "ru" ? "Прокрутите для просмотра полного ID" : "Scroll to view full ID"}">${match.matchId}</div>
+    `;
+    
+    // Добавляем стили для скроллбара
+    const style = document.createElement('style');
+    style.textContent = `
+      .match-id-scroll::-webkit-scrollbar {
+        height: 6px;
+      }
+      .match-id-scroll::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .match-id-scroll::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 3px;
+      }
+      .match-id-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.5);
+      }
+    `;
+    if (!document.head.querySelector('#match-id-scroll-styles')) {
+      style.id = 'match-id-scroll-styles';
+      document.head.appendChild(style);
+    }
+
+    // Используем hero.jpg как заглушку для аватара в локальном тестировании
+    const avatarSrc = opponentAvatar || "/assets/images/hero.jpg";
+    
     matchCard.innerHTML = `
       <div style="margin-bottom: 8px;">
-        <div style="font-weight: 600; margin-bottom: 4px;">${lang === "ru" ? "Противник" : "Opponent"}: ${opponentDisplay}</div>
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem; color: var(--muted);">
-          <span>${lang === "ru" ? "Статус" : "Status"}: ${statusText}</span>
-          <span style="font-size: 0.75rem;">Match: ${match.matchId.slice(0, 8)}...</span>
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 4px;">
+          <img src="${avatarSrc}" alt="${opponentDisplay}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);" onerror="this.src='/assets/images/hero.jpg';" />
+          <span>${lang === "ru" ? "Противник" : "Opponent"}: ${opponentDisplay}</span>
         </div>
+        <div style="font-size: 0.875rem; color: var(--muted);">
+          <span>${lang === "ru" ? "Статус" : "Status"}: ${statusText}</span>
+        </div>
+        ${match.status === "active" ? `<button class="btn continue-match-btn" data-match-id="${match.matchId}" style="margin-top: 8px; display: block;">${lang === "ru" ? "Продолжить" : "Continue"}</button>` : ""}
         ${timeDisplay ? `<div style="font-size: 0.875rem; color: ${isExpired ? 'var(--lose)' : 'var(--fg)'}; margin-top: 4px;">${lang === "ru" ? "Время" : "Time"}: ${timeDisplay}</div>` : ""}
       </div>
-      ${match.status === "pending" && !isPlayer1 ? `<button class="btn accept-match-btn" data-match-id="${match.matchId}" style="margin-top: 8px;">${lang === "ru" ? "Принять вызов" : "Accept Challenge"}</button>` : ""}
-      ${match.status === "active" ? `<button class="btn continue-match-btn" data-match-id="${match.matchId}" style="margin-top: 8px;">${lang === "ru" ? "Продолжить" : "Continue"}</button>` : ""}
     `;
+    
+    // Добавляем контейнер с Match ID сначала (перед Accept Challenge)
+    matchCard.appendChild(matchIdContainer);
+    
+    // Добавляем кнопку Accept Challenge после Match ID
+    if (match.status === "pending" && !isPlayer1 && !normalizedPlayer2Fid) {
+      const acceptBtn = document.createElement("button");
+      acceptBtn.className = "btn accept-match-btn";
+      acceptBtn.dataset.matchId = match.matchId;
+      acceptBtn.textContent = lang === "ru" ? "Принять вызов" : "Accept Challenge";
+      acceptBtn.style.cssText = "margin-top: 8px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-weight: 600; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); animation: pulse 2s infinite;";
+      matchCard.appendChild(acceptBtn);
+    }
 
     return matchCard;
   });
@@ -125,18 +241,36 @@ function renderMatchesList(container, matches, playerFid) {
         const modal = document.getElementById("matches-modal");
         if (modal) modal.setAttribute("aria-hidden", "true");
       } catch (error) {
-        alert(lang === "ru" ? `Ошибка: ${error.message}` : `Error: ${error.message}`);
+        let errorMsg = error.message || (lang === "ru" ? "Ошибка принятия матча" : "Error accepting match");
+        
+        // Показываем понятное сообщение об ошибке
+        if (errorMsg.includes("2 active matches")) {
+          errorMsg = lang === "ru" 
+            ? "У вас уже есть 2 активных матча. Завершите один из них, чтобы принять новый."
+            : "You already have 2 active matches. Finish one to accept a new one.";
+        }
+        
+        alert(errorMsg);
       }
     });
   });
 
+  // Обработчики для кнопок Continue (если они есть)
   container.querySelectorAll(".continue-match-btn").forEach(btn => {
+    const matchId = btn.dataset.matchId;
+    btn.style.display = "block"; // Показываем кнопку
     btn.addEventListener("click", async () => {
-      const matchId = btn.dataset.matchId;
-      await loadMatch(matchId);
-      window.dispatchEvent(new CustomEvent("match-loaded", { detail: { matchId } }));
-      const modal = document.getElementById("matches-modal");
-      if (modal) modal.setAttribute("aria-hidden", "true");
+      try {
+        await loadMatch(matchId);
+        window.dispatchEvent(new CustomEvent("match-loaded", { detail: { matchId } }));
+        // НЕ закрываем модальное окно - пользователь может захотеть переключиться на другой матч
+        // const modal = document.getElementById("matches-modal");
+        // if (modal) modal.setAttribute("aria-hidden", "true");
+      } catch (error) {
+        console.error("Failed to load match:", error);
+        const lang = localStorage.getItem("language") || "en";
+        alert(lang === "ru" ? `Ошибка загрузки матча: ${error.message}` : `Failed to load match: ${error.message}`);
+      }
     });
   });
 }

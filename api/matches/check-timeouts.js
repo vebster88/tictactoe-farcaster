@@ -11,15 +11,21 @@ async function checkMatchTimeout(match) {
   const timeSinceLastMove = now - lastMoveAt;
 
   if (timeSinceLastMove >= match.turnTimeout) {
-    // Timeout occurred
+    // Timeout occurred - player who didn't make a move loses
+    // The winner is the opponent (the one whose turn it is NOT)
     const { saveMatch } = await import("./kv-helper.js");
+    
+    // Determine winner: if it's X's turn and timeout, then O wins (and vice versa)
+    const currentTurnSymbol = match.gameState.next;
+    const winnerSymbol = currentTurnSymbol === "X" ? "O" : "X";
+    
     const updatedMatch = await saveMatch({
       ...match,
-      status: MATCH_STATUS.TIMEOUT,
+      status: MATCH_STATUS.FINISHED, // Use FINISHED instead of TIMEOUT for consistency
       gameState: {
         ...match.gameState,
         finished: true,
-        winner: match.gameState.next === "X" ? "O" : "X" // Opponent wins by timeout
+        winner: winnerSymbol // Opponent wins by timeout
       },
       updatedAt: now.toISOString()
     });

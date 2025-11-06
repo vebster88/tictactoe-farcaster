@@ -168,6 +168,23 @@ h1 .btn-settings-inline {
   overflow: visible;
 }
 
+.user-avatar {
+  position: absolute;
+  /* Позиционирование справа от кнопки Sign Out */
+  left: calc(100% + 8px);
+  /* Позиционирование по центру кнопки вертикально */
+  top: 50%;
+  margin-top: -17px; /* Половина высоты аватарки (34px) */
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border, rgba(255, 255, 255, 0.1));
+  pointer-events: none;
+  z-index: 2;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+}
+
 .user-label {
   position: absolute;
   /* Позиционирование относительно auth-wrapper (через auth-group) - ниже кнопки */
@@ -536,6 +553,12 @@ h1 .btn-settings-inline {
     flex-wrap: wrap;
   }
   
+  .user-avatar {
+    width: 34px;
+    height: 34px;
+    margin-top: -17px; /* Половина высоты аватарки (34px) */
+  }
+  
   .user-label {
     font-size: 0.7rem;
     /* Убираем margin-top, так как позиционирование через top */
@@ -660,4 +683,15 @@ h1 .btn-settings-inline {
 
 .timer-display.warning .timer-value {
   color: #f59e0b;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.02);
+  }
 }

@@ -35,10 +35,17 @@ export default async function handler(req, res) {
     }
 
     // Check if match already exists
-    const { getMatch } = await import("./kv-helper.js");
+    const { getMatch, getPlayerMatches } = await import("./kv-helper.js");
     const existingMatch = await getMatch(matchId);
     if (existingMatch) {
       return res.status(409).json({ error: "Match already exists" });
+    }
+
+    // Check if player already has 2 active matches
+    const playerMatches = await getPlayerMatches(normalizedPlayer1Fid);
+    const activeMatches = playerMatches.filter(m => m.status === MATCH_STATUS.ACTIVE);
+    if (activeMatches.length >= 2) {
+      return res.status(400).json({ error: "You can only have 2 active matches at a time" });
     }
 
     const match = await saveMatch({
