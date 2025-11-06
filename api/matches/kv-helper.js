@@ -1,7 +1,8 @@
-import { createMatchSchema, validateMatchSchema } from "./schema.js";
+import { createMatchSchema, validateMatchSchema, MATCH_STATUS } from "./schema.js";
 
 const MATCH_PREFIX = "match:";
 const PLAYER_MATCHES_PREFIX = "player_matches:";
+const PENDING_MATCHES_KEY = `${MATCH_PREFIX}pending`;
 
 // Check if KV is available
 function isKVAvailable() {
@@ -82,6 +83,7 @@ export async function saveMatch(match) {
 
     if (useMemoryStore) {
       memoryStore.set(key, matchData);
+      console.log(`[saveMatch] Saved match ${match.matchId} to memoryStore (status: ${matchData.status}, player1Fid: ${matchData.player1Fid}, player2Fid: ${matchData.player2Fid})`);
       
       // Also index by players (normalize FID to number)
       if (match.player1Fid) {
@@ -103,6 +105,23 @@ export async function saveMatch(match) {
         }
       }
       
+      // Index pending matches (for finding available matches)
+      if (matchData.status === MATCH_STATUS.PENDING && !matchData.player2Fid) {
+        if (!playerMatchesStore.has(PENDING_MATCHES_KEY)) {
+          playerMatchesStore.set(PENDING_MATCHES_KEY, new Set());
+          console.log(`[saveMatch] Created pending matches index`);
+        }
+        playerMatchesStore.get(PENDING_MATCHES_KEY).add(match.matchId);
+        console.log(`[saveMatch] Added match ${match.matchId} to pending index (player1Fid: ${matchData.player1Fid})`);
+      } else {
+        // Remove from pending index if no longer pending
+        const pendingSet = playerMatchesStore.get(PENDING_MATCHES_KEY);
+        if (pendingSet) {
+          pendingSet.delete(match.matchId);
+          console.log(`[saveMatch] Removed match ${match.matchId} from pending index (status: ${matchData.status}, player2Fid: ${matchData.player2Fid})`);
+        }
+      }
+      
       return matchData;
     }
 
@@ -120,6 +139,14 @@ export async function saveMatch(match) {
       if (!isNaN(normalizedFid2)) {
         await kv.sadd(`${PLAYER_MATCHES_PREFIX}${normalizedFid2}`, match.matchId);
       }
+    }
+
+    // Index pending matches (for finding available matches)
+    if (matchData.status === MATCH_STATUS.PENDING && !matchData.player2Fid) {
+      await kv.sadd(PENDING_MATCHES_KEY, match.matchId);
+    } else {
+      // Remove from pending index if no longer pending
+      await kv.srem(PENDING_MATCHES_KEY, match.matchId);
     }
 
     return matchData;
@@ -151,6 +178,20 @@ export async function saveMatch(match) {
             playerMatchesStore.set(normalizedFid2, new Set());
           }
           playerMatchesStore.get(normalizedFid2).add(match.matchId);
+        }
+      }
+      
+      // Index pending matches (for finding available matches)
+      if (matchData.status === MATCH_STATUS.PENDING && !matchData.player2Fid) {
+        if (!playerMatchesStore.has(PENDING_MATCHES_KEY)) {
+          playerMatchesStore.set(PENDING_MATCHES_KEY, new Set());
+        }
+        playerMatchesStore.get(PENDING_MATCHES_KEY).add(match.matchId);
+      } else {
+        // Remove from pending index if no longer pending
+        const pendingSet = playerMatchesStore.get(PENDING_MATCHES_KEY);
+        if (pendingSet) {
+          pendingSet.delete(match.matchId);
         }
       }
       
@@ -274,5 +315,175 @@ export async function getPlayerMatches(fid) {
       return matches;
     }
     throw new Error(`Failed to get player matches: ${error.message}`);
+  }
+}
+
+// Get all finished matches (for leaderboard)
+export async function getAllFinishedMatches() {
+  await initKV();
+  
+  try {
+    const allMatches = [];
+    
+    if (useMemoryStore) {
+      // Scan all matches in memory store
+      for (const [key, match] of memoryStore.entries()) {
+        if (key.startsWith(MATCH_PREFIX)) {
+          // Проверяем что матч завершен и имеет обоих игроков (PVP)
+          if (match.status === MATCH_STATUS.FINISHED && 
+              match.gameState?.finished && 
+              match.player1Fid && 
+              match.player2Fid) {
+            allMatches.push(match);
+          }
+        }
+      }
+      console.log(`[getAllFinishedMatches] Found ${allMatches.length} finished PVP matches in memory store`);
+    } else {
+      // For KV store, we need to scan all matches
+      // This is not efficient but works for now
+      try {
+        // Get all player match keys
+        const playerKeys = await kv.keys(`${PLAYER_MATCHES_PREFIX}*`);
+        const matchIdsSet = new Set();
+        
+        // Collect all unique match IDs
+        for (const playerKey of playerKeys) {
+          const matchIds = await kv.smembers(playerKey) || [];
+          matchIds.forEach(id => matchIdsSet.add(id));
+        }
+        
+        // Get all matches and filter finished ones
+        for (const matchId of matchIdsSet) {
+          const match = await getMatch(matchId);
+          if (match && 
+              match.status === MATCH_STATUS.FINISHED && 
+              match.gameState?.finished && 
+              match.player1Fid && 
+              match.player2Fid) {
+            allMatches.push(match);
+          }
+        }
+        
+        console.log(`[getAllFinishedMatches] Found ${allMatches.length} finished PVP matches in KV store`);
+      } catch (error) {
+        console.warn('[getAllFinishedMatches] Error scanning KV store:', error);
+      }
+    }
+    
+    return allMatches;
+  } catch (error) {
+    console.error('[getAllFinishedMatches] Error:', error);
+    return [];
+  }
+}
+
+// Get all pending matches available for acceptance (where player2Fid is null)
+export async function getAvailableMatches(excludeFid = null) {
+  await initKV();
+  
+  try {
+    // Normalize excludeFid to number for comparison
+    const normalizedExcludeFid = excludeFid !== null ? (typeof excludeFid === 'string' ? parseInt(excludeFid, 10) : excludeFid) : null;
+    
+    console.log(`[getAvailableMatches] Looking for available matches, excluding FID: ${normalizedExcludeFid}`);
+    
+    const allMatches = [];
+    
+    if (useMemoryStore) {
+      // Use pending matches index for faster lookup
+      const pendingSet = playerMatchesStore.get(PENDING_MATCHES_KEY);
+      if (pendingSet && pendingSet.size > 0) {
+        console.log(`[getAvailableMatches] Using pending index, found ${pendingSet.size} pending match IDs`);
+        
+        for (const matchId of pendingSet) {
+          const key = `${MATCH_PREFIX}${matchId}`;
+          const match = memoryStore.get(key);
+          
+          if (match) {
+            // Normalize FIDs for comparison
+            const normalizedPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+            
+            // Double-check: match should be pending and have no player2
+            if (match.status === MATCH_STATUS.PENDING && !match.player2Fid) {
+              // Exclude matches where excludeFid is player1 (user can't accept their own matches)
+              if (normalizedExcludeFid === null || normalizedPlayer1Fid !== normalizedExcludeFid) {
+                allMatches.push(match);
+                console.log(`[getAvailableMatches] Found available match: ${match.matchId}, player1Fid: ${normalizedPlayer1Fid}`);
+              } else {
+                console.log(`[getAvailableMatches] Excluding own match: ${match.matchId}, player1Fid: ${normalizedPlayer1Fid}`);
+              }
+            } else {
+              console.log(`[getAvailableMatches] Match ${matchId} in pending index but status is ${match.status}, player2Fid: ${match.player2Fid}`);
+            }
+          } else {
+            console.warn(`[getAvailableMatches] Match ${matchId} in pending index but not found in memoryStore`);
+          }
+        }
+        
+        console.log(`[getAvailableMatches] Found ${allMatches.length} available matches from index`);
+      } else {
+        // Fallback: scan all matches if index is empty
+        console.log(`[getAvailableMatches] Pending index is empty, scanning all matches`);
+        let totalScanned = 0;
+        let pendingFound = 0;
+        
+        for (const [key, match] of memoryStore.entries()) {
+          if (key.startsWith(MATCH_PREFIX)) {
+            totalScanned++;
+            
+            // Normalize FIDs for comparison
+            const normalizedPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+            
+            if (match.status === MATCH_STATUS.PENDING && !match.player2Fid) {
+              pendingFound++;
+              
+              // Exclude matches where excludeFid is player1 (user can't accept their own matches)
+              if (normalizedExcludeFid === null || normalizedPlayer1Fid !== normalizedExcludeFid) {
+                allMatches.push(match);
+                console.log(`[getAvailableMatches] Found available match (scan): ${match.matchId}, player1Fid: ${normalizedPlayer1Fid}`);
+              }
+            }
+          }
+        }
+        
+        console.log(`[getAvailableMatches] Scanned ${totalScanned} matches, found ${pendingFound} pending, ${allMatches.length} available`);
+      }
+    } else {
+      // For KV store, we need to scan all matches
+      // This is less efficient, but necessary to find pending matches
+      // We'll use a pattern to get all match keys
+      // Note: This requires KV to support pattern matching or we need to maintain a separate index
+      // For now, we'll use a workaround: store pending matches in a separate set
+      try {
+        // Get all match IDs from pending matches index
+        const pendingMatchIds = await kv.smembers(PENDING_MATCHES_KEY) || [];
+        console.log(`[getAvailableMatches] Found ${pendingMatchIds.length} pending match IDs in index`);
+        
+        for (const matchId of pendingMatchIds) {
+          const match = await getMatch(matchId);
+          if (match) {
+            // Normalize FIDs for comparison
+            const normalizedPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+            
+            if (match.status === MATCH_STATUS.PENDING && 
+                !match.player2Fid && 
+                (normalizedExcludeFid === null || normalizedPlayer1Fid !== normalizedExcludeFid)) {
+              allMatches.push(match);
+              console.log(`[getAvailableMatches] Found available match: ${match.matchId}, player1Fid: ${normalizedPlayer1Fid}`);
+            }
+          }
+        }
+      } catch (error) {
+        // If pending index doesn't exist, return empty array
+        console.warn('[getAvailableMatches] Could not use pending index:', error);
+      }
+    }
+    
+    console.log(`[getAvailableMatches] Returning ${allMatches.length} available matches`);
+    return allMatches;
+  } catch (error) {
+    console.error('[getAvailableMatches] Error:', error);
+    return [];
   }
 }

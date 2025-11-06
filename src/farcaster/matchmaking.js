@@ -22,7 +22,7 @@ export function buildInvitePayload(session, opts = {}) {
 export async function sendInvite(session, opts = {}) {
   const payload = buildInvitePayload(session, opts);
   
-  // Create match in backend API
+  // Create match in backend API (только один раз)
   let matchCreated = false;
   try {
     const player1Fid = session?.farcaster?.fid || session?.fid;
@@ -35,12 +35,26 @@ export async function sendInvite(session, opts = {}) {
       matchCreated = true;
     }
   } catch (error) {
-    // Continue even if match creation fails - invite can still be published
+    // If match creation fails due to limit, throw error instead of continuing
+    if (error.message?.includes("2 active matches")) {
+      throw error;
+    }
+    // Если матч уже существует, это не ошибка
+    if (error.message?.includes("already exists")) {
+      matchCreated = true; // Матч уже создан, считаем что все ок
+      console.log("Match already exists, continuing...");
+    } else {
+      // Continue even if match creation fails for other reasons - invite can still be published
     console.warn("Failed to create match in API:", error);
   }
+  }
 
-  // Publish invite to Farcaster
-  const res = await publishInvite(payload);
+  // Publish invite to Farcaster (только если матч создан или уже существует)
+  // Для приватного матча publishInvite вызывается отдельно с кастомным текстом
+  let res = null;
+  if (!opts.skipPublish) {
+    res = await publishInvite(payload);
+  }
   
   return { payload, res, matchCreated };
 }

@@ -26,12 +26,32 @@ function isMock() {
 // Получить профиль пользователя по Ethereum адресу
 export async function getUserByAddress(address) {
   if (isMock()) {
+    // Генерируем уникальные данные на основе адреса кошелька
+    // Используем хеш адреса для детерминированной генерации
+    const addressHash = address.toLowerCase().split('').reduce((hash, char) => {
+      return ((hash << 5) - hash) + char.charCodeAt(0);
+    }, 0);
+    
+    // Генерируем FID на основе адреса (от 10000 до 99999)
+    const fid = 10000 + Math.abs(addressHash % 90000);
+    
+    // Генерируем уникальное имя пользователя
+    const usernameSuffix = Math.abs(addressHash % 10000);
+    const username = `user${usernameSuffix}`;
+    
+    // Генерируем display name
+    const displayName = `User ${usernameSuffix}`;
+    
+    // В тестовом режиме используем hero.jpg как аватарку
+    const pfpUrl = "/assets/images/hero.jpg";
+    
     return {
       schemaVersion: "1.0.0",
       user: {
-        fid: 12345,
-        username: "vebster88",
-        display_name: "Vebster88",
+        fid: fid,
+        username: username,
+        display_name: displayName,
+        pfp_url: pfpUrl,
         verified_addresses: { eth_addresses: [address] }
       }
     };
@@ -57,6 +77,88 @@ export async function getUserByAddress(address) {
   }
 }
 
+// Получить профиль пользователя по FID (для отображения информации о противнике)
+export async function getUserByFid(fid) {
+  if (isMock()) {
+    // В mock режиме генерируем данные на основе FID
+    // Это не точное соответствие, но для тестирования достаточно
+    const fidHash = Math.abs(fid) % 10000;
+    // В тестовом режиме используем hero.jpg как аватарку
+    const pfpUrl = "/assets/images/hero.jpg";
+    return {
+      schemaVersion: "1.0.0",
+      user: {
+        fid: fid,
+        username: `user${fidHash}`,
+        display_name: `User ${fidHash}`,
+        pfp_url: pfpUrl
+      }
+    };
+  }
+
+  try {
+    const response = await axios.get(`${NEYNAR_BASE_URL}/farcaster/user/bulk`, {
+      params: { fids: fid },
+      headers: { 'api_key': NEYNAR_API_KEY }
+    });
+    
+    if (response.data?.users && response.data.users.length > 0) {
+      return {
+        schemaVersion: "1.0.0",
+        user: response.data.users[0]
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error fetching user by FID:", error);
+    return null;
+  }
+}
+
+// Поиск пользователя по username
+export async function searchUserByUsername(username) {
+  if (isMock()) {
+    // В mock режиме генерируем данные на основе username
+    const usernameHash = username.toLowerCase().split('').reduce((hash, char) => {
+      return ((hash << 5) - hash) + char.charCodeAt(0);
+    }, 0);
+    const fid = 10000 + Math.abs(usernameHash % 90000);
+    return {
+      schemaVersion: "1.0.0",
+      user: {
+        fid: fid,
+        username: username.toLowerCase(),
+        display_name: username.charAt(0).toUpperCase() + username.slice(1),
+        pfp_url: "/assets/images/hero.jpg"
+      }
+    };
+  }
+
+  try {
+    // Neynar API endpoint для поиска пользователя по username
+    const response = await axios.get(`${NEYNAR_BASE_URL}/farcaster/user/by_username`, {
+      params: { username: username.replace('@', '') }, // Убираем @ если есть
+      headers: { 'api_key': NEYNAR_API_KEY }
+    });
+    
+    if (response.data?.result?.user) {
+      return {
+        schemaVersion: "1.0.0",
+        user: response.data.result.user
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error searching user by username:", error);
+    if (error.response?.status === 404) {
+      return null; // Пользователь не найден
+    }
+    throw error;
+  }
+}
+
 // Публикация инвайта
 export async function publishInvite(invitePayload) {
   if (isMock()) {
@@ -68,13 +170,28 @@ export async function publishInvite(invitePayload) {
   }
 
   try {
-    const response = await axios.post(`${NEYNAR_BASE_URL}/farcaster/cast`, {
+    // Формируем текст cast
+    let castText = `🎮 Приглашение в игру Krestiki Noliki!\n\nMatch ID: ${invitePayload.matchId}\nПравила: ${JSON.stringify(invitePayload.rules)}\nВидимость: ${invitePayload.visibility}`;
+    
+    // Если есть кастомный текст, используем его
+    if (invitePayload.text) {
+      castText = invitePayload.text;
+    }
+    
+    const castData = {
       signer_uuid: NEYNAR_SIGNER_UUID,
-      text: `🎮 Приглашение в игру Krestiki Noliki!\n\nMatch ID: ${invitePayload.matchId}\nПравила: ${JSON.stringify(invitePayload.rules)}\nВидимость: ${invitePayload.visibility}`,
+      text: castText,
       embeds: [{
         url: window.location.origin
       }]
-    }, {
+    };
+    
+    // Если есть упоминания, добавляем их
+    if (invitePayload.mentions && Array.isArray(invitePayload.mentions)) {
+      castData.mentions = invitePayload.mentions;
+    }
+    
+    const response = await axios.post(`${NEYNAR_BASE_URL}/farcaster/cast`, castData, {
       headers: { 
         'api_key': NEYNAR_API_KEY,
         'Content-Type': 'application/json'

@@ -4,11 +4,12 @@ import { pickRandomMove } from "./ai/random.js";
 import { bestMoveMinimax } from "./ai/minimax.js";
 import { getSession, signInWithWallet, signOut } from "./farcaster/auth.js";
 import { sendInvite } from "./farcaster/matchmaking.js";
-import { listThreadReplies, publishMatchResult } from "./farcaster/client.js";
+import { listThreadReplies, publishMatchResult, getUserByFid } from "./farcaster/client.js";
 import { getMatch, acceptMatch, sendMove, listPlayerMatches } from "./farcaster/match-api.js";
 import { setCurrentMatch, loadMatch, clearCurrentMatch, handleMove as handleMatchMove, isMyTurn, getMySymbol, getOpponentFid, startSyncing, stopSyncing, getCurrentMatch } from "./game/match-state.js";
 import { TurnTimer } from "./ui/Timer.js";
 import { loadMatchesList } from "./ui/MatchesList.js";
+import { loadLeaderboard, renderLeaderboard } from "./ui/Leaderboard.js";
 import { createSignedKey } from "./farcaster/signer.js";
 import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
@@ -362,8 +363,14 @@ const publishBtn = document.getElementById("btn-publish-result");
 const matchesBtn = document.getElementById("btn-matches");
 const matchesModal = document.getElementById("matches-modal");
 const matchesList = document.getElementById("matches-list");
+const leaderboardBtn = document.getElementById("btn-leaderboard");
+const leaderboardModal = document.getElementById("leaderboard-modal");
+const leaderboardList = document.getElementById("leaderboard-list");
 const timerContainer = document.getElementById("timer-container");
 const cells = [...boardEl.querySelectorAll(".cell")];
+const matchSwitcher = document.getElementById("match-switcher");
+const matchSwitcherPrev = document.getElementById("match-switcher-prev");
+const matchSwitcherNext = document.getElementById("match-switcher-next");
 
 // Settings modal elements
 const settingsModal = document.getElementById("settings-modal");
@@ -372,7 +379,7 @@ const settingsMode = document.getElementById("settings-mode");
 const modalCloseBtns = document.querySelectorAll(".modal-close");
 
 let state = createInitialState();
-let scores = { X: 0, O: 0, draw: 0 };
+let scores = { wins: 0, losses: 0, draws: 0 };
 let mode = settingsMode?.value || "pve-easy";
 let botThinking = false;
 
@@ -405,7 +412,7 @@ function showToast(message, type = "info") {
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
   toast.style.cssText = `
-    background: ${type === "error" ? "rgba(239, 68, 68, 0.9)" : type === "success" ? "rgba(16, 185, 129, 0.9)" : type === "warning" ? "rgba(245, 158, 11, 0.9)" : "rgba(59, 130, 246, 0.9)"};
+    background: ${type === "error" ? "rgba(239, 68, 68, 0.9)" : type === "success" ? "rgba(16, 185, 129, 0.9)" : type === "warning" ? "rgba(245, 158, 11, 0.9)" : type === "draw" ? "rgba(128, 128, 128, 0.9)" : "rgba(59, 130, 246, 0.9)"};
     color: white;
     padding: 12px 16px;
     border-radius: var(--radius);
@@ -444,14 +451,12 @@ function render() {
     showStatus(t("turn", { ru: `Ход: ${state.next}`, en: `Turn: ${state.next}` }));
     publishBtn?.setAttribute("disabled", "true");
   }
-  document.getElementById("score-x").textContent = String(scores.X);
-  document.getElementById("score-o").textContent = String(scores.O);
-  document.getElementById("score-draw").textContent = String(scores.draw);
+  updateScores();
 }
 
 function resetBoard(keepScore = false) {
   state = createInitialState();
-  if (!keepScore) scores = { X: 0, O: 0, draw: 0 };
+  if (!keepScore) scores = { wins: 0, losses: 0, draws: 0 };
   botThinking = false;
   render();
 }
@@ -472,7 +477,15 @@ function maybeBotMove() {
     if (res.ok) {
       state = res.state;
       if (state.finished) {
-        if (state.winner) scores[state.winner] += 1; else scores.draw += 1;
+        // В локальных играх игрок всегда играет за X, бот за O
+        if (state.winner === "X") {
+          scores.wins += 1;
+        } else if (state.winner === "O") {
+          scores.losses += 1;
+        } else {
+          scores.draws += 1;
+        }
+        updateScores();
       }
       render();
     }
@@ -485,7 +498,15 @@ function handleMove(idx) {
   if (!res.ok) return;
   state = res.state;
   if (state.finished) {
-    if (state.winner) scores[state.winner] += 1; else scores.draw += 1;
+    // В локальных играх игрок всегда играет за X, бот за O
+    if (state.winner === "X") {
+      scores.wins += 1;
+    } else if (state.winner === "O") {
+      scores.losses += 1;
+    } else {
+      scores.draws += 1;
+    }
+    updateScores();
     render();
     return;
   }
@@ -573,6 +594,13 @@ boardEl.addEventListener("click", async (e) => {
   const currentMatch = getCurrentMatch();
   if (mode === "pvp-farcaster" && currentMatch.matchState) {
     // PvP match - use API
+    // Проверяем, не завершен ли матч
+    if (currentMatch.matchState.gameState?.finished) {
+      const lang = getLanguage();
+      showToast(lang === "ru" ? "Матч уже завершен" : "Match is already finished", "warning");
+      return;
+    }
+    
     if (!isMyTurn()) {
       const lang = getLanguage();
       showToast(lang === "ru" ? "Не ваш ход" : "Not your turn", "warning");
@@ -586,24 +614,107 @@ boardEl.addEventListener("click", async (e) => {
     try {
       const match = await handleMatchMove(idx);
       state = match.gameState;
+      render();
+      
+      // Показываем сообщение о сделанном ходе
+      const lang = getLanguage();
+      showToast(
+        lang === "ru" ? "Вы сделали ход" : "You made a move",
+        "success"
+      );
+      
       if (state.finished) {
-        if (state.winner) scores[state.winner] += 1; else scores.draw += 1;
+        // В PvP матчах определяем, выиграл ли текущий игрок
+        const currentMatch = getCurrentMatch();
+        const isWinner = match.player1Symbol === state.winner && match.player1Fid === currentMatch.playerFid ||
+                         match.player2Symbol === state.winner && match.player2Fid === currentMatch.playerFid;
+        
+        if (state.winner && isWinner) {
+          scores.wins += 1;
+        } else if (state.winner && !isWinner) {
+          scores.losses += 1;
+        } else {
+          scores.draws += 1;
+        }
+        updateScores();
         stopSyncing();
-        const lang = getLanguage();
-        const isWinner = (match.player1Symbol === state.winner && match.player1Fid === currentMatch.playerFid) ||
-                         (match.player2Symbol === state.winner && match.player2Fid === currentMatch.playerFid);
-        showToast(
-          isWinner 
-            ? (lang === "ru" ? "🎉 Вы победили!" : "🎉 You won!")
-            : (lang === "ru" ? "😔 Вы проиграли" : "😔 You lost"),
-          isWinner ? "success" : "error"
-        );
+        
+        // Проверяем ничью
+        if (!state.winner) {
+          // Ничья - показываем правильное сообщение
+          showToast(
+            lang === "ru" ? "🤝 Ничья!" : "🤝 Here is a draw!",
+            "draw"
+          );
+        } else {
+          const isWinner = (match.player1Symbol === state.winner && match.player1Fid === currentMatch.playerFid) ||
+                           (match.player2Symbol === state.winner && match.player2Fid === currentMatch.playerFid);
+          showToast(
+            isWinner 
+              ? (lang === "ru" ? "🎉 Вы победили!" : "🎉 You won!")
+              : (lang === "ru" ? "😔 Вы проиграли" : "😔 You lost"),
+            isWinner ? "success" : "error"
+          );
+        }
+        
+        // Автоматически переключаемся на другой активный матч, если он есть
+        const storedSwitched = localStorage.getItem(`match_switched_${currentMatch.matchId}`);
+        if (!storedSwitched) {
+          (async () => {
+            try {
+              const session = getSession();
+              const playerFid = session?.farcaster?.fid || session?.fid;
+              if (playerFid && mode === "pvp-farcaster") {
+                const matches = await listPlayerMatches(playerFid);
+                const activeMatches = matches.filter(m => 
+                  m.status === "active" && 
+                  !m.gameState.finished && 
+                  m.matchId !== currentMatch.matchId
+                );
+                
+                if (activeMatches.length > 0) {
+                  const nextMatch = activeMatches[0];
+                  localStorage.setItem(`match_switched_${currentMatch.matchId}`, "true");
+                  
+                  setTimeout(async () => {
+                    try {
+                      await loadMatch(nextMatch.matchId);
+                      mode = "pvp-farcaster";
+                      if (settingsMode) settingsMode.value = "pvp-farcaster";
+                      updateUIForMode();
+                      updateMatchUI();
+                      const lang = getLanguage();
+                      showToast(
+                        lang === "ru" ? "Переключено на другой активный матч" : "Switched to another active match",
+                        "info"
+                      );
+                    } catch (error) {
+                      console.error("Failed to load next match:", error);
+                      localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
+                    }
+                  }, 2000);
+                }
+              }
+            } catch (error) {
+              console.warn("Failed to auto-switch to next match:", error);
+              localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
+            }
+          })();
+        }
       }
       render();
+      
+      // НЕ обновляем lastSyncBoard сразу после нашего хода
+      // Это позволит следующей синхронизации правильно определить ход противника
+      // Обновим только lastSyncTurn, чтобы отслеживать прогресс
+      lastSyncTurn = state.turn;
+      
       updateMatchUI();
     } catch (error) {
       const lang = getLanguage();
-      showToast(lang === "ru" ? `Ошибка хода: ${error.message}` : `Move error: ${error.message}`, "error");
+      const errorMessage = error?.message || error?.toString() || (lang === "ru" ? "Неизвестная ошибка" : "Unknown error");
+      showToast(lang === "ru" ? `Ошибка хода: ${errorMessage}` : `Move error: ${errorMessage}`, "error");
+      console.error("Move error:", error);
     } finally {
       isMakingMove = false;
       btn.disabled = false;
@@ -736,6 +847,16 @@ function refreshUserLabel() {
   updateUIForMode();
 }
 
+function updateScores() {
+  const winsEl = document.getElementById("score-wins");
+  const lossesEl = document.getElementById("score-losses");
+  const drawsEl = document.getElementById("score-draws");
+
+  if (winsEl) winsEl.textContent = String(scores.wins);
+  if (lossesEl) lossesEl.textContent = String(scores.losses);
+  if (drawsEl) drawsEl.textContent = String(scores.draws);
+}
+
 // Matches button handler
 matchesBtn?.addEventListener("click", async () => {
   if (matchesModal && matchesList) {
@@ -760,6 +881,164 @@ if (matchesModal) {
   });
 }
 
+// Leaderboard button handler
+if (leaderboardBtn) {
+  leaderboardBtn.addEventListener("click", async () => {
+    if (leaderboardModal) {
+      leaderboardModal.setAttribute("aria-hidden", "false");
+      
+      // Load and render leaderboard
+      if (leaderboardList) {
+        leaderboardList.innerHTML = `<div style="text-align: center; padding: 24px; color: var(--muted);">${getLanguage() === "ru" ? "Загрузка..." : "Loading..."}</div>`;
+        
+        try {
+          const leaderboard = await loadLeaderboard();
+          renderLeaderboard(leaderboard, leaderboardList);
+        } catch (error) {
+          console.error("Error loading leaderboard:", error);
+          const lang = getLanguage();
+          leaderboardList.innerHTML = `<div style="text-align: center; padding: 24px; color: var(--lose);">${lang === "ru" ? "Ошибка загрузки таблицы лидеров" : "Error loading leaderboard"}</div>`;
+        }
+      }
+    }
+  });
+}
+
+// Close leaderboard modal
+if (leaderboardModal) {
+  leaderboardModal.addEventListener("click", (e) => {
+    if (e.target === leaderboardModal) {
+      leaderboardModal.setAttribute("aria-hidden", "true");
+    }
+  });
+}
+
+// Match switcher handlers
+if (matchSwitcherPrev) {
+  matchSwitcherPrev.addEventListener("click", async () => {
+    await switchToPreviousMatch();
+  });
+}
+
+if (matchSwitcherNext) {
+  matchSwitcherNext.addEventListener("click", async () => {
+    await switchToNextMatch();
+  });
+}
+
+// Показываем tooltip при наведении на переключатель
+if (matchSwitcher) {
+  let tooltipTimeout = null;
+  
+  // Создаем tooltip в body, если его еще нет
+  let tooltipElement = document.getElementById("match-switcher-tooltip");
+  if (!tooltipElement) {
+    tooltipElement = document.createElement("div");
+    tooltipElement.id = "match-switcher-tooltip";
+    tooltipElement.style.cssText = "display: none; position: fixed; padding: 6px; background: rgba(0, 0, 0, 0.85); border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); z-index: 99999; min-width: 100px; max-width: 150px; text-align: center; pointer-events: none; white-space: normal; word-wrap: break-word; backdrop-filter: blur(4px);";
+    tooltipElement.innerHTML = `
+      <img id="match-switcher-opponent-avatar" src="" alt="Opponent" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.3); margin-bottom: 4px;" />
+      <div id="match-switcher-opponent-name" style="font-weight: 600; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.5rem;"></div>
+      <div id="match-switcher-match-info" style="font-size: 0.375rem; color: var(--muted);"></div>
+    `;
+    document.body.appendChild(tooltipElement);
+  }
+  
+  const showTooltip = async (match, buttonElement = null) => {
+    if (match && tooltipElement) {
+      // Перемещаем tooltip в body, если он еще не там
+      if (tooltipElement.parentElement !== document.body) {
+        document.body.appendChild(tooltipElement);
+      }
+      
+      tooltipElement.style.display = "block";
+      await updateMatchSwitcherTooltip(match);
+      // Позиционируем tooltip правее стрелки
+      setTimeout(() => {
+        if (tooltipElement && buttonElement) {
+          const buttonRect = buttonElement.getBoundingClientRect();
+          // Левый край tooltip совпадает с левым краем кнопки, но не перекрывает её
+          tooltipElement.style.left = `${buttonRect.left}px`;
+          tooltipElement.style.top = `${buttonRect.top - tooltipElement.offsetHeight - 8}px`;
+          tooltipElement.style.transform = "none";
+          tooltipElement.style.right = "auto";
+          tooltipElement.style.bottom = "auto";
+          
+          // Проверяем, не выходит ли tooltip за границы экрана
+          const tooltipRect = tooltipElement.getBoundingClientRect();
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          
+          // Если выходит за правую границу - прижимаем к правому краю
+          if (tooltipRect.right > viewportWidth) {
+            tooltipElement.style.left = "auto";
+            tooltipElement.style.right = "8px";
+          }
+          // Если выходит за левую границу - прижимаем к левому краю
+          else if (tooltipRect.left < 0) {
+            tooltipElement.style.left = "8px";
+          }
+          
+          // Если выходит за верхнюю границу - показываем снизу
+          if (tooltipRect.top < 0) {
+            tooltipElement.style.top = `${buttonRect.bottom + 8}px`;
+          }
+        }
+      }, 100);
+    }
+  };
+  
+  const hideTooltip = () => {
+    if (tooltipTimeout) {
+      clearTimeout(tooltipTimeout);
+      tooltipTimeout = null;
+    }
+    if (tooltipElement) {
+      tooltipElement.style.display = "none";
+    }
+  };
+  
+  // Tooltip при наведении на предыдущую стрелку
+  if (matchSwitcherPrev) {
+    matchSwitcherPrev.addEventListener("mouseenter", async () => {
+      if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
+      const currentMatch = getCurrentMatch();
+      const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatch.matchId);
+      if (currentIndex > 0) {
+        const prevMatch = window.activeMatchesList[currentIndex - 1];
+        tooltipTimeout = setTimeout(() => showTooltip(prevMatch, matchSwitcherPrev), 300);
+      }
+    });
+    matchSwitcherPrev.addEventListener("mouseleave", hideTooltip);
+  }
+  
+  // Tooltip при наведении на следующую стрелку
+  if (matchSwitcherNext) {
+    matchSwitcherNext.addEventListener("mouseenter", async () => {
+      if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
+      const currentMatch = getCurrentMatch();
+      const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatch.matchId);
+      if (currentIndex < window.activeMatchesList.length - 1) {
+        const nextMatch = window.activeMatchesList[currentIndex + 1];
+        tooltipTimeout = setTimeout(() => showTooltip(nextMatch, matchSwitcherNext), 300);
+      }
+    });
+    matchSwitcherNext.addEventListener("mouseleave", hideTooltip);
+  }
+  
+  // Tooltip при наведении на сам переключатель (показываем текущий матч)
+  matchSwitcher.addEventListener("mouseenter", async () => {
+    tooltipTimeout = setTimeout(async () => {
+      const currentMatch = getCurrentMatch();
+      if (currentMatch.matchState && tooltipElement) {
+        await showTooltip(currentMatch.matchState, matchSwitcher);
+      }
+    }, 500);
+  });
+  
+  matchSwitcher.addEventListener("mouseleave", hideTooltip);
+}
+
 // Handle match loaded event
 window.addEventListener("match-loaded", async (e) => {
   const { matchId } = e.detail;
@@ -769,6 +1048,109 @@ window.addEventListener("match-loaded", async (e) => {
     if (settingsMode) settingsMode.value = "pvp-farcaster";
     updateUIForMode();
     updateMatchUI();
+    // Обновляем переключатель матчей
+    updateMatchSwitcher();
+  }
+});
+
+// Handle match status changed event (pending -> active) для автоматического переключения
+window.addEventListener("match-status-changed", async (e) => {
+  const { matchId, status } = e.detail;
+  if (status === "active" && matchId) {
+    // Проверяем, не загружен ли уже этот матч
+    const currentMatch = getCurrentMatch();
+    if (!currentMatch.matchState || currentMatch.matchId !== matchId) {
+      // Автоматически переключаемся на матч
+      await loadMatch(matchId);
+      mode = "pvp-farcaster";
+      if (settingsMode) settingsMode.value = "pvp-farcaster";
+      updateUIForMode();
+      updateMatchUI();
+      
+      const lang = getLanguage();
+      showToast(
+        lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
+        "success"
+      );
+    }
+  }
+});
+
+// Также обрабатываем match-synced для случаев, когда статус меняется через синхронизацию
+window.addEventListener("match-synced", async () => {
+  const currentMatch = getCurrentMatch();
+  if (currentMatch.matchState && currentMatch.matchId) {
+    const match = currentMatch.matchState;
+    const storedStatus = localStorage.getItem(`match_status_${currentMatch.matchId}`);
+    
+    // Проверяем изменение статуса с pending на active
+    if (storedStatus === "pending" && match.status === "active") {
+      // Автоматически переключаемся на матч
+      await loadMatch(currentMatch.matchId);
+      mode = "pvp-farcaster";
+      if (settingsMode) settingsMode.value = "pvp-farcaster";
+      updateUIForMode();
+      updateMatchUI();
+      
+      const lang = getLanguage();
+      showToast(
+        lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
+        "success"
+      );
+    } else {
+      // Обновляем UI для проверки хода противника
+      updateMatchUI();
+      
+      // Если матч завершился, переключаемся на другой матч
+      if (match.gameState.finished) {
+        const storedSwitched = localStorage.getItem(`match_switched_${currentMatch.matchId}`);
+        if (!storedSwitched) {
+          (async () => {
+            try {
+              const session = getSession();
+              const playerFid = session?.farcaster?.fid || session?.fid;
+              if (playerFid && mode === "pvp-farcaster") {
+                const matches = await listPlayerMatches(playerFid);
+                const activeMatches = matches.filter(m => 
+                  m.status === "active" && 
+                  !m.gameState.finished && 
+                  m.matchId !== currentMatch.matchId
+                );
+                
+                if (activeMatches.length > 0) {
+                  const nextMatch = activeMatches[0];
+                  localStorage.setItem(`match_switched_${currentMatch.matchId}`, "true");
+                  
+                  setTimeout(async () => {
+                    try {
+                      await loadMatch(nextMatch.matchId);
+                      mode = "pvp-farcaster";
+                      if (settingsMode) settingsMode.value = "pvp-farcaster";
+                      updateUIForMode();
+                      updateMatchUI();
+                      const lang = getLanguage();
+                      showToast(
+                        lang === "ru" ? "Переключено на другой активный матч" : "Switched to another active match",
+                        "info"
+                      );
+                    } catch (error) {
+                      console.error("Failed to load next match:", error);
+                      localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
+                    }
+                  }, 2000);
+                }
+              }
+            } catch (error) {
+              console.warn("Failed to auto-switch to next match:", error);
+              localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
+            }
+          })();
+        }
+      }
+    }
+    
+    // Сохраняем текущий статус
+    localStorage.setItem(`match_status_${currentMatch.matchId}`, match.status);
   }
 });
 
@@ -776,7 +1158,15 @@ window.addEventListener("match-loaded", async (e) => {
 settingsMode?.addEventListener("change", () => {
   if (mode !== "pvp-farcaster") {
     clearCurrentMatch();
+    stopPendingMatchesCheck();
     updateMatchUI();
+  } else {
+    // При переключении в pvp-farcaster запускаем проверку pending матчей
+    const session = getSession();
+    const playerFid = session?.farcaster?.fid || session?.fid;
+    if (playerFid) {
+      startPendingMatchesCheck(5000);
+    }
   }
 });
 
@@ -792,8 +1182,15 @@ function updateUIForMode() {
   }
   
   // Показываем кнопку списка матчей в Farcaster режиме для авторизованных пользователей
+  // Также показываем во время активной игры для доступа к матчам
   if (matchesBtn) {
-    matchesBtn.style.display = isFarcasterMode && isSignedIn ? "inline-block" : "none";
+    const hasActiveMatch = getCurrentMatch().matchState && mode === "pvp-farcaster";
+    matchesBtn.style.display = (isFarcasterMode && isSignedIn) || hasActiveMatch ? "inline-block" : "none";
+  }
+  
+  // Показываем кнопку Leaderboard только в PVP Farcaster режиме
+  if (leaderboardBtn) {
+    leaderboardBtn.style.display = isFarcasterMode && isSignedIn ? "inline-block" : "none";
   }
   
   if (publishBtn) {
@@ -814,6 +1211,284 @@ function updateUIForMode() {
 
 let matchTimer = null;
 let lastSyncTurn = 0;
+let lastSyncBoard = null; // Сохраняем состояние доски для сравнения
+let opponentAvatarCache = null;
+let pendingMatchesCheckInterval = null;
+
+// Функция для проверки pending матчей и автоматической загрузки при переходе в active
+async function checkPendingMatches() {
+  const session = getSession();
+  const playerFid = session?.farcaster?.fid || session?.fid;
+  
+  if (!playerFid || mode !== "pvp-farcaster") {
+    return;
+  }
+  
+  // Если уже есть активный матч, не проверяем pending
+  const currentMatch = getCurrentMatch();
+  if (currentMatch.matchState && currentMatch.matchState.status === "active") {
+    return;
+  }
+  
+  try {
+    const matches = await listPlayerMatches(playerFid);
+    
+    // Ищем pending матчи, которые стали active
+    for (const match of matches) {
+      if (match.status === "active" && !match.gameState.finished) {
+        // Проверяем, не загружен ли уже этот матч
+        if (!currentMatch.matchState || currentMatch.matchId !== match.matchId) {
+          // Автоматически загружаем матч
+          await loadMatch(match.matchId);
+          mode = "pvp-farcaster";
+          if (settingsMode) settingsMode.value = "pvp-farcaster";
+          updateUIForMode();
+          updateMatchUI();
+          // updateMatchUI уже вызывает updateMatchSwitcher, но для надежности вызываем еще раз
+          await updateMatchSwitcher();
+          
+          const lang = getLanguage();
+          showToast(
+            lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
+            "success"
+          );
+          
+          // Останавливаем проверку pending матчей, так как теперь есть активный
+          stopPendingMatchesCheck();
+          return;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Error checking pending matches:", error);
+  }
+}
+
+// Запуск периодической проверки pending матчей
+function startPendingMatchesCheck(intervalMs = 5000) {
+  stopPendingMatchesCheck();
+  
+  // Первая проверка сразу
+  checkPendingMatches();
+  
+  // Затем периодически
+  pendingMatchesCheckInterval = setInterval(() => {
+    checkPendingMatches();
+  }, intervalMs);
+}
+
+// Остановка проверки pending матчей
+function stopPendingMatchesCheck() {
+  if (pendingMatchesCheckInterval) {
+    clearInterval(pendingMatchesCheckInterval);
+    pendingMatchesCheckInterval = null;
+  }
+}
+
+async function updateOpponentAvatar() {
+  const currentMatch = getCurrentMatch();
+  if (!currentMatch.matchState || mode !== "pvp-farcaster") {
+    const opponentAvatar = document.getElementById("opponent-avatar");
+    if (opponentAvatar) opponentAvatar.style.display = "none";
+    return;
+  }
+
+  const currentOpponentFid = getOpponentFid();
+  if (!currentOpponentFid) {
+    const opponentAvatar = document.getElementById("opponent-avatar");
+    if (opponentAvatar) opponentAvatar.style.display = "none";
+    return;
+  }
+
+  // Используем кеш если FID не изменился
+  
+  if (opponentAvatarCache && opponentAvatarCache.fid === currentOpponentFid) {
+    const opponentAvatar = document.getElementById("opponent-avatar");
+    if (opponentAvatar && opponentAvatarCache.pfp_url) {
+      opponentAvatar.style.display = "block";
+      opponentAvatar.src = opponentAvatarCache.pfp_url || "";
+      opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
+    } else if (opponentAvatar) {
+      opponentAvatar.style.display = "none";
+    }
+    return;
+  }
+
+  try {
+    const userData = await getUserByFid(currentOpponentFid);
+    if (userData?.user) {
+      opponentAvatarCache = {
+        fid: currentOpponentFid,
+        username: userData.user.username,
+        display_name: userData.user.display_name,
+        pfp_url: userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || null
+      };
+      
+      const opponentAvatar = document.getElementById("opponent-avatar");
+      if (opponentAvatar && opponentAvatarCache.pfp_url) {
+        opponentAvatar.style.display = "block";
+        opponentAvatar.src = opponentAvatarCache.pfp_url;
+        opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
+        opponentAvatar.onerror = () => {
+          if (opponentAvatar) opponentAvatar.style.display = "none";
+        };
+      } else if (opponentAvatar) {
+        opponentAvatar.style.display = "none";
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to load opponent avatar:", error);
+  }
+}
+
+// Переменная для отслеживания предыдущего статуса матча
+let previousMatchStatus = null;
+let lastMatchId = null; // Отслеживаем смену матча
+
+// Функция для обновления переключателя матчей
+async function updateMatchSwitcher() {
+  if (!matchSwitcher) return;
+  
+  const session = getSession();
+  const playerFid = session?.farcaster?.fid || session?.fid;
+  
+  if (!playerFid || mode !== "pvp-farcaster") {
+    matchSwitcher.style.display = "none";
+    return;
+  }
+  
+  try {
+    const matches = await listPlayerMatches(playerFid);
+    const activeMatches = matches.filter(m => m.status === "active" && !m.gameState.finished);
+    
+    // Показываем переключатель только если есть 2+ активных матча
+    if (activeMatches.length >= 2) {
+      matchSwitcher.style.display = "flex";
+      matchSwitcher.style.alignItems = "center";
+      matchSwitcher.style.gap = "4px";
+      
+      // Сохраняем список активных матчей для переключения
+      window.activeMatchesList = activeMatches;
+      updateMatchSwitcherButtons();
+    } else {
+      matchSwitcher.style.display = "none";
+      window.activeMatchesList = null;
+    }
+  } catch (error) {
+    console.warn("Failed to update match switcher:", error);
+    matchSwitcher.style.display = "none";
+  }
+}
+
+// Обновление состояния кнопок переключателя
+function updateMatchSwitcherButtons() {
+  if (!window.activeMatchesList || window.activeMatchesList.length < 2) {
+    if (matchSwitcherPrev) matchSwitcherPrev.disabled = true;
+    if (matchSwitcherNext) matchSwitcherNext.disabled = true;
+    return;
+  }
+  
+  const currentMatch = getCurrentMatch();
+  const currentMatchId = currentMatch.matchId;
+  const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatchId);
+  
+  if (matchSwitcherPrev) {
+    matchSwitcherPrev.disabled = currentIndex <= 0;
+  }
+  if (matchSwitcherNext) {
+    matchSwitcherNext.disabled = currentIndex >= window.activeMatchesList.length - 1;
+  }
+}
+
+// Переключение на предыдущий матч
+async function switchToPreviousMatch() {
+  if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
+  
+  const currentMatch = getCurrentMatch();
+  const currentMatchId = currentMatch.matchId;
+  const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatchId);
+  
+  if (currentIndex > 0) {
+    const prevMatch = window.activeMatchesList[currentIndex - 1];
+    await loadMatch(prevMatch.matchId);
+    mode = "pvp-farcaster";
+    if (settingsMode) settingsMode.value = "pvp-farcaster";
+    updateUIForMode();
+    updateMatchUI();
+    // Обновляем tooltip для нового матча
+    await updateMatchSwitcherTooltip(prevMatch);
+    // Обновляем состояние кнопок
+    updateMatchSwitcherButtons();
+  }
+}
+
+// Переключение на следующий матч
+async function switchToNextMatch() {
+  if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
+  
+  const currentMatch = getCurrentMatch();
+  const currentMatchId = currentMatch.matchId;
+  const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatchId);
+  
+  if (currentIndex < window.activeMatchesList.length - 1) {
+    const nextMatch = window.activeMatchesList[currentIndex + 1];
+    await loadMatch(nextMatch.matchId);
+    mode = "pvp-farcaster";
+    if (settingsMode) settingsMode.value = "pvp-farcaster";
+    updateUIForMode();
+    updateMatchUI();
+    // Обновляем tooltip для нового матча
+    await updateMatchSwitcherTooltip(nextMatch);
+    // Обновляем состояние кнопок
+    updateMatchSwitcherButtons();
+  }
+}
+
+// Обновление tooltip с информацией о противнике
+async function updateMatchSwitcherTooltip(match) {
+  const tooltipEl = document.getElementById("match-switcher-tooltip");
+  if (!tooltipEl || !match) return;
+  
+  const session = getSession();
+  const playerFid = session?.farcaster?.fid || session?.fid;
+  if (!playerFid) return;
+  
+  const isPlayer1 = match.player1Fid === playerFid;
+  const opponentFid = isPlayer1 ? match.player2Fid : match.player1Fid;
+  
+  if (opponentFid) {
+    try {
+      const userData = await getUserByFid(opponentFid);
+      if (userData?.user) {
+        const opponentName = userData.user.username 
+          ? `@${userData.user.username}` 
+          : userData.user.display_name || `FID: ${opponentFid}`;
+        const opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
+        
+        const avatarEl = tooltipEl.querySelector("#match-switcher-opponent-avatar");
+        const nameEl = tooltipEl.querySelector("#match-switcher-opponent-name");
+        const infoEl = tooltipEl.querySelector("#match-switcher-match-info");
+        
+        if (avatarEl) {
+          avatarEl.src = opponentAvatar;
+          avatarEl.alt = opponentName;
+        }
+        if (nameEl) {
+          nameEl.textContent = opponentName;
+        }
+        if (infoEl) {
+          const lang = getLanguage();
+          const mySymbol = isPlayer1 ? match.player1Symbol : match.player2Symbol;
+          infoEl.textContent = lang === "ru" 
+            ? `Ваш символ: ${mySymbol}` 
+            : `Your symbol: ${mySymbol}`;
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load opponent info for tooltip:", error);
+    }
+  }
+}
 
 function updateMatchUI() {
   const currentMatch = getCurrentMatch();
@@ -823,26 +1498,117 @@ function updateMatchUI() {
       matchTimer.destroy();
       matchTimer = null;
     }
-    stopSyncing();
-    lastSyncTurn = 0;
+      stopSyncing();
+      lastSyncTurn = 0;
+      lastSyncBoard = null;
+      lastMatchId = null;
+      opponentAvatarCache = null;
+    previousMatchStatus = null;
+    const opponentAvatar = document.getElementById("opponent-avatar");
+    if (opponentAvatar) opponentAvatar.style.display = "none";
+    // Обновляем видимость кнопки My Matches и переключателя
+    updateUIForMode();
+    updateMatchSwitcher();
     return;
   }
 
   const match = currentMatch.matchState;
   
-  // Check if opponent made a move
-  const currentTurn = match.gameState.turn;
-  if (currentTurn > lastSyncTurn && lastSyncTurn > 0) {
-    // New move detected - show notification
-    const lang = getLanguage();
-    const msg = lang === "ru" ? "Противник сделал ход!" : "Opponent made a move!";
-    showToast(msg, "info");
+  // Если матч изменился, сбрасываем состояние синхронизации
+  if (lastMatchId !== null && lastMatchId !== currentMatch.matchId) {
+    lastSyncTurn = 0;
+    lastSyncBoard = null;
   }
-  lastSyncTurn = currentTurn;
+  lastMatchId = currentMatch.matchId;
+  
+  // Проверяем изменение статуса матча (pending -> active)
+  // Это обрабатывается через событие match-synced для автоматического переключения
+  // Здесь просто обновляем previousMatchStatus
+  previousMatchStatus = match.status;
+  
+  // Обновляем аватарку противника
+  updateOpponentAvatar();
+  
+  // Инициализируем состояние синхронизации при первой загрузке матча
+  if (lastSyncBoard === null) {
+    lastSyncTurn = match.gameState.turn;
+    lastSyncBoard = JSON.parse(JSON.stringify(match.gameState.board));
+  }
+  
+  // Check if opponent made a move (сравниваем состояние доски)
+  if (!match.gameState.finished) {
+    const currentTurn = match.gameState.turn;
+    const currentBoard = match.gameState.board;
+    const mySymbol = getMySymbol();
+    
+    // Проверяем, что мы знаем свой символ (матч полностью загружен)
+    if (mySymbol && lastSyncBoard) {
+      const opponentSymbol = mySymbol === "X" ? "O" : "X";
+      
+      // Сравниваем доску: если доска изменилась, проверяем, чей символ появился
+      const boardChanged = JSON.stringify(currentBoard) !== JSON.stringify(lastSyncBoard);
+      const turnIncreased = currentTurn > lastSyncTurn;
+      
+      if (boardChanged && turnIncreased) {
+        // Находим, какая клетка изменилась и чей символ там появился
+        let opponentMadeMove = false;
+        let changedCellIndex = -1;
+        
+        for (let i = 0; i < currentBoard.length; i++) {
+          if (currentBoard[i] !== lastSyncBoard[i]) {
+            changedCellIndex = i;
+            // Если в новой клетке символ противника, значит он сделал ход
+            if (currentBoard[i] === opponentSymbol) {
+              opponentMadeMove = true;
+              break;
+            }
+          }
+        }
+        
+        if (opponentMadeMove) {
+          // New move detected - show notification
+          const lang = getLanguage();
+          const msg = lang === "ru" ? "Противник сделал ход!" : "Opponent made a move!";
+          showToast(msg, "info");
+          
+          if (DEBUG_ENABLED) {
+            addDebugLog('🎯 Ход противника обнаружен', {
+              cellIndex: changedCellIndex,
+              opponentSymbol,
+              mySymbol,
+              turn: currentTurn,
+              lastTurn: lastSyncTurn
+            });
+          }
+        } else if (DEBUG_ENABLED && boardChanged) {
+          // Логируем, если доска изменилась, но это не ход противника
+          addDebugLog('⚠️ Доска изменилась, но не ход противника', {
+            changedCellIndex,
+            cellValue: changedCellIndex >= 0 ? currentBoard[changedCellIndex] : null,
+            opponentSymbol,
+            mySymbol,
+            turn: currentTurn,
+            lastTurn: lastSyncTurn
+          });
+        }
+      }
+    }
+    
+    // Обновляем состояние для следующей проверки (всегда, даже если mySymbol еще не определен)
+    lastSyncTurn = currentTurn;
+    lastSyncBoard = JSON.parse(JSON.stringify(currentBoard)); // Глубокая копия доски
+  } else {
+    // Игра завершена - сбрасываем состояние
+    lastSyncTurn = 0;
+    lastSyncBoard = null;
+  }
   
   // Update board state from match
   state = match.gameState;
   render();
+  
+  // Обновляем переключатель матчей (асинхронно, чтобы не блокировать рендер)
+  updateMatchSwitcher().catch(err => console.warn("Failed to update match switcher:", err));
 
   // Show timer if match is active
   if (match.status === "active" && !match.gameState.finished && timerContainer) {
@@ -855,11 +1621,28 @@ function updateMatchUI() {
       matchTimer = new TurnTimer(timerContainer, {
         timeoutMs: match.turnTimeout,
         lastMoveAt: match.lastMoveAt,
-        onTimeout: () => {
+        onTimeout: async () => {
           // Refresh match state when timeout occurs
-          syncMatch().then(result => {
-            if (result) updateMatchUI();
-          });
+          const syncResult = await syncMatch();
+          if (syncResult) {
+            updateMatchUI();
+            
+            // Обновляем счетчик при победе по таймеру
+            const updatedMatch = getCurrentMatch().matchState;
+            if (updatedMatch && updatedMatch.gameState.finished) {
+              const currentMatch = getCurrentMatch();
+              const isWinner = (updatedMatch.player1Symbol === updatedMatch.gameState.winner && updatedMatch.player1Fid === currentMatch.playerFid) ||
+                               (updatedMatch.player2Symbol === updatedMatch.gameState.winner && updatedMatch.player2Fid === currentMatch.playerFid);
+              if (updatedMatch.gameState.winner && isWinner) {
+                scores.wins += 1;
+              } else if (updatedMatch.gameState.winner && !isWinner) {
+                scores.losses += 1;
+              } else {
+                scores.draws += 1;
+              }
+              updateScores();
+            }
+          }
         }
       });
     }
@@ -890,9 +1673,21 @@ function updateMatchUI() {
       showStatus(isWinner 
         ? (lang === "ru" ? `Победа: ${winnerSymbol}` : `You win: ${winnerSymbol}`)
         : (lang === "ru" ? `Поражение: ${winnerSymbol}` : `You lose: ${winnerSymbol}`));
+      // Сбрасываем цвет статуса для победы/поражения
+      const statusEl = document.getElementById("status");
+      if (statusEl) {
+        statusEl.style.color = "";
+      }
     } else {
-      showStatus(lang === "ru" ? "Ничья" : "Draw");
+      // Ничья - показываем правильный текст и цвет
+      showStatus(lang === "ru" ? "Ничья" : "Here is a draw");
+      // Используем серый цвет для ничьей (muted)
+      const statusEl = document.getElementById("status");
+      if (statusEl) {
+        statusEl.style.color = "var(--muted)";
+      }
     }
+    
   } else {
     const mySymbol = getMySymbol();
     if (isMyTurn()) {
@@ -948,9 +1743,10 @@ authBtn?.addEventListener("click", async () => {
       // Выход из системы
       const session = getSession();
       
-      // Останавливаем синхронизацию матчей
+      // Останавливаем синхронизацию матчей и проверку pending
       try {
         stopSyncing();
+        stopPendingMatchesCheck();
         clearCurrentMatch();
       } catch (error) {
         if (DEBUG_ENABLED) {
@@ -1241,27 +2037,363 @@ inviteBtn?.addEventListener("click", async () => {
     return;
   }
   
-  const lang = getLanguage();
-  const visibility = confirm(
-    lang === "ru" 
-      ? "Публиковать публично? OK — public, Cancel — private"
-      : "Publish publicly? OK — public, Cancel — private"
-  ) ? "public" : "private";
+  // Показываем контекстное меню выбора типа матча
+  const matchTypeContext = document.getElementById("match-type-context");
+  const inviteBtnRect = inviteBtn.getBoundingClientRect();
   
-  try {
-    const { payload, res, matchCreated } = await sendInvite(session, { visibility });
-    const msg = lang === "ru"
-      ? `Инвайт создан!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch в API: ${matchCreated ? "да" : "нет"}`
-      : `Invite created!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch in API: ${matchCreated ? "yes" : "no"}`;
-    alert(msg);
-  } catch (e) {
+  if (matchTypeContext) {
+    // Позиционируем контекстное меню рядом с кнопкой
+    matchTypeContext.style.display = "block";
+    
+    // Вычисляем позицию с учетом границ экрана
+    const contextWidth = 200; // Примерная ширина контекстного меню
+    const contextHeight = 120; // Примерная высота
+    const padding = 8;
+    
+    let leftPos = inviteBtnRect.right + padding;
+    let topPos = inviteBtnRect.top;
+    
+    // Проверяем, не выходит ли за правый край экрана
+    if (leftPos + contextWidth > window.innerWidth) {
+      // Размещаем слева от кнопки
+      leftPos = inviteBtnRect.left - contextWidth - padding;
+    }
+    
+    // Проверяем, не выходит ли за нижний край экрана
+    if (topPos + contextHeight > window.innerHeight) {
+      topPos = window.innerHeight - contextHeight - padding;
+    }
+    
+    // Проверяем, не выходит ли за верхний край экрана
+    if (topPos < 0) {
+      topPos = padding;
+    }
+    
+    matchTypeContext.style.left = `${leftPos}px`;
+    matchTypeContext.style.top = `${topPos}px`;
+    
+    // Обновляем текст на выбранный язык
     const lang = getLanguage();
-    const errorMsg = lang === "ru" 
-      ? `Не удалось создать инвайт: ${e?.message || e}`
-      : `Failed to create invite: ${e?.message || e}`;
-    alert(errorMsg);
+    const contextTitle = matchTypeContext.querySelector("div");
+    if (contextTitle) {
+      contextTitle.textContent = lang === "ru" ? "Выбери тип матча" : "Choose match type";
+    }
+    
+    // Ждем выбора пользователя
+    return new Promise((resolve) => {
+      let resolved = false;
+      let publicHandler, privateHandler, clickHandler;
+      
+      const handleChoice = async (visibility) => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        matchTypeContext.style.display = "none";
+        
+        try {
+          const { payload, res, matchCreated } = await sendInvite(session, { visibility });
+          const msg = lang === "ru"
+            ? `Инвайт создан!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch в API: ${matchCreated ? "да" : "нет"}`
+            : `Invite created!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch in API: ${matchCreated ? "yes" : "no"}`;
+          alert(msg);
+          
+          // Запускаем проверку pending матчей после создания
+          if (mode === "pvp-farcaster") {
+            startPendingMatchesCheck(5000);
+          }
+        } catch (e) {
+          let errorMsg = e?.message || e;
+          if (errorMsg.includes("2 active matches")) {
+            errorMsg = lang === "ru" 
+              ? "У вас уже есть 2 активных матча. Завершите один из них, чтобы создать новый."
+              : "You already have 2 active matches. Finish one to create a new one.";
+          } else {
+            errorMsg = lang === "ru" 
+              ? `Не удалось создать инвайт: ${errorMsg}`
+              : `Failed to create invite: ${errorMsg}`;
+          }
+          alert(errorMsg);
+        }
+        resolve();
+      };
+      
+      publicHandler = () => handleChoice("public");
+      privateHandler = () => {
+        if (resolved) return;
+        cleanup();
+        matchTypeContext.style.display = "none";
+        
+        // Показываем модальное окно для поиска пользователя
+        const privateMatchModal = document.getElementById("private-match-modal");
+        if (privateMatchModal) {
+          privateMatchModal.setAttribute("aria-hidden", "false");
+          initPrivateMatchSearch(privateMatchModal, session, resolve);
+        } else {
+          resolve();
+        }
+      };
+      
+      // Закрытие контекстного меню при клике вне его
+      clickHandler = (e) => {
+        if (!matchTypeContext.contains(e.target) && e.target !== inviteBtn) {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          matchTypeContext.style.display = "none";
+          resolve();
+        }
+      };
+      
+      const cleanup = () => {
+        const btnPublic = document.getElementById("btn-match-public");
+        const btnPrivate = document.getElementById("btn-match-private");
+        if (btnPublic && publicHandler) btnPublic.removeEventListener("click", publicHandler);
+        if (btnPrivate && privateHandler) btnPrivate.removeEventListener("click", privateHandler);
+        if (clickHandler) document.removeEventListener("click", clickHandler);
+      };
+      
+      const btnPublic = document.getElementById("btn-match-public");
+      const btnPrivate = document.getElementById("btn-match-private");
+      
+      if (btnPublic) btnPublic.addEventListener("click", publicHandler);
+      if (btnPrivate) btnPrivate.addEventListener("click", privateHandler);
+      
+      // Закрываем при клике вне меню
+      setTimeout(() => {
+        document.addEventListener("click", clickHandler);
+      }, 0);
+    });
   }
 });
+
+// Инициализация поиска пользователя для приватного матча
+let privateMatchSearchTimeout = null;
+let selectedPrivateMatchUser = null;
+
+function initPrivateMatchSearch(modal, session, onResolve) {
+  const lang = getLanguage();
+  const usernameInput = document.getElementById("private-match-username");
+  const suggestionsContainer = document.getElementById("private-match-suggestions");
+  const userPreview = document.getElementById("private-match-user-preview");
+  const userAvatar = document.getElementById("private-match-user-avatar");
+  const userName = document.getElementById("private-match-user-name");
+  const userFid = document.getElementById("private-match-user-fid");
+  const sendBtn = document.getElementById("btn-private-match-send");
+  const cancelBtn = document.getElementById("btn-private-match-cancel");
+  
+  // Обновляем текст на выбранный язык
+  const title = modal.querySelector("#private-match-modal-title");
+  if (title) {
+    title.textContent = lang === "ru" ? "Найти пользователя" : "Find User";
+  }
+  if (usernameInput) {
+    usernameInput.placeholder = lang === "ru" ? "@username" : "@username";
+  }
+  if (sendBtn) {
+    sendBtn.textContent = lang === "ru" ? "Отправить вызов" : "Send Challenge";
+  }
+  if (cancelBtn) {
+    cancelBtn.textContent = lang === "ru" ? "Отмена" : "Cancel";
+  }
+  
+  // Сброс состояния
+  selectedPrivateMatchUser = null;
+  if (usernameInput) usernameInput.value = "";
+  if (suggestionsContainer) suggestionsContainer.style.display = "none";
+  if (userPreview) userPreview.style.display = "none";
+  if (sendBtn) sendBtn.style.display = "none";
+  
+  // Удаляем старые обработчики если они есть
+  const oldInputHandler = usernameInput?.oninput;
+  if (oldInputHandler) usernameInput.removeEventListener("input", oldInputHandler);
+  
+  // Обработчик ввода username
+  if (usernameInput) {
+    const inputHandler = async (e) => {
+      const input = e.target.value.trim();
+      
+      // Очищаем предыдущий таймер
+      if (privateMatchSearchTimeout) {
+        clearTimeout(privateMatchSearchTimeout);
+      }
+      
+      if (!input) {
+        if (suggestionsContainer) suggestionsContainer.style.display = "none";
+        if (userPreview) userPreview.style.display = "none";
+        if (sendBtn) sendBtn.style.display = "none";
+        selectedPrivateMatchUser = null;
+        return;
+      }
+      
+      // Если начинается с @, убираем его
+      const searchUsername = input.startsWith("@") ? input.slice(1) : input;
+      
+      // Дебаунс поиска (500ms)
+      privateMatchSearchTimeout = setTimeout(async () => {
+        if (searchUsername.length < 2) {
+          if (suggestionsContainer) suggestionsContainer.style.display = "none";
+          return;
+        }
+        
+        try {
+          const { searchUserByUsername } = await import("./farcaster/client.js");
+          const userData = await searchUserByUsername(searchUsername);
+          
+          if (userData?.user) {
+            selectedPrivateMatchUser = userData.user;
+            
+            // Показываем превью пользователя
+            if (userPreview) userPreview.style.display = "block";
+            if (userAvatar) {
+              userAvatar.src = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
+              userAvatar.alt = userData.user.username || userData.user.display_name || "User";
+            }
+            if (userName) {
+              userName.textContent = userData.user.username 
+                ? `@${userData.user.username}` 
+                : userData.user.display_name || `FID: ${userData.user.fid}`;
+            }
+            if (userFid) {
+              userFid.textContent = `FID: ${userData.user.fid}`;
+            }
+            if (sendBtn) sendBtn.style.display = "block";
+            if (suggestionsContainer) suggestionsContainer.style.display = "none";
+          } else {
+            // Пользователь не найден
+            if (userPreview) userPreview.style.display = "none";
+            if (sendBtn) sendBtn.style.display = "none";
+            if (suggestionsContainer) {
+              suggestionsContainer.style.display = "block";
+              suggestionsContainer.innerHTML = `<div style="padding: 8px; color: var(--muted); font-size: 0.875rem;">${lang === "ru" ? "Пользователь не найден" : "User not found"}</div>`;
+            }
+            selectedPrivateMatchUser = null;
+          }
+        } catch (error) {
+          console.error("Error searching user:", error);
+          if (suggestionsContainer) {
+            suggestionsContainer.style.display = "block";
+            suggestionsContainer.innerHTML = `<div style="padding: 8px; color: var(--lose); font-size: 0.875rem;">${lang === "ru" ? "Ошибка поиска" : "Search error"}</div>`;
+          }
+          selectedPrivateMatchUser = null;
+        }
+      }, 500);
+    };
+    usernameInput.addEventListener("input", inputHandler);
+    usernameInput.oninput = inputHandler; // Сохраняем ссылку для очистки
+  }
+  
+  // Удаляем старый обработчик кнопки отправки (если был сохранен)
+  if (sendBtn && sendBtn._clickHandler) {
+    sendBtn.removeEventListener("click", sendBtn._clickHandler);
+  }
+  // Удаляем старый обработчик кнопки отмены (если был сохранен)
+  if (cancelBtn && cancelBtn._clickHandler) {
+    cancelBtn.removeEventListener("click", cancelBtn._clickHandler);
+  }
+  
+  // Обработчик кнопки отправки
+  if (sendBtn) {
+    const sendHandler = async () => {
+      if (!selectedPrivateMatchUser) return;
+      
+      try {
+        // Создаем приватный матч (skipPublish чтобы не публиковать дважды)
+        const { payload, matchCreated } = await sendInvite(session, { 
+          visibility: "private",
+          skipPublish: true // Пропускаем автоматическую публикацию, сделаем вручную
+        });
+        
+        // Публикуем cast с упоминанием пользователя (только один раз)
+        const { publishInvite } = await import("./farcaster/client.js");
+        const mentionText = selectedPrivateMatchUser.username 
+          ? `@${selectedPrivateMatchUser.username}` 
+          : `FID:${selectedPrivateMatchUser.fid}`;
+        
+        // Публикуем cast с упоминанием
+        const castResult = await publishInvite({
+          ...payload,
+          text: `🎮 Приватный вызов в Krestiki Noliki! ${mentionText}\n\nMatch ID: ${payload.matchId}\nПримите вызов, чтобы начать игру!`,
+          mentions: [selectedPrivateMatchUser.fid]
+        });
+        
+        const msg = lang === "ru"
+          ? `Приватный инвайт создан!\n\nMatch ID: ${payload.matchId}\nУпоминание: ${mentionText}\nCast ID: ${castResult.castId || "ok"}\nMatch в API: ${matchCreated ? "да" : "нет"}`
+          : `Private invite created!\n\nMatch ID: ${payload.matchId}\nMention: ${mentionText}\nCast ID: ${castResult.castId || "ok"}\nMatch in API: ${matchCreated ? "yes" : "no"}`;
+        alert(msg);
+        
+        // Запускаем проверку pending матчей после создания
+        if (mode === "pvp-farcaster") {
+          startPendingMatchesCheck(5000);
+        }
+        
+        // Закрываем модальное окно
+        if (modal) modal.setAttribute("aria-hidden", "true");
+        onResolve();
+      } catch (e) {
+        let errorMsg = e?.message || e;
+        if (errorMsg.includes("2 active matches")) {
+          errorMsg = lang === "ru" 
+            ? "У вас уже есть 2 активных матча. Завершите один из них, чтобы создать новый."
+            : "You already have 2 active matches. Finish one to create a new one.";
+        } else {
+          errorMsg = lang === "ru" 
+            ? `Не удалось создать приватный инвайт: ${errorMsg}`
+            : `Failed to create private invite: ${errorMsg}`;
+        }
+        alert(errorMsg);
+      } finally {
+        // Включаем кнопку обратно
+        if (sendBtn) sendBtn.disabled = false;
+      }
+    };
+    // Сохраняем и навешиваем единичный обработчик клика
+    sendBtn._clickHandler = sendHandler;
+    sendBtn.addEventListener("click", sendHandler);
+  }
+  
+  // Обработчик кнопки отмены
+  if (cancelBtn) {
+    const cancelHandler = () => {
+      if (modal) modal.setAttribute("aria-hidden", "true");
+      onResolve();
+    };
+    // Сохраняем и навешиваем единичный обработчик клика
+    cancelBtn._clickHandler = cancelHandler;
+    cancelBtn.addEventListener("click", cancelHandler);
+  }
+  
+  // Удаляем старый обработчик backdrop
+  // Удаляем старый обработчик backdrop (если был сохранен)
+  if (modal && modal._backdropHandler) {
+    modal.removeEventListener("click", modal._backdropHandler);
+  }
+  
+  // Закрытие при клике на backdrop
+  const backdropHandler = (e) => {
+    if (e.target === modal) {
+      modal.setAttribute("aria-hidden", "true");
+      onResolve();
+    }
+  };
+  // Сохраняем и навешиваем единичный обработчик клика по backdrop
+  modal._backdropHandler = backdropHandler;
+  modal.addEventListener("click", backdropHandler);
+  
+  // Обработчик кнопки закрытия модального окна
+  const closeBtn = modal.querySelector(".modal-close");
+  if (closeBtn) {
+    const closeHandler = () => {
+      modal.setAttribute("aria-hidden", "true");
+      onResolve();
+    };
+    closeBtn.addEventListener("click", closeHandler);
+  }
+  
+  // Фокус на поле ввода
+  if (usernameInput) {
+    setTimeout(() => usernameInput.focus(), 100);
+  }
+}
 
 checkRepliesBtn?.addEventListener("click", async () => {
   try {
@@ -1381,11 +2513,22 @@ function initializeUITexts() {
   
   // Update Farcaster buttons
   if (inviteBtn) {
-    inviteBtn.textContent = lang === "ru" ? "Пригласить игрока" : "Invite Player";
+    inviteBtn.textContent = lang === "ru" ? "Начать PVP" : "Start PVP";
   }
   
   if (matchesBtn) {
     matchesBtn.textContent = lang === "ru" ? "Мои матчи" : "My Matches";
+  }
+  
+  if (leaderboardBtn) {
+    leaderboardBtn.textContent = lang === "ru" ? "Таблица лидеров" : "Leaderboard";
+  }
+  
+  if (leaderboardModal) {
+    const title = leaderboardModal.querySelector("#leaderboard-modal-title");
+    if (title) {
+      title.textContent = lang === "ru" ? "Таблица лидеров" : "Leaderboard";
+    }
   }
   
   // Update mode select options (now in settings)
@@ -1471,9 +2614,14 @@ refreshUserLabel();
       if (activeMatch) {
         await loadMatch(activeMatch.matchId);
         updateMatchUI();
+      } else {
+        // Если нет активного матча, запускаем проверку pending матчей
+        startPendingMatchesCheck(5000);
       }
     } catch (error) {
       // Silent fail - match loading is optional
+      // Но все равно запускаем проверку pending матчей
+      startPendingMatchesCheck(5000);
     }
   }
 })();

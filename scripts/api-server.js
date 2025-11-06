@@ -111,6 +111,16 @@ app.post('/api/matches/check-timeouts', async (req, res) => {
   }
 });
 
+app.get('/api/matches/leaderboard', async (req, res) => {
+  try {
+    const handler = (await import('../api/matches/leaderboard.js')).default;
+    await createHandler(req, res, handler);
+  } catch (error) {
+    console.error('Error in /api/matches/leaderboard:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 app.get('/api/user', async (req, res) => {
   try {
     const handler = (await import('../api/user.js')).default;

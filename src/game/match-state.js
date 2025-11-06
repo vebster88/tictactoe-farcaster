@@ -45,6 +45,10 @@ export async function loadMatch(matchId) {
   try {
     const match = await getMatch(matchId);
     setCurrentMatch(matchId, match);
+    // Сохраняем статус для отслеживания изменений
+    if (typeof window !== 'undefined' && match) {
+      localStorage.setItem(`match_status_${matchId}`, match.status || "unknown");
+    }
     return match;
   } catch (error) {
     throw new Error(`Failed to load match: ${error.message}`);

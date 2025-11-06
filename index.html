@@ -45,10 +45,11 @@
   <body data-theme="light">
     <header class="app-header">
       <div class="header-content">
-        <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Show logo"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="App version">v1.64</span> <button id="btn-settings" class="btn btn-settings-inline" type="button" aria-label="Settings" title="Settings">⚙️</button></h1>
+        <h1 aria-live="polite">Krestiki Noliki <button id="logo" class="logo-btn" type="button" aria-label="Show logo"><img src="/assets/images/hero.jpg" alt="vebster88" /></button> <span id="app-version" class="app-version" title="App version">v1.76</span> <button id="btn-settings" class="btn btn-settings-inline" type="button" aria-label="Settings" title="Settings">⚙️</button></h1>
         <nav class="top-actions" aria-label="Actions">
           <button id="btn-new" class="btn" type="button">New Game</button>
           <button id="btn-matches" class="btn" type="button" style="display: none;">My Matches</button>
+          <button id="btn-leaderboard" class="btn" type="button" style="display: none;">Leaderboard</button>
           <button id="btn-dev-toggle" class="btn" type="button" title="Developer mode" style="display: none;">🔧</button>
           <div class="auth-wrapper">
             <button id="btn-auth" class="btn" type="button">Sign In</button>
@@ -62,7 +63,7 @@
       
       <nav class="game-actions" aria-label="Game Actions">
         <!-- Основные игровые кнопки -->
-        <button id="btn-invite" class="btn" type="button" style="display: none;">Invite Player</button>
+        <button id="btn-invite" class="btn" type="button" style="display: none;">Start PVP</button>
         <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish Result</button>
         
         <!-- Технические кнопки (скрыты по умолчанию) -->
@@ -75,9 +76,17 @@
 
     <main class="app-main">
       <section class="score" aria-label="Счёт">
-        <div>X: <span id="score-x">0</span></div>
-        <div>O: <span id="score-o">0</span></div>
-        <div>≡: <span id="score-draw">0</span></div>
+        <div>🏆 <span id="score-wins">0</span></div>
+        <div>💔 <span id="score-losses">0</span></div>
+        <div>🤝 <span id="score-draws">0</span></div>
+        <div style="position: relative; display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+          <img id="opponent-avatar" alt="Opponent" style="display: none; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.3);" />
+          <!-- Match Switcher (показывается только при наличии 2+ активных матчей) -->
+          <div id="match-switcher" style="display: none; position: relative; display: flex; align-items: center; gap: 4px;">
+            <button id="match-switcher-prev" class="btn" type="button" style="padding: 4px 8px; font-size: 1.2rem; min-width: auto;" title="Previous match">←</button>
+            <button id="match-switcher-next" class="btn" type="button" style="padding: 4px 8px; font-size: 1.2rem; min-width: auto;" title="Next match">→</button>
+          </div>
+        </div>
       </section>
 
       <section class="board" id="board" role="grid" aria-label="Игровое поле 3×3" aria-live="polite">
@@ -142,6 +151,58 @@
         <button class="modal-close" aria-label="Close">&times;</button>
         <h2 id="matches-modal-title" style="position: static; margin: 0 0 20px 0; padding: 0; background: none; font-size: 1.5rem;">My Matches</h2>
         <div id="matches-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+      </div>
+    </div>
+
+    <!-- Leaderboard Modal -->
+    <div id="leaderboard-modal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="leaderboard-modal-title">
+      <div class="modal-content" style="padding: 24px; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <button class="modal-close" aria-label="Close">&times;</button>
+        <h2 id="leaderboard-modal-title" style="position: static; margin: 0 0 20px 0; padding: 0; background: none; font-size: 1.5rem;">Leaderboard</h2>
+        <div id="leaderboard-list"></div>
+      </div>
+    </div>
+
+    <!-- Match Type Context Menu -->
+    <div id="match-type-context" style="display: none; position: fixed; z-index: 10000; background: rgba(26, 26, 46, 0.95); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 16px; min-width: 200px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);">
+      <div style="margin-bottom: 12px; font-weight: 600; font-size: 0.9rem; color: var(--muted);">Выбери тип матча</div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button id="btn-match-public" class="btn" style="width: 100%;">Public</button>
+        <button id="btn-match-private" class="btn" style="width: 100%;">Private</button>
+      </div>
+    </div>
+
+    <!-- Private Match User Search Modal -->
+    <div id="private-match-modal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="private-match-modal-title">
+      <div class="modal-content" style="padding: 24px; max-width: 400px;">
+        <button class="modal-close" aria-label="Close">&times;</button>
+        <h2 id="private-match-modal-title" style="position: static; margin: 0 0 20px 0; padding: 0; background: none; font-size: 1.5rem;">Find User</h2>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <label for="private-match-username" style="display: block; margin-bottom: 8px; font-weight: 500;">Username</label>
+            <input 
+              type="text" 
+              id="private-match-username" 
+              placeholder="@username" 
+              style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: var(--fg); font-size: 0.9rem;"
+              autocomplete="off"
+            />
+            <div id="private-match-suggestions" style="margin-top: 8px; max-height: 200px; overflow-y: auto; display: none;"></div>
+          </div>
+          <div id="private-match-user-preview" style="display: none; padding: 12px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <img id="private-match-user-avatar" src="" alt="" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);" />
+              <div>
+                <div id="private-match-user-name" style="font-weight: 600;"></div>
+                <div id="private-match-user-fid" style="font-size: 0.875rem; color: var(--muted);"></div>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-private-match-cancel" class="btn" style="flex: 1;">Cancel</button>
+            <button id="btn-private-match-send" class="btn" style="flex: 1; display: none;">Send Challenge</button>
+          </div>
+        </div>
       </div>
     </div>
 
