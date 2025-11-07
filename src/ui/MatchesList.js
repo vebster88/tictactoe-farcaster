@@ -196,10 +196,10 @@ async function renderMatchesList(container, matches, playerFid) {
           <img src="${avatarSrc}" alt="${opponentDisplay}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);" onerror="this.src='/assets/images/hero.jpg';" />
           <span>${lang === "ru" ? "Противник" : "Opponent"}: ${opponentDisplay}</span>
         </div>
-        <div style="font-size: 0.875rem; color: var(--muted);">
+        <div style="font-size: 0.875rem; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
           <span>${lang === "ru" ? "Статус" : "Status"}: ${statusText}</span>
+          ${timeDisplay ? `<span style="color: ${isExpired ? 'var(--lose)' : 'var(--fg)'}; margin-top: 4px;">${lang === "ru" ? "Время" : "Time"}: ${timeDisplay}</span>` : ""}
         </div>
-        ${timeDisplay ? `<div style="font-size: 0.875rem; color: ${isExpired ? 'var(--lose)' : 'var(--fg)'}; margin-top: 4px;">${lang === "ru" ? "Время" : "Time"}: ${timeDisplay}</div>` : ""}
       </div>
     `;
     

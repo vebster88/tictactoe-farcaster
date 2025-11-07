@@ -380,9 +380,11 @@ const modalCloseBtns = document.querySelectorAll(".modal-close");
 
 let state = createInitialState();
 let sessionStats = { wins: 0, losses: 0, draws: 0 };
-const recordedMatchOutcomes = new Set();
+const standaloneSessionStats = { wins: 0, losses: 0, draws: 0 };
+const matchOutcomeMap = new Map();
 let mode = settingsMode?.value || "pve-easy";
 let botThinking = false;
+const MAX_PENDING_INVITES = 2;
 
 function getLanguage() {
   return localStorage.getItem("language") || "en"; // Default to English
@@ -435,6 +437,48 @@ function showToast(message, type = "info") {
   }, 3000);
 }
 
+async function ensurePendingInviteLimit(session) {
+  const lang = getLanguage();
+  const playerFidRaw = session?.farcaster?.fid ?? session?.fid;
+  if (!playerFidRaw) {
+    return true;
+  }
+
+  const playerFidString = String(playerFidRaw);
+  const numericPlayerFid = typeof playerFidRaw === "string" ? parseInt(playerFidRaw, 10) : playerFidRaw;
+  const fidForRequest = Number.isFinite(numericPlayerFid) ? numericPlayerFid : playerFidRaw;
+
+  try {
+    const matches = await listPlayerMatches(fidForRequest);
+    const pendingInvites = (matches || []).filter((match) => {
+      if (match?.status !== "pending") return false;
+      const creatorRaw =
+        match.player1Fid ?? match.player1?.fid ?? match.createdByFid ?? match.createdBy?.fid ?? null;
+      if (creatorRaw === null || creatorRaw === undefined) return false;
+      return String(creatorRaw) === playerFidString;
+    });
+
+    if (pendingInvites.length >= MAX_PENDING_INVITES) {
+      const message =
+        lang === "ru"
+          ? `У вас уже есть ${MAX_PENDING_INVITES} активных предложения матча. Дождитесь принятия или отмените одно из них, чтобы создать новое.`
+          : `You already have ${MAX_PENDING_INVITES} active match invites. Wait for someone to accept or cancel one before creating another.`;
+      alert(message);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Failed to check pending invites:", error);
+    const message =
+      lang === "ru"
+        ? "Не удалось проверить текущие приглашения. Попробуйте снова чуть позже."
+        : "Failed to check your current invites. Please try again shortly.";
+    alert(message);
+    return false;
+  }
+}
+
 function render() {
   cells.forEach((btn, i) => {
     const v = state.board[i];
@@ -459,7 +503,11 @@ function resetBoard(keepScore = false) {
   state = createInitialState();
   if (!keepScore) {
     sessionStats = { wins: 0, losses: 0, draws: 0 };
-    recordedMatchOutcomes.clear();
+    standaloneSessionStats.wins = 0;
+    standaloneSessionStats.losses = 0;
+    standaloneSessionStats.draws = 0;
+    matchOutcomeMap.clear();
+    recalculateTotalStats();
   }
   botThinking = false;
   render();
@@ -474,24 +522,73 @@ function updateScores() {
   if (drawEl) drawEl.textContent = String(sessionStats.draws);
 }
 
-function recordOutcome(result, matchId = null) {
-  if (matchId !== null && matchId !== undefined) {
-    const key = `${matchId}:${result}`;
-    if (recordedMatchOutcomes.has(key)) {
-      return false;
+function recalculateTotalStats() {
+  sessionStats = {
+    wins: standaloneSessionStats.wins,
+    losses: standaloneSessionStats.losses,
+    draws: standaloneSessionStats.draws
+  };
+
+  for (const outcome of matchOutcomeMap.values()) {
+    if (outcome === "win") {
+      sessionStats.wins += 1;
+    } else if (outcome === "loss") {
+      sessionStats.losses += 1;
+    } else if (outcome === "draw") {
+      sessionStats.draws += 1;
     }
-    recordedMatchOutcomes.add(key);
   }
-  
-  if (result === "win") {
-    sessionStats.wins += 1;
-  } else if (result === "loss") {
-    sessionStats.losses += 1;
-  } else {
-    sessionStats.draws += 1;
-  }
-  
+
   updateScores();
+}
+
+function recordOutcome(result, matchId = null) {
+  if (result !== "win" && result !== "loss" && result !== "draw") {
+    return false;
+  }
+
+  if (result === "win") {
+    if (matchId !== null && matchId !== undefined) {
+      const key = String(matchId);
+      const previousOutcome = matchOutcomeMap.get(key);
+      if (previousOutcome === "win") {
+        recalculateTotalStats();
+        return false;
+      }
+      matchOutcomeMap.set(key, "win");
+      recalculateTotalStats();
+      return previousOutcome !== "win";
+    }
+    standaloneSessionStats.wins += 1;
+  } else if (result === "loss") {
+    if (matchId !== null && matchId !== undefined) {
+      const key = String(matchId);
+      const previousOutcome = matchOutcomeMap.get(key);
+      if (previousOutcome === "loss") {
+        recalculateTotalStats();
+        return false;
+      }
+      matchOutcomeMap.set(key, "loss");
+      recalculateTotalStats();
+      return previousOutcome !== "loss";
+    }
+    standaloneSessionStats.losses += 1;
+  } else {
+    if (matchId !== null && matchId !== undefined) {
+      const key = String(matchId);
+      const previousOutcome = matchOutcomeMap.get(key);
+      if (previousOutcome === "draw") {
+        recalculateTotalStats();
+        return false;
+      }
+      matchOutcomeMap.set(key, "draw");
+      recalculateTotalStats();
+      return previousOutcome !== "draw";
+    }
+    standaloneSessionStats.draws += 1;
+  }
+
+  recalculateTotalStats();
   return true;
 }
 
@@ -2113,6 +2210,16 @@ inviteBtn?.addEventListener("click", async () => {
       
       const handleChoice = async (visibility) => {
         if (resolved) return;
+
+        const canCreate = await ensurePendingInviteLimit(session);
+        if (!canCreate) {
+          cleanup();
+          matchTypeContext.style.display = "none";
+          resolved = true;
+          resolve();
+          return;
+        }
+
         resolved = true;
         cleanup();
         matchTypeContext.style.display = "none";
@@ -2145,8 +2252,18 @@ inviteBtn?.addEventListener("click", async () => {
       };
       
       publicHandler = () => handleChoice("public");
-      privateHandler = () => {
+      privateHandler = async () => {
         if (resolved) return;
+
+        const canCreate = await ensurePendingInviteLimit(session);
+        if (!canCreate) {
+          cleanup();
+          matchTypeContext.style.display = "none";
+          resolved = true;
+          resolve();
+          return;
+        }
+
         cleanup();
         matchTypeContext.style.display = "none";
         
@@ -2323,6 +2440,11 @@ function initPrivateMatchSearch(modal, session, onResolve) {
     const sendHandler = async () => {
       if (!selectedPrivateMatchUser) return;
       
+      const canCreate = await ensurePendingInviteLimit(session);
+      if (!canCreate) {
+        return;
+      }
+
       try {
         // Создаем приватный матч (skipPublish чтобы не публиковать дважды)
         const { payload, matchCreated } = await sendInvite(session, { 
