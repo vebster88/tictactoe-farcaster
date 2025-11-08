@@ -210,6 +210,12 @@ window.updateDebugModal = function() {
     }
   }
   
+  uniqueLogs.sort((a, b) => {
+    const timeA = a.timestamp ? new Date(a.timestamp) : new Date(0);
+    const timeB = b.timestamp ? new Date(b.timestamp) : new Date(0);
+    return timeA - timeB;
+  });
+
   logsCount.textContent = uniqueLogs.length;
   
   // Показываем информацию о статусе debug режима
@@ -234,7 +240,7 @@ window.updateDebugModal = function() {
       <div style="margin-bottom: 10px; padding: 8px; background: #111; border-radius: 4px; font-size: 11px; color: #888;">
         ${debugStatus}
       </div>
-      ${uniqueLogs.slice(-50).reverse().map(log => 
+      ${uniqueLogs.slice(-50).map(log => 
         `<div style="margin: 8px 0; padding: 8px; border-bottom: 1px solid #222; border-left: 3px solid #0f0;">
           <div style="display: flex; gap: 10px; margin-bottom: 4px;">
             <span style="color: #888; font-size: 10px;">[${log.time}]</span>
@@ -385,6 +391,208 @@ const matchOutcomeMap = new Map();
 let mode = settingsMode?.value || "pve-easy";
 let botThinking = false;
 const MAX_PENDING_INVITES = 2;
+const matchSymbolCache = new Map();
+
+function normalizeMatchIdValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "object") {
+    if ("matchId" in value && value.matchId !== null && value.matchId !== undefined) {
+      return normalizeMatchIdValue(value.matchId);
+    }
+    if ("id" in value && value.id !== null && value.id !== undefined) {
+      return normalizeMatchIdValue(value.id);
+    }
+    return null;
+  }
+  try {
+    return String(value);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeFidValue(fid) {
+  if (fid === null || fid === undefined) return null;
+  if (typeof fid === "object") {
+    if ("fid" in fid) return normalizeFidValue(fid.fid);
+    if ("id" in fid) return normalizeFidValue(fid.id);
+  }
+  if (typeof fid === "string") {
+    const trimmed = fid.trim();
+    if (!trimmed) return null;
+    return trimmed;
+  }
+  if (Number.isFinite(fid)) {
+    return String(fid);
+  }
+  try {
+    return String(fid);
+  } catch (error) {
+    return null;
+  }
+}
+
+function getMatchRoleInfo(match, playerFidInput) {
+  const player1FidRaw = match?.player1Fid ?? match?.player1?.fid;
+  const player2FidRaw = match?.player2Fid ?? match?.player2?.fid;
+  const player1Fid = normalizeFidValue(player1FidRaw);
+  const player2Fid = normalizeFidValue(player2FidRaw);
+  const playerFidStr = normalizeFidValue(playerFidInput);
+
+  const isPlayer1 = Boolean(playerFidStr && player1Fid && player1Fid === playerFidStr);
+  const isPlayer2 = Boolean(playerFidStr && player2Fid && player2Fid === playerFidStr);
+
+  return { player1Fid, player2Fid, isPlayer1, isPlayer2 };
+}
+
+function getMatchSymbols(match) {
+  let player1Symbol = match?.player1Symbol;
+  let player2Symbol = match?.player2Symbol;
+
+  if (player1Symbol) player1Symbol = String(player1Symbol).toUpperCase();
+  if (player2Symbol) player2Symbol = String(player2Symbol).toUpperCase();
+
+  if (!player1Symbol || !player2Symbol) {
+    const firstMove = match?.rules?.firstMove;
+    if (!player1Symbol && !player2Symbol) {
+      if (firstMove === "O") {
+        player1Symbol = "O";
+        player2Symbol = "X";
+      } else if (firstMove === "X") {
+        player1Symbol = "X";
+        player2Symbol = "O";
+      } else {
+        player1Symbol = "X";
+        player2Symbol = "O";
+      }
+    } else if (!player1Symbol && player2Symbol) {
+      player1Symbol = player2Symbol === "X" ? "O" : "X";
+    } else if (!player2Symbol && player1Symbol) {
+      player2Symbol = player1Symbol === "X" ? "O" : "X";
+    } else {
+      player1Symbol = player1Symbol || "X";
+      player2Symbol = player2Symbol || (player1Symbol === "X" ? "O" : "X");
+    }
+  }
+
+  if (!player1Symbol) player1Symbol = "X";
+  if (!player2Symbol) player2Symbol = player1Symbol === "X" ? "O" : "X";
+
+  return { player1Symbol, player2Symbol };
+}
+
+function getTooltipSymbolInfo(match, playerFidInput) {
+  const playerFidStr = normalizeFidValue(playerFidInput);
+  const { player1Fid, player2Fid, isPlayer1, isPlayer2 } = getMatchRoleInfo(match, playerFidStr);
+  const { player1Symbol, player2Symbol } = getMatchSymbols(match);
+
+  if (isPlayer1) {
+    return { mySymbol: player1Symbol, opponentFid: player2Fid, player1Fid, player2Fid };
+  }
+  if (isPlayer2) {
+    return { mySymbol: player2Symbol, opponentFid: player1Fid, player1Fid, player2Fid };
+  }
+
+  if (DEBUG_ENABLED) {
+    addDebugLog("⚠️ Не удалось определить символ игрока для матча (tooltip)", {
+      matchId: match?.matchId ?? match?.id ?? null,
+      playerFid: playerFidInput,
+      player1Fid,
+      player2Fid,
+      status: match?.status
+    });
+  }
+
+  return null;
+}
+
+function updateMatchSymbolCache(match, infoOverride = null, options = {}) {
+  if (!match) return null;
+  const matchId = normalizeMatchIdValue(match);
+  if (!matchId) return null;
+
+  const session = getSession();
+  const playerFid = session?.farcaster?.fid || session?.fid;
+  if (!playerFid) return null;
+
+  const playerFidStr = normalizeFidValue(playerFid);
+  const info = infoOverride || getTooltipSymbolInfo(match, playerFidStr);
+  if (!info || !info.mySymbol) {
+    return null;
+  }
+
+  const normalizedInfo = {
+    ...info,
+    mySymbol: String(info.mySymbol).toUpperCase(),
+    player1Fid: normalizeFidValue(info.player1Fid),
+    player2Fid: normalizeFidValue(info.player2Fid),
+    opponentFid: normalizeFidValue(info.opponentFid),
+    matchId,
+    playerFid: playerFidStr,
+    cachedAt: Date.now(),
+    source: options?.source || "unknown",
+    trace: options?.trace || null
+  };
+
+  matchSymbolCache.set(matchId, normalizedInfo);
+  return normalizedInfo;
+}
+
+function validateSymbolInfo(match, playerFidInput, symbolInfo) {
+  const playerFidStr = normalizeFidValue(playerFidInput);
+  if (!match) {
+    return { ok: false, reason: "NO_MATCH_DATA" };
+  }
+  if (!playerFidStr) {
+    return { ok: false, reason: "NO_PLAYER_FID" };
+  }
+  if (!symbolInfo || !symbolInfo.mySymbol) {
+    return { ok: false, reason: "NO_SYMBOL_INFO" };
+  }
+
+  const { player1Fid, player2Fid } = getMatchRoleInfo(match, playerFidStr);
+  if (!player1Fid && !player2Fid) {
+    return { ok: false, reason: "MATCH_WITHOUT_PLAYERS", meta: { matchId: match?.matchId ?? match?.id ?? null } };
+  }
+
+  const { player1Symbol, player2Symbol } = getMatchSymbols(match);
+  const expectedSymbol = player1Fid === playerFidStr
+    ? player1Symbol
+    : player2Fid === playerFidStr
+      ? player2Symbol
+      : null;
+
+  if (!expectedSymbol) {
+    return {
+      ok: false,
+      reason: "PLAYER_NOT_IN_MATCH",
+      meta: {
+        matchId: match?.matchId ?? match?.id ?? null,
+        playerFid: playerFidStr,
+        player1Fid,
+        player2Fid
+      }
+    };
+  }
+
+  const actualSymbol = String(symbolInfo.mySymbol).toUpperCase();
+  if (actualSymbol !== String(expectedSymbol).toUpperCase()) {
+    return {
+      ok: false,
+      reason: "SYMBOL_MISMATCH",
+      meta: {
+        matchId: match?.matchId ?? match?.id ?? null,
+        expectedSymbol: expectedSymbol,
+        actualSymbol,
+        playerFid: playerFidStr,
+        player1Fid,
+        player2Fid
+      }
+    };
+  }
+
+  return { ok: true };
+}
 
 function getLanguage() {
   return localStorage.getItem("language") || "en"; // Default to English
@@ -1057,9 +1265,21 @@ if (matchSwitcher) {
         clearTimeout(tooltipAutoHideTimeout);
         tooltipAutoHideTimeout = null;
       }
-      
+      if (DEBUG_ENABLED) {
+        addDebugLog("ℹ️ Запрос tooltip для матча", {
+          targetMatchId: normalizeMatchIdValue(match),
+          currentMatchId: normalizeMatchIdValue(getCurrentMatch()),
+          triggerButton: buttonElement?.id || null
+        });
+      }
+
       tooltipElement.style.display = "block";
-      await updateMatchSwitcherTooltip(match);
+      const updated = await updateMatchSwitcherTooltip(match);
+      if (!updated) {
+        tooltipElement.style.display = "none";
+        tooltipElement.dataset.matchId = "";
+        return;
+      }
       // Позиционируем tooltip правее стрелки
       setTimeout(() => {
         if (tooltipElement && buttonElement) {
@@ -1114,9 +1334,14 @@ if (matchSwitcher) {
     matchSwitcherPrev.addEventListener("mouseenter", async () => {
       if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
       const currentMatch = getCurrentMatch();
-      const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatch.matchId);
+      const currentMatchId = normalizeMatchIdValue(currentMatch);
+      const currentIndex = window.activeMatchesList.findIndex(match => normalizeMatchIdValue(match) === currentMatchId);
       if (currentIndex > 0) {
         const prevMatch = window.activeMatchesList[currentIndex - 1];
+        if (tooltipTimeout) {
+          clearTimeout(tooltipTimeout);
+          tooltipTimeout = null;
+        }
         tooltipTimeout = setTimeout(() => showTooltip(prevMatch, matchSwitcherPrev), 300);
       }
     });
@@ -1128,9 +1353,14 @@ if (matchSwitcher) {
     matchSwitcherNext.addEventListener("mouseenter", async () => {
       if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
       const currentMatch = getCurrentMatch();
-      const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatch.matchId);
+      const currentMatchId = normalizeMatchIdValue(currentMatch);
+      const currentIndex = window.activeMatchesList.findIndex(match => normalizeMatchIdValue(match) === currentMatchId);
       if (currentIndex < window.activeMatchesList.length - 1) {
         const nextMatch = window.activeMatchesList[currentIndex + 1];
+        if (tooltipTimeout) {
+          clearTimeout(tooltipTimeout);
+          tooltipTimeout = null;
+        }
         tooltipTimeout = setTimeout(() => showTooltip(nextMatch, matchSwitcherNext), 300);
       }
     });
@@ -1139,6 +1369,10 @@ if (matchSwitcher) {
   
   // Tooltip при наведении на сам переключатель (показываем текущий матч)
   matchSwitcher.addEventListener("mouseenter", async () => {
+    if (tooltipTimeout) {
+      clearTimeout(tooltipTimeout);
+      tooltipTimeout = null;
+    }
     tooltipTimeout = setTimeout(async () => {
       const currentMatch = getCurrentMatch();
       if (currentMatch.matchState && tooltipElement) {
@@ -1472,6 +1706,19 @@ async function updateMatchSwitcher() {
     const matches = await listPlayerMatches(playerFid);
     const activeMatches = matches.filter(m => m.status === "active" && !m.gameState.finished);
     
+    const activeMatchIds = new Set(
+      activeMatches
+        .map(match => normalizeMatchIdValue(match))
+        .filter(id => id !== null)
+    );
+    for (const cachedId of Array.from(matchSymbolCache.keys())) {
+      if (!activeMatchIds.has(cachedId)) {
+        matchSymbolCache.delete(cachedId);
+      }
+    }
+
+    activeMatches.forEach(match => updateMatchSymbolCache(match, null, { source: "list_player_matches" }));
+
     // Показываем переключатель только если есть 2+ активных матча
     if (activeMatches.length >= 2) {
       matchSwitcher.style.display = "flex";
@@ -1500,8 +1747,8 @@ function updateMatchSwitcherButtons() {
   }
   
   const currentMatch = getCurrentMatch();
-  const currentMatchId = currentMatch.matchId;
-  const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatchId);
+  const currentMatchId = normalizeMatchIdValue(currentMatch);
+  const currentIndex = window.activeMatchesList.findIndex(match => normalizeMatchIdValue(match) === currentMatchId);
   
   if (matchSwitcherPrev) {
     matchSwitcherPrev.disabled = currentIndex <= 0;
@@ -1516,12 +1763,14 @@ async function switchToPreviousMatch() {
   if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
   
   const currentMatch = getCurrentMatch();
-  const currentMatchId = currentMatch.matchId;
-  const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatchId);
+  const currentMatchId = normalizeMatchIdValue(currentMatch);
+  const currentIndex = window.activeMatchesList.findIndex(match => normalizeMatchIdValue(match) === currentMatchId);
   
   if (currentIndex > 0) {
     const prevMatch = window.activeMatchesList[currentIndex - 1];
-    await loadMatch(prevMatch.matchId);
+    const prevMatchId = normalizeMatchIdValue(prevMatch);
+    if (!prevMatchId) return;
+    await loadMatch(prevMatchId);
     mode = "pvp-farcaster";
     if (settingsMode) settingsMode.value = "pvp-farcaster";
     updateUIForMode();
@@ -1538,12 +1787,14 @@ async function switchToNextMatch() {
   if (!window.activeMatchesList || window.activeMatchesList.length < 2) return;
   
   const currentMatch = getCurrentMatch();
-  const currentMatchId = currentMatch.matchId;
-  const currentIndex = window.activeMatchesList.findIndex(m => m.matchId === currentMatchId);
+  const currentMatchId = normalizeMatchIdValue(currentMatch);
+  const currentIndex = window.activeMatchesList.findIndex(match => normalizeMatchIdValue(match) === currentMatchId);
   
   if (currentIndex < window.activeMatchesList.length - 1) {
     const nextMatch = window.activeMatchesList[currentIndex + 1];
-    await loadMatch(nextMatch.matchId);
+    const nextMatchId = normalizeMatchIdValue(nextMatch);
+    if (!nextMatchId) return;
+    await loadMatch(nextMatchId);
     mode = "pvp-farcaster";
     if (settingsMode) settingsMode.value = "pvp-farcaster";
     updateUIForMode();
@@ -1558,18 +1809,122 @@ async function switchToNextMatch() {
 // Обновление tooltip с информацией о противнике
 async function updateMatchSwitcherTooltip(match) {
   const tooltipEl = document.getElementById("match-switcher-tooltip");
-  if (!tooltipEl || !match) return;
+  if (!tooltipEl || !match) return false;
   
   const session = getSession();
   const playerFid = session?.farcaster?.fid || session?.fid;
-  if (!playerFid) return;
-  
-  const isPlayer1 = match.player1Fid === playerFid;
-  const opponentFid = isPlayer1 ? match.player2Fid : match.player1Fid;
-  
-  if (opponentFid) {
+  if (!playerFid) return false;
+
+  let matchData = match;
+  const matchIdStr = normalizeMatchIdValue(match);
+  let symbolInfo = null;
+  let fetchedFreshData = false;
+
+  if (matchIdStr) {
     try {
-      const userData = await getUserByFid(opponentFid);
+      const freshMatch = await getMatch(matchIdStr);
+      if (freshMatch) {
+        matchData = freshMatch;
+        symbolInfo = updateMatchSymbolCache(
+          freshMatch,
+          null,
+          {
+            source: "tooltip_fetch",
+            trace: {
+              trigger: "hover",
+              matchId: matchIdStr
+            }
+          }
+        );
+        fetchedFreshData = true;
+      }
+    } catch (error) {
+      console.warn("Failed to refresh match data for tooltip:", error);
+      const cached = matchSymbolCache.get(matchIdStr);
+      if (cached) {
+        symbolInfo = cached;
+      } else {
+        symbolInfo = updateMatchSymbolCache(
+          matchData,
+          null,
+          {
+            source: "tooltip_fallback_after_fetch_error",
+            trace: {
+              trigger: "hover",
+              matchId: matchIdStr,
+              reason: "fetch_error"
+            }
+          }
+        );
+      }
+    }
+  } else {
+    symbolInfo = updateMatchSymbolCache(
+      matchData,
+      null,
+      {
+        source: "tooltip_without_match_id",
+        trace: {
+          trigger: "hover",
+          reason: "no_match_id"
+        }
+      }
+    );
+  }
+
+  if (!symbolInfo) {
+    return false;
+  }
+
+  let validation = validateSymbolInfo(matchData, playerFid, symbolInfo);
+
+  if (!validation.ok) {
+    if (DEBUG_ENABLED) {
+      addDebugLog("❌ Валидация символа для tooltip не прошла", {
+        reason: validation.reason,
+        meta: validation.meta || null,
+        matchId: matchIdStr,
+        playerFid: normalizeFidValue(playerFid),
+        symbolInfo
+      });
+    }
+    if (matchIdStr) {
+      matchSymbolCache.delete(matchIdStr);
+    }
+    return false;
+  }
+
+  if (!symbolInfo) return false;
+
+  const { mySymbol, opponentFid, player1Fid, player2Fid } = symbolInfo;
+
+  const matchIdentifier =
+    normalizeMatchIdValue(matchData) ||
+    `${player1Fid || "unknown"}:${player2Fid || "unknown"}`;
+  tooltipEl.dataset.matchId = matchIdentifier;
+
+  if (DEBUG_ENABLED) {
+    addDebugLog("ℹ️ Данные для tooltip подготовлены", {
+      matchIdentifier,
+      hoveredMatchId: matchIdStr,
+      mySymbol,
+      opponentFid,
+      playerFid: normalizeFidValue(playerFid),
+      player1Fid,
+      player2Fid,
+      cacheSource: symbolInfo.source,
+      fetchedFreshData,
+      trace: symbolInfo.trace || null
+    });
+  }
+
+  if (opponentFid) {
+    const opponentFidNumber = Number(opponentFid);
+    try {
+      const userData = await getUserByFid(Number.isFinite(opponentFidNumber) ? opponentFidNumber : opponentFid);
+      if (tooltipEl.dataset.matchId !== matchIdentifier) {
+        return;
+      }
       if (userData?.user) {
         const opponentName = userData.user.username 
           ? `@${userData.user.username}` 
@@ -1589,7 +1944,6 @@ async function updateMatchSwitcherTooltip(match) {
         }
         if (infoEl) {
           const lang = getLanguage();
-          const mySymbol = isPlayer1 ? match.player1Symbol : match.player2Symbol;
           infoEl.textContent = lang === "ru" 
             ? `Ваш символ: ${mySymbol}` 
             : `Your symbol: ${mySymbol}`;
@@ -1599,6 +1953,20 @@ async function updateMatchSwitcherTooltip(match) {
       console.warn("Failed to load opponent info for tooltip:", error);
     }
   }
+
+  // Обновляем символ даже если данные противника не загрузились
+  const infoEl = tooltipEl.querySelector("#match-switcher-match-info");
+  if (infoEl) {
+    if (tooltipEl.dataset.matchId !== matchIdentifier) {
+      return false;
+    }
+    const lang = getLanguage();
+    infoEl.textContent = lang === "ru"
+      ? `Ваш символ: ${mySymbol}`
+      : `Your symbol: ${mySymbol}`;
+  }
+
+  return true;
 }
 
 function updateMatchUI() {
@@ -1717,6 +2085,7 @@ function updateMatchUI() {
   // Update board state from match
   state = match.gameState;
   render();
+  updateMatchSymbolCache(match, null, { source: "update_match_ui" });
   
   // Обновляем переключатель матчей (асинхронно, чтобы не блокировать рендер)
   updateMatchSwitcher().catch(err => console.warn("Failed to update match switcher:", err));
