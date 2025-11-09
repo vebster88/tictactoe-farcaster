@@ -392,6 +392,9 @@ let mode = settingsMode?.value || "pve-easy";
 let botThinking = false;
 const MAX_PENDING_INVITES = 2;
 const matchSymbolCache = new Map();
+const statsRefreshTimers = new Set();
+const activeMatchIdsCache = new Set();
+let statsSyncInterval = null;
 
 function normalizeMatchIdValue(value) {
   if (value === null || value === undefined) return null;
@@ -658,6 +661,7 @@ async function ensurePendingInviteLimit(session) {
 
   try {
     const matches = await listPlayerMatches(fidForRequest);
+    await syncSessionStatsWithMatches(matches, { source: "ensure_pending_limit", fromList: true });
     const pendingInvites = (matches || []).filter((match) => {
       if (match?.status !== "pending") return false;
       const creatorRaw =
@@ -765,6 +769,7 @@ function recordOutcome(result, matchId = null) {
       }
       matchOutcomeMap.set(key, "win");
       recalculateTotalStats();
+      scheduleStatsSyncAfterOutcome(key, "win", "record_outcome_win");
       return previousOutcome !== "win";
     }
     standaloneSessionStats.wins += 1;
@@ -778,6 +783,7 @@ function recordOutcome(result, matchId = null) {
       }
       matchOutcomeMap.set(key, "loss");
       recalculateTotalStats();
+      scheduleStatsSyncAfterOutcome(key, "loss", "record_outcome_loss");
       return previousOutcome !== "loss";
     }
     standaloneSessionStats.losses += 1;
@@ -791,6 +797,7 @@ function recordOutcome(result, matchId = null) {
       }
       matchOutcomeMap.set(key, "draw");
       recalculateTotalStats();
+      scheduleStatsSyncAfterOutcome(key, "draw", "record_outcome_draw");
       return previousOutcome !== "draw";
     }
     standaloneSessionStats.draws += 1;
@@ -798,6 +805,248 @@ function recordOutcome(result, matchId = null) {
 
   recalculateTotalStats();
   return true;
+}
+
+function determineMatchOutcomeForPlayer(match, playerFidInput) {
+  if (!match || !match.gameState || !match.gameState.finished) {
+    return null;
+  }
+
+  const playerFid = normalizeFidValue(playerFidInput);
+  if (!playerFid) {
+    return null;
+  }
+
+  const { isPlayer1, isPlayer2 } = getMatchRoleInfo(match, playerFid);
+  if (!isPlayer1 && !isPlayer2) {
+    return null;
+  }
+
+  const winnerSymbol = match.gameState.winner;
+  if (!winnerSymbol) {
+    return "draw";
+  }
+
+  const { player1Symbol, player2Symbol } = getMatchSymbols(match);
+  const mySymbol = isPlayer1 ? player1Symbol : player2Symbol;
+  if (!mySymbol) {
+    return null;
+  }
+
+  return String(mySymbol).toUpperCase() === String(winnerSymbol).toUpperCase() ? "win" : "loss";
+}
+
+async function syncSessionStatsWithMatches(matches, options = {}) {
+  if (!Array.isArray(matches) || matches.length === 0) {
+    return;
+  }
+
+  const session = getSession();
+  const playerFid = normalizeFidValue(session?.farcaster?.fid || session?.fid);
+  if (!playerFid) {
+    return;
+  }
+
+  const isFromList = options?.fromList === true;
+
+  const matchesById = new Map();
+  const matchesToEnrich = [];
+  const currentListMatchIds = new Set();
+
+  for (const match of matches) {
+    const matchId = normalizeMatchIdValue(match);
+    if (!matchId) continue;
+
+    const hasGameState = match?.gameState && typeof match.gameState.finished === "boolean";
+    const key = String(matchId);
+    const hasRecordedOutcome = matchOutcomeMap.has(key);
+    const status = typeof match?.status === "string" ? match.status.toLowerCase() : "active";
+    const matchFinished = match?.gameState?.finished === true || (status !== "active" && status !== "pending");
+
+    if (isFromList) {
+      currentListMatchIds.add(matchId);
+    }
+
+    if ((!hasGameState || (!matchFinished && !hasRecordedOutcome)) &&
+        options?.skipDetails !== true) {
+      matchesToEnrich.push(matchId);
+    }
+
+    const existing = matchesById.get(matchId);
+    if (!existing || (!existing.gameState && match.gameState)) {
+      matchesById.set(matchId, match);
+    }
+  }
+
+  if (isFromList) {
+    const missingMatchIds = Array.from(activeMatchIdsCache).filter(id => !currentListMatchIds.has(id));
+    if (missingMatchIds.length > 0) {
+      missingMatchIds.forEach(id => matchesToEnrich.push(id));
+    }
+  }
+
+  if (matchesToEnrich.length > 0) {
+    const uniqueIds = Array.from(new Set(matchesToEnrich));
+    const fetchResults = await Promise.allSettled(
+      uniqueIds.map(id => getMatch(id).catch(error => {
+        if (DEBUG_ENABLED) {
+          addDebugLog("⚠️ Не удалось получить детальные данные матча", {
+            matchId: id,
+            source: options?.source || "sync_session_stats",
+            error: error?.message || String(error)
+          });
+        }
+        throw error;
+      }))
+    );
+
+    fetchResults.forEach((result, index) => {
+      if (result.status === "fulfilled" && result.value) {
+        const match = result.value;
+        const matchId = normalizeMatchIdValue(match);
+        if (!matchId) return;
+        matchesById.set(matchId, match);
+      }
+    });
+  }
+
+  let statsChanged = false;
+
+  for (const [matchId, match] of matchesById.entries()) {
+    if (!match) {
+      continue;
+    }
+
+    const status = typeof match?.status === "string" ? match.status.toLowerCase() : "active";
+    const matchFinished = match?.gameState?.finished === true || (status !== "active" && status !== "pending");
+
+    if (!matchFinished) {
+      continue;
+    }
+
+    if (!match.gameState) {
+      if (DEBUG_ENABLED) {
+        addDebugLog("⚠️ Нет gameState у завершенного матча", {
+          source: options?.source || "unknown",
+          matchId,
+          status
+        });
+      }
+      continue;
+    }
+
+    const outcome = determineMatchOutcomeForPlayer(match, playerFid);
+    if (!outcome) {
+      if (DEBUG_ENABLED) {
+        addDebugLog("⚠️ Не удалось определить исход для игрока", {
+          source: options?.source || "unknown",
+          matchId,
+          playerFid
+        });
+      }
+      continue;
+    }
+
+    const key = String(matchId);
+    const previousOutcome = matchOutcomeMap.get(key);
+    if (previousOutcome !== outcome) {
+      matchOutcomeMap.set(key, outcome);
+      statsChanged = true;
+
+      if (DEBUG_ENABLED && options?.source) {
+        addDebugLog("📊 Синхронизирован результат матча (список)", {
+          matchId: key,
+          outcome,
+          source: options.source,
+          delay: options.delay || 0
+        });
+      }
+    } else if (DEBUG_ENABLED) {
+      addDebugLog("ℹ️ Исход матча уже зафиксирован", {
+        matchId: key,
+        outcome,
+        source: options?.source || "unknown"
+      });
+    }
+  }
+
+  if (statsChanged) {
+    recalculateTotalStats();
+    if (DEBUG_ENABLED) {
+      addDebugLog("✅ Пересчитана статистика после синхронизации", {
+        source: options?.source || "unknown",
+        totalWins: sessionStats.wins,
+        totalLosses: sessionStats.losses,
+        totalDraws: sessionStats.draws
+      });
+    }
+  }
+
+  if (isFromList) {
+    activeMatchIdsCache.clear();
+    currentListMatchIds.forEach(id => activeMatchIdsCache.add(id));
+  }
+}
+
+async function refreshSessionStatsFromServer(options = {}) {
+  const session = getSession();
+  const playerFid = session?.farcaster?.fid || session?.fid;
+  if (!playerFid) {
+    return;
+  }
+
+  try {
+    const matches = await listPlayerMatches(playerFid);
+    await syncSessionStatsWithMatches(matches, {
+      source: options.source || "refresh_session_stats",
+      delay: options.delay || 0,
+      fromList: true
+    });
+  } catch (error) {
+    if (DEBUG_ENABLED) {
+      addDebugLog("⚠️ Не удалось обновить статистику с сервера", {
+        source: options.source || "refresh_session_stats",
+        delay: options.delay || 0,
+        error: error?.message || String(error)
+      });
+    }
+  }
+}
+
+function scheduleSessionStatsRefresh(delays, source) {
+  if (!Array.isArray(delays)) {
+    delays = [delays];
+  }
+  delays
+    .map(delay => Number.isFinite(delay) ? Math.max(0, delay) : 0)
+    .forEach(delay => {
+      const timer = setTimeout(async () => {
+        statsRefreshTimers.delete(timer);
+        await refreshSessionStatsFromServer({ source, delay });
+      }, delay);
+      statsRefreshTimers.add(timer);
+    });
+}
+
+function scheduleStatsSyncAfterOutcome(matchId, outcome, source) {
+  if (!matchId) return;
+  const baseSource = source || `outcome_${outcome}`;
+  scheduleSessionStatsRefresh([0, 1200, 3500, 6000, 9000], `${baseSource}_immediate`);
+}
+
+function startSessionStatsLoop(intervalMs = 4000) {
+  stopSessionStatsLoop();
+  void refreshSessionStatsFromServer({ source: "stats_loop_initial" }).catch(() => {});
+  statsSyncInterval = setInterval(() => {
+    void refreshSessionStatsFromServer({ source: "stats_loop_periodic", delay: intervalMs }).catch(() => {});
+  }, intervalMs);
+}
+
+function stopSessionStatsLoop() {
+  if (statsSyncInterval) {
+    clearInterval(statsSyncInterval);
+    statsSyncInterval = null;
+  }
 }
 
 function maybeBotMove() {
@@ -983,7 +1232,8 @@ boardEl.addEventListener("click", async (e) => {
               const session = getSession();
               const playerFid = session?.farcaster?.fid || session?.fid;
               if (playerFid && mode === "pvp-farcaster") {
-                const matches = await listPlayerMatches(playerFid);
+              const matches = await listPlayerMatches(playerFid);
+              await syncSessionStatsWithMatches(matches, { source: "auto_switch_after_finish", fromList: true });
                 const activeMatches = matches.filter(m => 
                   m.status === "active" && 
                   !m.gameState.finished && 
@@ -1455,7 +1705,8 @@ window.addEventListener("match-synced", async () => {
               const session = getSession();
               const playerFid = session?.farcaster?.fid || session?.fid;
               if (playerFid && mode === "pvp-farcaster") {
-                const matches = await listPlayerMatches(playerFid);
+              const matches = await listPlayerMatches(playerFid);
+              await syncSessionStatsWithMatches(matches, { source: "match_synced_auto_switch", fromList: true });
                 const activeMatches = matches.filter(m => 
                   m.status === "active" && 
                   !m.gameState.finished && 
@@ -1499,18 +1750,27 @@ window.addEventListener("match-synced", async () => {
   }
 });
 
+window.addEventListener("player-matches-updated", (event) => {
+  const matches = event?.detail?.matches;
+  if (Array.isArray(matches) && matches.length > 0) {
+    void syncSessionStatsWithMatches(matches, { source: "matches_list_event", fromList: true }).catch(() => {});
+  }
+});
+
 // Cleanup on mode change
 settingsMode?.addEventListener("change", () => {
   if (mode !== "pvp-farcaster") {
     clearCurrentMatch();
     stopPendingMatchesCheck();
     updateMatchUI();
+    stopSessionStatsLoop();
   } else {
     // При переключении в pvp-farcaster запускаем проверку pending матчей
     const session = getSession();
     const playerFid = session?.farcaster?.fid || session?.fid;
     if (playerFid) {
       startPendingMatchesCheck(5000);
+      startSessionStatsLoop();
     }
   }
 });
@@ -1542,6 +1802,12 @@ function updateUIForMode() {
     publishBtn.style.display = isFarcasterMode && isSignedIn ? "inline-block" : "none";
   }
   
+  if (isFarcasterMode && isSignedIn) {
+    startSessionStatsLoop();
+  } else {
+    stopSessionStatsLoop();
+  }
+
   // Dev кнопка видна только для авторизованных разработчиков
   if (devToggleBtn) {
     devToggleBtn.style.display = isAuthorizedDev ? "inline-block" : "none";
@@ -1577,6 +1843,7 @@ async function checkPendingMatches() {
   
   try {
     const matches = await listPlayerMatches(playerFid);
+    await syncSessionStatsWithMatches(matches, { source: "pending_matches_check", fromList: true });
     
     // Ищем pending матчи, которые стали active
     for (const match of matches) {
@@ -1704,6 +1971,7 @@ async function updateMatchSwitcher() {
   
   try {
     const matches = await listPlayerMatches(playerFid);
+    await syncSessionStatsWithMatches(matches, { source: "match_switcher", fromList: true });
     const activeMatches = matches.filter(m => m.status === "active" && !m.gameState.finished);
     
     const activeMatchIds = new Set(
@@ -1825,6 +2093,7 @@ async function updateMatchSwitcherTooltip(match) {
       const freshMatch = await getMatch(matchIdStr);
       if (freshMatch) {
         matchData = freshMatch;
+        await syncSessionStatsWithMatches([freshMatch], { source: "tooltip_fetch" });
         symbolInfo = updateMatchSymbolCache(
           freshMatch,
           null,
@@ -1992,6 +2261,7 @@ function updateMatchUI() {
   }
 
   const match = currentMatch.matchState;
+  void syncSessionStatsWithMatches([match], { source: "update_match_ui" }).catch(() => {});
   
   // Если матч изменился, сбрасываем состояние синхронизации
   if (lastMatchId !== null && lastMatchId !== currentMatch.matchId) {
@@ -3128,6 +3398,7 @@ refreshUserLabel();
   if (playerFid && mode === "pvp-farcaster") {
     try {
       const matches = await listPlayerMatches(playerFid);
+      await syncSessionStatsWithMatches(matches, { source: "initial_load", fromList: true });
       const activeMatch = matches.find(m => m.status === "active" && !m.gameState.finished);
       if (activeMatch) {
         await loadMatch(activeMatch.matchId);
