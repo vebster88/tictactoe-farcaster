@@ -49,14 +49,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { fid } = req.body;
+    const fidValue = req.body?.fid ?? null;
 
-    if (!fid) {
+    if (fidValue === null || fidValue === undefined) {
       return res.status(400).json({ error: "fid is required" });
     }
 
+    const normalizedFid = typeof fidValue === "string" ? parseInt(fidValue, 10) : fidValue;
+
+    if (Number.isNaN(normalizedFid)) {
+      return res.status(400).json({ error: "fid must be a valid number" });
+    }
+
     // Get all matches for this player
-    const matches = await getPlayerMatches(fid);
+    const matches = await getPlayerMatches(normalizedFid);
     const activeMatches = matches.filter(m => m.status === MATCH_STATUS.ACTIVE);
 
     const timeoutMatches = [];

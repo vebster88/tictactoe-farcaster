@@ -94,13 +94,18 @@ export async function listPlayerMatches(fid) {
   }
 }
 
-export async function checkMatchTimeouts() {
+export async function checkMatchTimeouts(fid) {
+  if (fid === undefined || fid === null) {
+    throw new Error("fid is required to check match timeouts");
+  }
+
   try {
     const response = await fetch(`${API_BASE}/api/matches/check-timeouts`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ fid }),
     });
 
     if (!response.ok) {

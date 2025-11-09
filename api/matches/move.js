@@ -76,6 +76,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "playerFid is required" });
     }
 
+    const normalizedPlayerFid = typeof playerFid === "string" ? parseInt(playerFid, 10) : playerFid;
+
+    if (Number.isNaN(normalizedPlayerFid)) {
+      return res.status(400).json({ error: "playerFid must be a valid number" });
+    }
+
     if (cellIndex === undefined || cellIndex === null || cellIndex < 0 || cellIndex > 8) {
       return res.status(400).json({ error: "cellIndex must be between 0 and 8" });
     }
@@ -95,8 +101,10 @@ export default async function handler(req, res) {
     }
 
     // Determine which player is making the move
-    const isPlayer1 = match.player1Fid === playerFid;
-    const isPlayer2 = match.player2Fid === playerFid;
+    const normalizedPlayer1Fid = typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid;
+    const normalizedPlayer2Fid = typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid;
+    const isPlayer1 = normalizedPlayer1Fid === normalizedPlayerFid;
+    const isPlayer2 = normalizedPlayer2Fid === normalizedPlayerFid;
 
     if (!isPlayer1 && !isPlayer2) {
       return res.status(403).json({ error: "Player is not part of this match" });

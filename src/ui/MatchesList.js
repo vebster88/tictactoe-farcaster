@@ -14,6 +14,9 @@ export async function loadMatchesList(container, playerFid) {
   try {
     const matches = await listPlayerMatches(playerFid);
     console.log('[MatchesList] Received matches:', matches.length, matches);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("player-matches-updated", { detail: { matches, playerFid } }));
+    }
     await renderMatchesList(container, matches, playerFid);
   } catch (error) {
     const lang = localStorage.getItem("language") || "en";
