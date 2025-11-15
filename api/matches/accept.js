@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     }
 
     // Check if player already has 2 active matches
-    const playerMatches = await getPlayerMatches(normalizedPlayer2Fid);
+    const playerMatches = await getPlayerMatches(normalizedPlayer2Fid, { includeFinished: false });
     const activeMatches = playerMatches.filter(m => m.status === MATCH_STATUS.ACTIVE);
     if (activeMatches.length >= 2) {
       return res.status(400).json({ error: "You can only have 2 active matches at a time" });

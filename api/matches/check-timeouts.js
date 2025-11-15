@@ -1,4 +1,4 @@
-import { getPlayerMatches, saveMatch } from "../../lib/matches/kv-helper.js";
+import { getPlayerMatches, saveMatch, recordLeaderboardOutcomeForMatch } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS, TURN_TIMEOUT_MS } from "../../lib/matches/schema.js";
 
 async function checkMatchTimeout(match) {
@@ -27,6 +27,7 @@ async function checkMatchTimeout(match) {
       },
       updatedAt: now.toISOString()
     });
+    await recordLeaderboardOutcomeForMatch(updatedMatch);
     return updatedMatch;
   }
 
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
     }
 
     // Get all matches for this player
-    const matches = await getPlayerMatches(normalizedFid);
+    const matches = await getPlayerMatches(normalizedFid, { includeFinished: false });
     const activeMatches = matches.filter(m => m.status === MATCH_STATUS.ACTIVE);
 
     const timeoutMatches = [];

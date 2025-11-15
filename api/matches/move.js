@@ -1,4 +1,4 @@
-import { getMatch, saveMatch } from "../../lib/matches/kv-helper.js";
+import { getMatch, saveMatch, recordLeaderboardOutcomeForMatch } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS, TURN_TIMEOUT_MS } from "../../lib/matches/schema.js";
 
 // Game logic (copied from src/game for serverless functions)
@@ -135,6 +135,7 @@ export default async function handler(req, res) {
         },
         updatedAt: now.toISOString()
       });
+      await recordLeaderboardOutcomeForMatch(updatedMatch);
       return res.status(400).json({ 
         error: "Turn timeout - opponent wins",
         match: updatedMatch
@@ -159,6 +160,10 @@ export default async function handler(req, res) {
       status: moveResult.state.finished ? MATCH_STATUS.FINISHED : MATCH_STATUS.ACTIVE,
       updatedAt: now.toISOString()
     });
+
+    if (moveResult.state.finished && !match.gameState.finished) {
+      await recordLeaderboardOutcomeForMatch(updatedMatch);
+    }
 
     return res.status(200).json(updatedMatch);
   } catch (error) {

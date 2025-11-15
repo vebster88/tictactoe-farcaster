@@ -392,9 +392,30 @@ let mode = settingsMode?.value || "pve-easy";
 let botThinking = false;
 const MAX_PENDING_INVITES = 2;
 const matchSymbolCache = new Map();
-const statsRefreshTimers = new Set();
+const statsRefreshTimers = new Map();
 const activeMatchIdsCache = new Set();
-let statsSyncInterval = null;
+
+const MATCH_POLL_CONFIG = {
+  fastIntervalMs: 3500,
+  activeIntervalMs: 4500,
+  pendingIntervalMs: 8000,
+  idleIntervalMs: 12000,
+  noMatchIntervalMs: 16000,
+  changeBoostMs: 12000,
+  cacheStaleMs: 4500
+};
+
+const matchDataStore = {
+  matches: [],
+  lastFetchedAt: 0,
+  signature: "",
+  fetchPromise: null,
+  subscribers: new Set(),
+  pollTimer: null,
+  pollingEnabled: false,
+  nextIntervalMs: MATCH_POLL_CONFIG.activeIntervalMs,
+  lastChangeAt: 0
+};
 
 function normalizeMatchIdValue(value) {
   if (value === null || value === undefined) return null;
@@ -433,6 +454,217 @@ function normalizeFidValue(fid) {
   } catch (error) {
     return null;
   }
+}
+
+function getNumericPlayerFid() {
+  const session = getSession();
+  const rawFid = session?.farcaster?.fid ?? session?.fid;
+  if (rawFid === null || rawFid === undefined) {
+    return null;
+  }
+  const parsed = typeof rawFid === "string" ? parseInt(rawFid, 10) : rawFid;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildMatchesSignature(matches) {
+  if (!Array.isArray(matches) || matches.length === 0) {
+    return "";
+  }
+  return matches
+    .map((match) => {
+      const id = normalizeMatchIdValue(match) || "unknown";
+      const status = match?.status || "unknown";
+      const updatedAt = match?.updatedAt || match?.lastMoveAt || match?.createdAt || "";
+      const finished = match?.gameState?.finished ? "1" : "0";
+      return `${id}:${status}:${updatedAt}:${finished}`;
+    })
+    .sort()
+    .join("|");
+}
+
+function notifyMatchSubscribers(matches, meta = {}) {
+  const metaPayload = { ...meta, internal: true };
+
+  matchDataStore.subscribers.forEach((callback) => {
+    try {
+      callback(matches, metaPayload);
+    } catch (error) {
+      console.warn("Match subscriber failed:", error);
+    }
+  });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("player-matches-updated", { detail: { matches, meta: metaPayload } }));
+  }
+}
+
+function computeNextMatchPollInterval(matches, changed) {
+  const now = Date.now();
+  if (!Array.isArray(matches) || matches.length === 0) {
+    return MATCH_POLL_CONFIG.noMatchIntervalMs;
+  }
+
+  const hasActive = matches.some((match) => match?.status === "active" && !match?.gameState?.finished);
+  const hasPending = matches.some((match) => match?.status === "pending");
+
+  let interval = MATCH_POLL_CONFIG.idleIntervalMs;
+  if (hasActive) {
+    interval = MATCH_POLL_CONFIG.activeIntervalMs;
+  } else if (hasPending) {
+    interval = MATCH_POLL_CONFIG.pendingIntervalMs;
+  } else {
+    interval = MATCH_POLL_CONFIG.noMatchIntervalMs;
+  }
+
+  if (changed || now - matchDataStore.lastChangeAt < MATCH_POLL_CONFIG.changeBoostMs) {
+    interval = Math.min(interval, MATCH_POLL_CONFIG.fastIntervalMs);
+  }
+
+  return interval;
+}
+
+async function fetchMatchesSnapshot(reason = "unknown", { force = false } = {}) {
+  const playerFid = getNumericPlayerFid();
+
+  if (!playerFid || mode !== "pvp-farcaster") {
+    matchDataStore.matches = [];
+    matchDataStore.lastFetchedAt = Date.now();
+    return [];
+  }
+
+  if (matchDataStore.fetchPromise) {
+    if (!force) {
+      return matchDataStore.fetchPromise;
+    }
+    try {
+      await matchDataStore.fetchPromise;
+    } catch {
+      // Ignore previous failure and start a new fetch
+    }
+  }
+
+  const fetchPromise = (async () => {
+    const matches = await listPlayerMatches(playerFid);
+    const signature = buildMatchesSignature(matches);
+    const changed = signature !== matchDataStore.signature;
+
+    matchDataStore.matches = matches;
+    matchDataStore.lastFetchedAt = Date.now();
+    matchDataStore.signature = signature;
+    if (changed) {
+      matchDataStore.lastChangeAt = matchDataStore.lastFetchedAt;
+    }
+
+    await syncSessionStatsWithMatches(matches, { source: reason, fromList: true });
+    notifyMatchSubscribers(matches, { reason, changed });
+
+    const interval = computeNextMatchPollInterval(matches, changed);
+    matchDataStore.nextIntervalMs = interval;
+
+    if (DEBUG_ENABLED) {
+      addDebugLog("🔁 Обновлены матчи игрока", {
+        reason,
+        matches: matches.length,
+        nextIntervalMs: interval
+      });
+    }
+
+    return matches;
+  })().finally(() => {
+    matchDataStore.fetchPromise = null;
+  });
+
+  matchDataStore.fetchPromise = fetchPromise;
+  return fetchPromise;
+}
+
+async function getMatchesSnapshot(options = {}) {
+  const {
+    reason = "snapshot_request",
+    maxAgeMs = MATCH_POLL_CONFIG.cacheStaleMs,
+    forceFetch = false
+  } = options;
+
+  const now = Date.now();
+  if (
+    !forceFetch &&
+    matchDataStore.matches.length > 0 &&
+    now - matchDataStore.lastFetchedAt <= maxAgeMs
+  ) {
+    return matchDataStore.matches;
+  }
+
+  return fetchMatchesSnapshot(reason, { force: forceFetch });
+}
+
+function subscribeToMatchUpdates(callback, { immediate = false } = {}) {
+  if (typeof callback !== "function") {
+    return () => {};
+  }
+  matchDataStore.subscribers.add(callback);
+  if (immediate && matchDataStore.matches.length > 0) {
+    try {
+      callback(matchDataStore.matches, { reason: "initial_emit", changed: false });
+    } catch (error) {
+      console.warn("Match subscriber failed (initial emit):", error);
+    }
+  }
+  return () => {
+    matchDataStore.subscribers.delete(callback);
+  };
+}
+
+async function runMatchPoll(reason = "poll_loop") {
+  if (!matchDataStore.pollingEnabled) {
+    return;
+  }
+  try {
+    await fetchMatchesSnapshot(reason);
+  } catch (error) {
+    if (DEBUG_ENABLED) {
+      addDebugLog("⚠️ Ошибка при обновлении матчей", {
+        reason,
+        error: error?.message || String(error)
+      });
+    }
+  } finally {
+    scheduleNextMatchPoll();
+  }
+}
+
+function scheduleNextMatchPoll() {
+  if (!matchDataStore.pollingEnabled) {
+    return;
+  }
+  const interval = matchDataStore.nextIntervalMs || MATCH_POLL_CONFIG.noMatchIntervalMs;
+  if (matchDataStore.pollTimer) {
+    clearTimeout(matchDataStore.pollTimer);
+  }
+  matchDataStore.pollTimer = setTimeout(() => {
+    matchDataStore.pollTimer = null;
+    void runMatchPoll("poll_loop");
+  }, interval);
+}
+
+function startMatchPollingService() {
+  if (matchDataStore.pollingEnabled) {
+    return;
+  }
+  matchDataStore.pollingEnabled = true;
+  matchDataStore.nextIntervalMs = MATCH_POLL_CONFIG.fastIntervalMs;
+  void runMatchPoll("poll_loop_initial");
+}
+
+function stopMatchPollingService() {
+  matchDataStore.pollingEnabled = false;
+  if (matchDataStore.pollTimer) {
+    clearTimeout(matchDataStore.pollTimer);
+    matchDataStore.pollTimer = null;
+  }
+}
+
+async function requestImmediateMatchRefresh(reason = "manual_refresh") {
+  return fetchMatchesSnapshot(reason, { force: true });
 }
 
 function getMatchRoleInfo(match, playerFidInput) {
@@ -660,8 +892,10 @@ async function ensurePendingInviteLimit(session) {
   const fidForRequest = Number.isFinite(numericPlayerFid) ? numericPlayerFid : playerFidRaw;
 
   try {
-    const matches = await listPlayerMatches(fidForRequest);
-    await syncSessionStatsWithMatches(matches, { source: "ensure_pending_limit", fromList: true });
+    const matches = await getMatchesSnapshot({
+      reason: "ensure_pending_limit",
+      maxAgeMs: 6000
+    });
     const pendingInvites = (matches || []).filter((match) => {
       if (match?.status !== "pending") return false;
       const creatorRaw =
@@ -989,19 +1223,19 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
 }
 
 async function refreshSessionStatsFromServer(options = {}) {
-  const session = getSession();
-  const playerFid = session?.farcaster?.fid || session?.fid;
-  if (!playerFid) {
-    return;
-  }
-
   try {
-    const matches = await listPlayerMatches(playerFid);
-    await syncSessionStatsWithMatches(matches, {
-      source: options.source || "refresh_session_stats",
-      delay: options.delay || 0,
-      fromList: true
+    const matches = await getMatchesSnapshot({
+      reason: options.source || "refresh_session_stats",
+      forceFetch: true
     });
+    if (
+      Array.isArray(matches) &&
+      matches.length === 0 &&
+      typeof options.source === "string" &&
+      options.source.startsWith("record_outcome")
+    ) {
+      cancelStatsRefreshTimersBySource(options.source);
+    }
   } catch (error) {
     if (DEBUG_ENABLED) {
       addDebugLog("⚠️ Не удалось обновить статистику с сервера", {
@@ -1024,8 +1258,18 @@ function scheduleSessionStatsRefresh(delays, source) {
         statsRefreshTimers.delete(timer);
         await refreshSessionStatsFromServer({ source, delay });
       }, delay);
-      statsRefreshTimers.add(timer);
+      statsRefreshTimers.set(timer, { source });
     });
+}
+
+function cancelStatsRefreshTimersBySource(targetSource) {
+  if (!targetSource) return;
+  for (const [timer, meta] of statsRefreshTimers.entries()) {
+    if (meta?.source === targetSource) {
+      clearTimeout(timer);
+      statsRefreshTimers.delete(timer);
+    }
+  }
 }
 
 function scheduleStatsSyncAfterOutcome(matchId, outcome, source) {
@@ -1034,19 +1278,12 @@ function scheduleStatsSyncAfterOutcome(matchId, outcome, source) {
   scheduleSessionStatsRefresh([0, 1200, 3500, 6000, 9000], `${baseSource}_immediate`);
 }
 
-function startSessionStatsLoop(intervalMs = 4000) {
-  stopSessionStatsLoop();
-  void refreshSessionStatsFromServer({ source: "stats_loop_initial" }).catch(() => {});
-  statsSyncInterval = setInterval(() => {
-    void refreshSessionStatsFromServer({ source: "stats_loop_periodic", delay: intervalMs }).catch(() => {});
-  }, intervalMs);
+function startSessionStatsLoop() {
+  startMatchPollingService();
 }
 
 function stopSessionStatsLoop() {
-  if (statsSyncInterval) {
-    clearInterval(statsSyncInterval);
-    statsSyncInterval = null;
-  }
+  stopMatchPollingService();
 }
 
 function maybeBotMove() {
@@ -1232,8 +1469,10 @@ boardEl.addEventListener("click", async (e) => {
               const session = getSession();
               const playerFid = session?.farcaster?.fid || session?.fid;
               if (playerFid && mode === "pvp-farcaster") {
-              const matches = await listPlayerMatches(playerFid);
-              await syncSessionStatsWithMatches(matches, { source: "auto_switch_after_finish", fromList: true });
+              const matches = await getMatchesSnapshot({
+                reason: "auto_switch_after_finish",
+                forceFetch: true
+              });
                 const activeMatches = matches.filter(m => 
                   m.status === "active" && 
                   !m.gameState.finished && 
@@ -1420,7 +1659,36 @@ matchesBtn?.addEventListener("click", async () => {
     const session = getSession();
     const playerFid = session?.farcaster?.fid || session?.fid;
     if (playerFid) {
-      await loadMatchesList(matchesList, playerFid);
+      const lang = getLanguage();
+      const showStatus = (text) => {
+        matchesList.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted);">${text}</div>`;
+      };
+      showStatus(lang === "ru" ? "Загрузка..." : "Loading...");
+
+      const renderMatches = async ({ force = false, reason = "matches_modal_open" } = {}) => {
+        try {
+          if (force) {
+            showStatus(lang === "ru" ? "Обновление..." : "Refreshing...");
+          }
+          const matches = force
+            ? await requestImmediateMatchRefresh(reason)
+            : await getMatchesSnapshot({
+                reason,
+                maxAgeMs: 6000
+              });
+          await loadMatchesList(matchesList, playerFid, {
+            prefetchedMatches: matches,
+            allowRefresh: true,
+            lastUpdated: matchDataStore.lastFetchedAt,
+            onRefresh: () => renderMatches({ force: true, reason: "matches_modal_manual_refresh" })
+          });
+        } catch (error) {
+          const errorMsg = error?.message || (lang === "ru" ? "Неизвестная ошибка" : "Unknown error");
+          showStatus((lang === "ru" ? "Ошибка загрузки: " : "Load error: ") + errorMsg);
+        }
+      };
+
+      await renderMatches();
     } else {
       const lang = getLanguage();
       matchesList.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted);">${lang === "ru" ? "Войдите через Farcaster" : "Sign in with Farcaster"}</div>`;
@@ -1703,8 +1971,10 @@ window.addEventListener("match-synced", async () => {
               const session = getSession();
               const playerFid = session?.farcaster?.fid || session?.fid;
               if (playerFid && mode === "pvp-farcaster") {
-              const matches = await listPlayerMatches(playerFid);
-              await syncSessionStatsWithMatches(matches, { source: "match_synced_auto_switch", fromList: true });
+              const matches = await getMatchesSnapshot({
+                reason: "match_synced_auto_switch",
+                forceFetch: true
+              });
                 const activeMatches = matches.filter(m => 
                   m.status === "active" && 
                   !m.gameState.finished && 
@@ -1749,6 +2019,9 @@ window.addEventListener("match-synced", async () => {
 });
 
 window.addEventListener("player-matches-updated", (event) => {
+  if (event?.detail?.meta?.internal) {
+    return;
+  }
   const matches = event?.detail?.matches;
   if (Array.isArray(matches) && matches.length > 0) {
     void syncSessionStatsWithMatches(matches, { source: "matches_list_event", fromList: true }).catch(() => {});
@@ -1822,7 +2095,9 @@ let matchTimer = null;
 let lastSyncTurn = 0;
 let lastSyncBoard = null; // Сохраняем состояние доски для сравнения
 let opponentAvatarCache = null;
-let pendingMatchesCheckInterval = null;
+let pendingMatchesCheckTimer = null;
+let pendingMatchesDefaultInterval = 5000;
+let pendingMatchesCheckEnabled = false;
 
 // Функция для проверки pending матчей и автоматической загрузки при переходе в active
 async function checkPendingMatches() {
@@ -1830,69 +2105,101 @@ async function checkPendingMatches() {
   const playerFid = session?.farcaster?.fid || session?.fid;
   
   if (!playerFid || mode !== "pvp-farcaster") {
-    return;
+    return MATCH_POLL_CONFIG.noMatchIntervalMs;
   }
   
   // Если уже есть активный матч, не проверяем pending
   const currentMatch = getCurrentMatch();
   if (currentMatch.matchState && currentMatch.matchState.status === "active") {
-    return;
+    stopPendingMatchesCheck();
+    return null;
   }
   
+  let matches = [];
   try {
-    const matches = await listPlayerMatches(playerFid);
-    await syncSessionStatsWithMatches(matches, { source: "pending_matches_check", fromList: true });
-    
-    // Ищем pending матчи, которые стали active
-    for (const match of matches) {
-      if (match.status === "active" && !match.gameState.finished) {
-        // Проверяем, не загружен ли уже этот матч
-        if (!currentMatch.matchState || currentMatch.matchId !== match.matchId) {
-          // Автоматически загружаем матч
-          await loadMatch(match.matchId);
-          mode = "pvp-farcaster";
-          if (settingsMode) settingsMode.value = "pvp-farcaster";
-          updateUIForMode();
-          updateMatchUI();
-          // updateMatchUI уже вызывает updateMatchSwitcher, но для надежности вызываем еще раз
-          await updateMatchSwitcher();
-          
-          const lang = getLanguage();
-          showToast(
-            lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
-            "success"
-          );
-          
-          // Останавливаем проверку pending матчей, так как теперь есть активный
-          stopPendingMatchesCheck();
-          return;
-        }
-      }
-    }
+    matches = await getMatchesSnapshot({
+      reason: "pending_matches_check",
+      maxAgeMs: 7000
+    });
   } catch (error) {
     console.warn("Error checking pending matches:", error);
+    return pendingMatchesDefaultInterval;
   }
+
+  let hasPending = false;
+  
+  // Ищем pending матчи, которые стали active
+  for (const match of matches) {
+    if (match.status === "pending") {
+      hasPending = true;
+    }
+    if (match.status === "active" && !match.gameState.finished) {
+      // Проверяем, не загружен ли уже этот матч
+      if (!currentMatch.matchState || currentMatch.matchId !== match.matchId) {
+        // Автоматически загружаем матч
+        await loadMatch(match.matchId);
+        mode = "pvp-farcaster";
+        if (settingsMode) settingsMode.value = "pvp-farcaster";
+        updateUIForMode();
+        updateMatchUI();
+        // updateMatchUI уже вызывает updateMatchSwitcher, но для надежности вызываем еще раз
+        await updateMatchSwitcher();
+        
+        const lang = getLanguage();
+        showToast(
+          lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
+          "success"
+        );
+        
+        // Останавливаем проверку pending матчей, так как теперь есть активный
+        stopPendingMatchesCheck();
+        return null;
+      }
+    }
+  }
+
+  return hasPending ? pendingMatchesDefaultInterval : MATCH_POLL_CONFIG.noMatchIntervalMs;
 }
 
 // Запуск периодической проверки pending матчей
 function startPendingMatchesCheck(intervalMs = 5000) {
+  pendingMatchesDefaultInterval = Math.max(1000, intervalMs);
   stopPendingMatchesCheck();
-  
-  // Первая проверка сразу
-  checkPendingMatches();
-  
-  // Затем периодически
-  pendingMatchesCheckInterval = setInterval(() => {
-    checkPendingMatches();
-  }, intervalMs);
+  pendingMatchesCheckEnabled = true;
+  scheduleNextPendingMatchesCheck(0);
 }
 
 // Остановка проверки pending матчей
 function stopPendingMatchesCheck() {
-  if (pendingMatchesCheckInterval) {
-    clearInterval(pendingMatchesCheckInterval);
-    pendingMatchesCheckInterval = null;
+  pendingMatchesCheckEnabled = false;
+  if (pendingMatchesCheckTimer) {
+    clearTimeout(pendingMatchesCheckTimer);
+    pendingMatchesCheckTimer = null;
   }
+}
+
+function scheduleNextPendingMatchesCheck(delay) {
+  if (!pendingMatchesCheckEnabled) {
+    return;
+  }
+  const safeDelay = Math.max(0, delay);
+  pendingMatchesCheckTimer = setTimeout(async () => {
+    pendingMatchesCheckTimer = null;
+    let nextDelay = pendingMatchesDefaultInterval;
+    try {
+      const result = await checkPendingMatches();
+      if (typeof result === "number" || result === null) {
+        nextDelay = result;
+      }
+    } catch (error) {
+      console.warn("Error during pending matches check:", error);
+      nextDelay = pendingMatchesDefaultInterval;
+    }
+    if (!pendingMatchesCheckEnabled || nextDelay === null) {
+      return;
+    }
+    scheduleNextPendingMatchesCheck(nextDelay);
+  }, safeDelay);
 }
 
 async function updateOpponentAvatar() {
@@ -1955,54 +2262,62 @@ async function updateOpponentAvatar() {
 let previousMatchStatus = null;
 let lastMatchId = null; // Отслеживаем смену матча
 
-// Функция для обновления переключателя матчей
-async function updateMatchSwitcher() {
+function applyMatchSwitcherData(matches) {
   if (!matchSwitcher) return;
-  
   const session = getSession();
   const playerFid = session?.farcaster?.fid || session?.fid;
-  
   if (!playerFid || mode !== "pvp-farcaster") {
     matchSwitcher.style.display = "none";
+    window.activeMatchesList = null;
     return;
   }
-  
+
+  const activeMatches = (matches || []).filter((match) => match?.status === "active" && !match?.gameState?.finished);
+  const activeMatchIds = new Set(
+    activeMatches
+      .map((match) => normalizeMatchIdValue(match))
+      .filter((id) => id !== null)
+  );
+
+  for (const cachedId of Array.from(matchSymbolCache.keys())) {
+    if (!activeMatchIds.has(cachedId)) {
+      matchSymbolCache.delete(cachedId);
+    }
+  }
+
+  activeMatches.forEach((match) => updateMatchSymbolCache(match, null, { source: "matches_snapshot" }));
+
+  if (activeMatches.length >= 2) {
+    matchSwitcher.style.display = "flex";
+    matchSwitcher.style.alignItems = "center";
+    matchSwitcher.style.gap = "4px";
+    window.activeMatchesList = activeMatches;
+    updateMatchSwitcherButtons();
+  } else {
+    matchSwitcher.style.display = "none";
+    window.activeMatchesList = null;
+  }
+}
+
+// Функция для обновления переключателя матчей
+async function updateMatchSwitcher(options = {}) {
+  if (!matchSwitcher) return;
   try {
-    const matches = await listPlayerMatches(playerFid);
-    await syncSessionStatsWithMatches(matches, { source: "match_switcher", fromList: true });
-    const activeMatches = matches.filter(m => m.status === "active" && !m.gameState.finished);
-    
-    const activeMatchIds = new Set(
-      activeMatches
-        .map(match => normalizeMatchIdValue(match))
-        .filter(id => id !== null)
-    );
-    for (const cachedId of Array.from(matchSymbolCache.keys())) {
-      if (!activeMatchIds.has(cachedId)) {
-        matchSymbolCache.delete(cachedId);
-      }
-    }
-
-    activeMatches.forEach(match => updateMatchSymbolCache(match, null, { source: "list_player_matches" }));
-
-    // Показываем переключатель только если есть 2+ активных матча
-    if (activeMatches.length >= 2) {
-      matchSwitcher.style.display = "flex";
-      matchSwitcher.style.alignItems = "center";
-      matchSwitcher.style.gap = "4px";
-      
-      // Сохраняем список активных матчей для переключения
-      window.activeMatchesList = activeMatches;
-      updateMatchSwitcherButtons();
-    } else {
-      matchSwitcher.style.display = "none";
-      window.activeMatchesList = null;
-    }
+    const matches = await getMatchesSnapshot({
+      reason: options.reason || "match_switcher",
+      forceFetch: options.force === true,
+      maxAgeMs: options.maxAgeMs ?? 5000
+    });
+    applyMatchSwitcherData(matches);
   } catch (error) {
     console.warn("Failed to update match switcher:", error);
     matchSwitcher.style.display = "none";
   }
 }
+
+subscribeToMatchUpdates((matches) => {
+  applyMatchSwitcherData(matches);
+});
 
 // Обновление состояния кнопок переключателя
 function updateMatchSwitcherButtons() {
@@ -3395,8 +3710,10 @@ refreshUserLabel();
   const playerFid = session?.farcaster?.fid || session?.fid;
   if (playerFid && mode === "pvp-farcaster") {
     try {
-      const matches = await listPlayerMatches(playerFid);
-      await syncSessionStatsWithMatches(matches, { source: "initial_load", fromList: true });
+      const matches = await getMatchesSnapshot({
+        reason: "initial_load",
+        forceFetch: true
+      });
       const activeMatch = matches.find(m => m.status === "active" && !m.gameState.finished);
       if (activeMatch) {
         await loadMatch(activeMatch.matchId);

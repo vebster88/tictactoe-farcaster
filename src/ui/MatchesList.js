@@ -3,7 +3,7 @@ import { listPlayerMatches, acceptMatch } from "../farcaster/match-api.js";
 import { loadMatch } from "../game/match-state.js";
 import { getUserByFid } from "../farcaster/client.js";
 
-export async function loadMatchesList(container, playerFid) {
+export async function loadMatchesList(container, playerFid, options = {}) {
   if (!container || !playerFid) {
     console.warn('[MatchesList] Missing container or playerFid', { container: !!container, playerFid });
     return;
@@ -11,13 +11,29 @@ export async function loadMatchesList(container, playerFid) {
 
   console.log('[MatchesList] Loading matches for player FID:', playerFid, typeof playerFid);
   
+  const {
+    prefetchedMatches = null,
+    allowRefresh = false,
+    lastUpdated = Date.now(),
+    onRefresh
+  } = options;
+
   try {
-    const matches = await listPlayerMatches(playerFid);
+    let matches = Array.isArray(prefetchedMatches) ? prefetchedMatches : null;
+    if (!matches) {
+      matches = await listPlayerMatches(playerFid);
+    }
+
     console.log('[MatchesList] Received matches:', matches.length, matches);
-    if (typeof window !== "undefined") {
+    const shouldDispatch = !Array.isArray(prefetchedMatches);
+    if (shouldDispatch && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("player-matches-updated", { detail: { matches, playerFid } }));
     }
-    await renderMatchesList(container, matches, playerFid);
+    await renderMatchesList(container, matches, playerFid, {
+      refreshControls: allowRefresh,
+      lastUpdated,
+      onRefresh
+    });
   } catch (error) {
     const lang = localStorage.getItem("language") || "en";
     const errorMsg = lang === "ru" 
@@ -27,14 +43,47 @@ export async function loadMatchesList(container, playerFid) {
   }
 }
 
-async function renderMatchesList(container, matches, playerFid) {
+async function renderMatchesList(container, matches, playerFid, options = {}) {
   const lang = localStorage.getItem("language") || "en";
+  const refreshControls = options.refreshControls === true;
+  const lastUpdated = options.lastUpdated || Date.now();
+  const onRefresh = typeof options.onRefresh === "function" ? options.onRefresh : null;
+
+  container.innerHTML = "";
+  let contentHost = container;
+
+  if (refreshControls) {
+    const refreshBar = document.createElement("div");
+    refreshBar.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; font-size: 0.9rem; color: var(--muted);";
+    const info = document.createElement("span");
+    const updatedTime = new Date(lastUpdated).toLocaleTimeString();
+    info.textContent = lang === "ru"
+      ? `Последнее обновление: ${updatedTime}`
+      : `Last update: ${updatedTime}`;
+    refreshBar.appendChild(info);
+
+    if (onRefresh) {
+      const refreshBtn = document.createElement("button");
+      refreshBtn.className = "btn";
+      refreshBtn.textContent = lang === "ru" ? "Обновить" : "Refresh";
+      refreshBtn.style.minWidth = "120px";
+      refreshBtn.addEventListener("click", () => onRefresh());
+      refreshBar.appendChild(refreshBtn);
+    }
+
+    container.appendChild(refreshBar);
+    contentHost = document.createElement("div");
+    contentHost.style.display = "flex";
+    contentHost.style.flexDirection = "column";
+    contentHost.style.gap = "12px";
+    container.appendChild(contentHost);
+  }
 
   if (!matches || matches.length === 0) {
     const noMatchesText = lang === "ru" 
       ? "Нет активных матчей"
       : "No active matches";
-    container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted);">${noMatchesText}</div>`;
+    contentHost.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted);">${noMatchesText}</div>`;
     return;
   }
 
@@ -223,11 +272,11 @@ async function renderMatchesList(container, matches, playerFid) {
   });
 
   // Render cards
-  container.innerHTML = "";
-  matchCards.forEach(card => container.appendChild(card));
+  contentHost.innerHTML = "";
+  matchCards.forEach(card => contentHost.appendChild(card));
 
   // Attach event handlers
-  container.querySelectorAll(".accept-match-btn").forEach(btn => {
+  contentHost.querySelectorAll(".accept-match-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       const matchId = btn.dataset.matchId;
       const session = getSession();

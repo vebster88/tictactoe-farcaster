@@ -1,6 +1,37 @@
 import { getPlayerMatches, getAvailableMatches } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS } from "../../lib/matches/schema.js";
 
+const CACHE_TTL_MS = 2000;
+const responseCache = new Map();
+
+function getCacheEntry(key) {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry.payload;
+}
+
+function setCacheEntry(key, payload) {
+  responseCache.set(key, {
+    payload,
+    timestamp: Date.now()
+  });
+}
+
+function cloneMatches(data) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(data);
+  }
+  try {
+    return JSON.parse(JSON.stringify(data));
+  } catch {
+    return Array.isArray(data) ? [...data] : data;
+  }
+}
+
 export default async function handler(req, res) {
   console.log(`[list] Request received: ${req.method} ${req.url}`);
   
@@ -36,9 +67,18 @@ export default async function handler(req, res) {
     }
 
     console.log(`[list] Getting matches for player FID: ${playerFid}`);
+    const cacheKey = String(playerFid);
+    const skipCache = req.query?.refresh === "true";
+    if (!skipCache) {
+      const cached = getCacheEntry(cacheKey);
+      if (cached) {
+        console.log(`[list] Served from cache for FID ${playerFid}`);
+        return res.status(200).json(cached);
+      }
+    }
     
     // Get player's own matches
-    const playerMatches = await getPlayerMatches(playerFid);
+    const playerMatches = await getPlayerMatches(playerFid, { includeFinished: false });
     console.log(`[list] Found ${playerMatches.length} player matches`);
     
     // Get available matches (pending matches that can be accepted)
@@ -69,6 +109,7 @@ export default async function handler(req, res) {
       return dateB - dateA;
     });
 
+    setCacheEntry(cacheKey, cloneMatches(activeMatches));
     return res.status(200).json(activeMatches);
   } catch (error) {
     console.error("Error listing player matches:", error);
