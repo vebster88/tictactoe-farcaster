@@ -1,7 +1,7 @@
 import { getPlayerMatches, getAvailableMatches } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS } from "../../lib/matches/schema.js";
 
-const CACHE_TTL_MS = 2000;
+const CACHE_TTL_MS = 12000; // Увеличено для снижения KV запросов
 const responseCache = new Map();
 
 function getCacheEntry(key) {

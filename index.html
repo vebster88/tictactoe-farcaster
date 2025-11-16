@@ -57,15 +57,15 @@
               <img id="user-avatar" class="user-avatar" alt="User avatar" style="display: none;" />
               <span id="user-label" aria-live="polite" class="user-label"></span>
             </div>
+            <div class="auth-actions" style="display: flex; gap: 8px; align-items: center;">
+              <button id="btn-invite" class="btn" type="button" style="display: none;">Start PVP</button>
+              <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish</button>
+            </div>
           </div>
         </nav>
       </div>
       
       <nav class="game-actions" aria-label="Game Actions">
-        <!-- Основные игровые кнопки -->
-        <button id="btn-invite" class="btn" type="button" style="display: none;">Start PVP</button>
-        <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish Result</button>
-        
         <!-- Технические кнопки (скрыты по умолчанию) -->
         <div id="dev-controls" style="display: none;">
           <button id="btn-create-signer" class="btn" type="button">Create Signer</button>

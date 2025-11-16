@@ -396,13 +396,27 @@ const statsRefreshTimers = new Map();
 const activeMatchIdsCache = new Set();
 
 const MATCH_POLL_CONFIG = {
-  fastIntervalMs: 3500,
+  // Базовые интервалы (до адаптации по состояниям)
+  fastIntervalMs: 5000,
   activeIntervalMs: 4500,
   pendingIntervalMs: 8000,
-  idleIntervalMs: 12000,
-  noMatchIntervalMs: 16000,
+  idleIntervalMs: 17000,
+  noMatchIntervalMs: 60000,
+
+  // Как долго после изменения держим "горячий" режим
   changeBoostMs: 12000,
-  cacheStaleMs: 4500
+
+  // Через сколько стабильных циклов переводить polling в более "холодное" состояние
+  warmAfterUnchangedCycles: 3,
+  coldAfterUnchangedCycles: 9,
+
+  // Ограничения и джиттер для интервалов
+  minIntervalMs: 3000,
+  maxIntervalMs: 90000,
+  jitterRatio: 0.2, // +/-20%
+
+  // За сколько миллисекунд считаем кеш снапшота ещё свежим
+  cacheStaleMs: 12000 // Увеличено для снижения KV запросов
 };
 
 const matchDataStore = {
@@ -414,7 +428,10 @@ const matchDataStore = {
   pollTimer: null,
   pollingEnabled: false,
   nextIntervalMs: MATCH_POLL_CONFIG.activeIntervalMs,
-  lastChangeAt: 0
+  lastChangeAt: 0,
+  // Состояние "умного" polling'а
+  mode: "hot", // "hot" | "warm" | "cold"
+  unchangedCycles: 0
 };
 
 function normalizeMatchIdValue(value) {
@@ -500,27 +517,78 @@ function notifyMatchSubscribers(matches, meta = {}) {
 
 function computeNextMatchPollInterval(matches, changed) {
   const now = Date.now();
-  if (!Array.isArray(matches) || matches.length === 0) {
-    return MATCH_POLL_CONFIG.noMatchIntervalMs;
+  const hasMatches = Array.isArray(matches) && matches.length > 0;
+
+  const hasActive = hasMatches
+    ? matches.some((match) => match?.status === "active" && !match?.gameState?.finished)
+    : false;
+  const hasPending = hasMatches ? matches.some((match) => match?.status === "pending") : false;
+
+  // Обновляем счётчик стабильных циклов и режим
+  if (changed) {
+    matchDataStore.unchangedCycles = 0;
+    matchDataStore.mode = "hot";
+  } else {
+    matchDataStore.unchangedCycles += 1;
+
+    if (matchDataStore.mode === "hot" &&
+        matchDataStore.unchangedCycles >= MATCH_POLL_CONFIG.warmAfterUnchangedCycles) {
+      matchDataStore.mode = "warm";
+    } else if (matchDataStore.mode !== "cold" &&
+               matchDataStore.unchangedCycles >= MATCH_POLL_CONFIG.coldAfterUnchangedCycles) {
+      matchDataStore.mode = "cold";
+    }
   }
 
-  const hasActive = matches.some((match) => match?.status === "active" && !match?.gameState?.finished);
-  const hasPending = matches.some((match) => match?.status === "pending");
+  // Если матчей нет вовсе — переходим в "холодный" режим
+  if (!hasMatches) {
+    matchDataStore.mode = "cold";
+  }
 
-  let interval = MATCH_POLL_CONFIG.idleIntervalMs;
-  if (hasActive) {
-    interval = MATCH_POLL_CONFIG.activeIntervalMs;
+  // Базовый интервал от типа матчей
+  let baseInterval;
+  if (!hasMatches) {
+    baseInterval = MATCH_POLL_CONFIG.noMatchIntervalMs;
+  } else if (hasActive) {
+    baseInterval = MATCH_POLL_CONFIG.activeIntervalMs;
   } else if (hasPending) {
-    interval = MATCH_POLL_CONFIG.pendingIntervalMs;
+    baseInterval = MATCH_POLL_CONFIG.pendingIntervalMs;
   } else {
+    baseInterval = MATCH_POLL_CONFIG.idleIntervalMs;
+  }
+
+  let interval = baseInterval;
+
+  // "Горячий" режим — частые обновления после изменений
+  if (
+    changed ||
+    (hasMatches && now - matchDataStore.lastChangeAt < MATCH_POLL_CONFIG.changeBoostMs)
+  ) {
+    matchDataStore.mode = "hot";
+    matchDataStore.unchangedCycles = 0;
+    interval = Math.min(interval, MATCH_POLL_CONFIG.fastIntervalMs);
+  } else if (matchDataStore.mode === "warm") {
+    // "Тёплый" режим — чуть реже, но всё ещё с матчами
+    interval = Math.max(interval, MATCH_POLL_CONFIG.idleIntervalMs);
+  } else if (matchDataStore.mode === "cold") {
+    // "Холодный" режим — либо нет матчей, либо давно ничего не менялось
     interval = MATCH_POLL_CONFIG.noMatchIntervalMs;
   }
 
-  if (changed || now - matchDataStore.lastChangeAt < MATCH_POLL_CONFIG.changeBoostMs) {
-    interval = Math.min(interval, MATCH_POLL_CONFIG.fastIntervalMs);
+  // Применяем джиттер, чтобы не синхронизировать запросы всех клиентов
+  const jitterRatio = MATCH_POLL_CONFIG.jitterRatio ?? 0;
+  if (jitterRatio > 0) {
+    const delta = interval * jitterRatio;
+    const randomOffset = (Math.random() * 2 - 1) * delta; // [-delta, +delta]
+    interval = interval + randomOffset;
   }
 
-  return interval;
+  // Ограничиваем интервал разумными пределами
+  const minInterval = MATCH_POLL_CONFIG.minIntervalMs || 0;
+  const maxInterval = MATCH_POLL_CONFIG.maxIntervalMs || Number.MAX_SAFE_INTEGER;
+  interval = Math.max(minInterval, Math.min(maxInterval, interval));
+
+  return Math.round(interval);
 }
 
 async function fetchMatchesSnapshot(reason = "unknown", { force = false } = {}) {
@@ -896,19 +964,20 @@ async function ensurePendingInviteLimit(session) {
       reason: "ensure_pending_limit",
       maxAgeMs: 6000
     });
-    const pendingInvites = (matches || []).filter((match) => {
-      if (match?.status !== "pending") return false;
-      const creatorRaw =
-        match.player1Fid ?? match.player1?.fid ?? match.createdByFid ?? match.createdBy?.fid ?? null;
-      if (creatorRaw === null || creatorRaw === undefined) return false;
-      return String(creatorRaw) === playerFidString;
+    // Проверяем общее количество активных + pending матчей (лимит 2)
+    const activeOrPendingMatches = (matches || []).filter((match) => {
+      if (match?.status !== "active" && match?.status !== "pending") return false;
+      // Проверяем, является ли игрок участником матча (player1 или player2)
+      const player1Fid = match.player1Fid ? String(match.player1Fid) : null;
+      const player2Fid = match.player2Fid ? String(match.player2Fid) : null;
+      return player1Fid === playerFidString || player2Fid === playerFidString;
     });
 
-    if (pendingInvites.length >= MAX_PENDING_INVITES) {
+    if (activeOrPendingMatches.length >= 2) {
       const message =
         lang === "ru"
-          ? `У вас уже есть ${MAX_PENDING_INVITES} активных предложения матча. Дождитесь принятия или отмените одно из них, чтобы создать новое.`
-          : `You already have ${MAX_PENDING_INVITES} active match invites. Wait for someone to accept or cancel one before creating another.`;
+          ? "У вас уже есть 2 активных матча. Завершите один из них, чтобы создать новый."
+          : "You already have 2 active matches. Finish one to create a new one.";
       alert(message);
       return false;
     }
@@ -2098,8 +2167,15 @@ let opponentAvatarCache = null;
 let pendingMatchesCheckTimer = null;
 let pendingMatchesDefaultInterval = 5000;
 let pendingMatchesCheckEnabled = false;
+// Состояние "умного" polling'а для pending-проверки
+const pendingCheckState = {
+  mode: "hot", // "hot" | "warm" | "cold"
+  unchangedCycles: 0,
+  lastPendingCount: 0
+};
 
 // Функция для проверки pending матчей и автоматической загрузки при переходе в active
+// Оптимизировано: проверяем только свои pending матчи из снапшота, без сканирования всех чужих
 async function checkPendingMatches() {
   const session = getSession();
   const playerFid = session?.farcaster?.fid || session?.fid;
@@ -2117,54 +2193,159 @@ async function checkPendingMatches() {
   
   let matches = [];
   try {
+    // Используем снапшот с увеличенным maxAgeMs для снижения KV запросов
     matches = await getMatchesSnapshot({
       reason: "pending_matches_check",
-      maxAgeMs: 7000
+      maxAgeMs: 12000
     });
   } catch (error) {
     console.warn("Error checking pending matches:", error);
     return pendingMatchesDefaultInterval;
   }
 
-  let hasPending = false;
+  // Нормализуем FID игрока
+  const normalizedPlayerFid = typeof playerFid === "string" ? parseInt(playerFid, 10) : playerFid;
   
-  // Ищем pending матчи, которые стали active
-  for (const match of matches) {
-    if (match.status === "pending") {
-      hasPending = true;
+  // Проверяем наличие активных матчей игрока (где игрок является участником)
+  // Это может быть матч, который только что был принят
+  const hasNewActiveMatch = matches.some(match => {
+    if (match.status !== "active" || match.gameState?.finished) return false;
+    // Проверяем, является ли игрок участником матча
+    const matchPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+    const matchPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
+    const isPlayerInMatch = matchPlayer1Fid === normalizedPlayerFid || matchPlayer2Fid === normalizedPlayerFid;
+    // Проверяем, не загружен ли уже этот матч
+    const isNotLoaded = !currentMatch.matchState || currentMatch.matchId !== match.matchId;
+    return isPlayerInMatch && isNotLoaded;
+  });
+  
+  // Если найден новый активный матч игрока, принудительно обновляем снапшот
+  if (hasNewActiveMatch) {
+    try {
+      matches = await getMatchesSnapshot({
+        reason: "pending_matches_check",
+        forceFetch: true  // Принудительное обновление для получения актуальных данных
+      });
+    } catch (error) {
+      console.warn("Error refreshing matches snapshot:", error);
     }
+  }
+
+  // Фильтруем только свои pending матчи (созданные этим игроком)
+  let myPendingMatches = matches.filter((match) => {
+    if (match.status !== "pending") return false;
+    const creatorFid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+    return creatorFid === normalizedPlayerFid;
+  });
+
+  const pendingCount = myPendingMatches.length;
+  const hasPending = pendingCount > 0;
+  const changed = pendingCount !== pendingCheckState.lastPendingCount;
+  
+  // Проверяем активные матчи игрока (где игрок является участником)
+  const hasActiveMatch = matches.some(match => {
+    if (match.status !== "active" || match.gameState?.finished) return false;
+    const matchPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+    const matchPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
+    return matchPlayer1Fid === normalizedPlayerFid || matchPlayer2Fid === normalizedPlayerFid;
+  });
+  
+  // Обновляем состояние "умного" polling'а
+  if (changed || hasNewActiveMatch) {
+    pendingCheckState.unchangedCycles = 0;
+    pendingCheckState.mode = "hot";
+  } else {
+    pendingCheckState.unchangedCycles += 1;
+    
+    if (pendingCheckState.mode === "hot" &&
+        pendingCheckState.unchangedCycles >= MATCH_POLL_CONFIG.warmAfterUnchangedCycles) {
+      pendingCheckState.mode = "warm";
+    } else if (pendingCheckState.mode !== "cold" &&
+               pendingCheckState.unchangedCycles >= MATCH_POLL_CONFIG.coldAfterUnchangedCycles) {
+      pendingCheckState.mode = "cold";
+    }
+  }
+  
+  // Не переходим в cold, если есть активные матчи игрока или pending матчи
+  if (!hasPending && !hasActiveMatch) {
+    pendingCheckState.mode = "cold";
+  } else if (hasActiveMatch) {
+    // Если есть активный матч игрока, выходим из cold режима
+    pendingCheckState.mode = "hot";
+    pendingCheckState.unchangedCycles = 0;
+  }
+  
+  pendingCheckState.lastPendingCount = pendingCount;
+  
+  // Ищем pending матчи, которые стали active (только матчи игрока)
+  for (const match of matches) {
     if (match.status === "active" && !match.gameState.finished) {
-      // Проверяем, не загружен ли уже этот матч
-      if (!currentMatch.matchState || currentMatch.matchId !== match.matchId) {
-        // Автоматически загружаем матч
-        await loadMatch(match.matchId);
-        mode = "pvp-farcaster";
-        if (settingsMode) settingsMode.value = "pvp-farcaster";
-        updateUIForMode();
-        updateMatchUI();
-        // updateMatchUI уже вызывает updateMatchSwitcher, но для надежности вызываем еще раз
-        await updateMatchSwitcher();
-        
-        const lang = getLanguage();
-        showToast(
-          lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
-          "success"
-        );
-        
-        // Останавливаем проверку pending матчей, так как теперь есть активный
-        stopPendingMatchesCheck();
-        return null;
+      // Проверяем, является ли игрок участником матча
+      const matchPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+      const matchPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
+      const isPlayerInMatch = matchPlayer1Fid === normalizedPlayerFid || matchPlayer2Fid === normalizedPlayerFid;
+      
+      if (isPlayerInMatch) {
+        // Проверяем, не загружен ли уже этот матч
+        if (!currentMatch.matchState || currentMatch.matchId !== match.matchId) {
+          // Автоматически загружаем матч
+          await loadMatch(match.matchId);
+          mode = "pvp-farcaster";
+          if (settingsMode) settingsMode.value = "pvp-farcaster";
+          updateUIForMode();
+          updateMatchUI();
+          // updateMatchUI уже вызывает updateMatchSwitcher, но для надежности вызываем еще раз
+          await updateMatchSwitcher();
+          
+          const lang = getLanguage();
+          showToast(
+            lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
+            "success"
+          );
+          
+          // Останавливаем проверку pending матчей, так как теперь есть активный
+          stopPendingMatchesCheck();
+          return null;
+        }
       }
     }
   }
 
-  return hasPending ? pendingMatchesDefaultInterval : MATCH_POLL_CONFIG.noMatchIntervalMs;
+  // Вычисляем следующий интервал на основе режима
+  let nextInterval;
+  if (pendingCheckState.mode === "hot") {
+    nextInterval = MATCH_POLL_CONFIG.fastIntervalMs;
+  } else if (pendingCheckState.mode === "warm") {
+    nextInterval = MATCH_POLL_CONFIG.idleIntervalMs;
+  } else {
+    // cold режим - редкие проверки
+    nextInterval = MATCH_POLL_CONFIG.noMatchIntervalMs;
+  }
+  
+  // Применяем джиттер
+  const jitterRatio = MATCH_POLL_CONFIG.jitterRatio ?? 0;
+  if (jitterRatio > 0) {
+    const delta = nextInterval * jitterRatio;
+    const randomOffset = (Math.random() * 2 - 1) * delta;
+    nextInterval = nextInterval + randomOffset;
+  }
+  
+  nextInterval = Math.max(
+    MATCH_POLL_CONFIG.minIntervalMs || 0,
+    Math.min(MATCH_POLL_CONFIG.maxIntervalMs || Number.MAX_SAFE_INTEGER, nextInterval)
+  );
+  
+  return Math.round(nextInterval);
 }
 
 // Запуск периодической проверки pending матчей
 function startPendingMatchesCheck(intervalMs = 5000) {
   pendingMatchesDefaultInterval = Math.max(1000, intervalMs);
   stopPendingMatchesCheck();
+  // Сбрасываем состояние при старте
+  pendingCheckState.mode = "hot";
+  pendingCheckState.unchangedCycles = 0;
+  pendingCheckState.lastPendingCount = 0;
   pendingMatchesCheckEnabled = true;
   scheduleNextPendingMatchesCheck(0);
 }
@@ -2176,6 +2357,10 @@ function stopPendingMatchesCheck() {
     clearTimeout(pendingMatchesCheckTimer);
     pendingMatchesCheckTimer = null;
   }
+  // Сбрасываем состояние при остановке
+  pendingCheckState.mode = "cold";
+  pendingCheckState.unchangedCycles = 0;
+  pendingCheckState.lastPendingCount = 0;
 }
 
 function scheduleNextPendingMatchesCheck(delay) {
