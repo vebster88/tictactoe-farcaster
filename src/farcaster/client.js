@@ -10,7 +10,7 @@ function isMock() {
   const noSigner = !NEYNAR_SIGNER_UUID || NEYNAR_SIGNER_UUID === "your_signer_uuid_here";
   const isMockMode = mockMode || noApiKey || noSigner;
   
-  console.log("Farcaster mode check:", {
+  const modeInfo = {
     VITE_FARCASTER_MOCK: import.meta.env.VITE_FARCASTER_MOCK,
     NEYNAR_API_KEY: NEYNAR_API_KEY ? "***" + NEYNAR_API_KEY.slice(-4) : "undefined",
     NEYNAR_SIGNER_UUID: NEYNAR_SIGNER_UUID ? "***" + NEYNAR_SIGNER_UUID.slice(-4) : "undefined",
@@ -18,7 +18,21 @@ function isMock() {
     noApiKey,
     noSigner,
     isMockMode
-  });
+  };
+  
+  console.log("Farcaster mode check:", modeInfo);
+  
+  // Логируем в debug панель, если доступна
+  if (typeof window !== 'undefined' && window.addDebugLog) {
+    if (isMockMode) {
+      window.addDebugLog("⚠️ Farcaster работает в MOCK режиме", {
+        причина: mockMode ? "VITE_FARCASTER_MOCK=true" : (noApiKey ? "NEYNAR_API_KEY отсутствует" : "NEYNAR_SIGNER_UUID отсутствует"),
+        ...modeInfo
+      });
+    } else {
+      window.addDebugLog("✅ Farcaster работает в РЕАЛЬНОМ режиме", modeInfo);
+    }
+  }
   
   return isMockMode;
 }
