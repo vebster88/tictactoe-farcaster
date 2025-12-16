@@ -80,17 +80,23 @@ export async function loadLeaderboard() {
       leaderboard.map(async (entry) => {
         try {
           const userData = await getUserByFid(entry.fid);
+          // Извлекаем username из данных пользователя
+          const username = userData?.user?.username || null;
+          // Если username отсутствует, создаем его на основе FID (например, user2757)
+          const finalUsername = username || `user${entry.fid}`;
+          
           return {
             ...entry,
-            username: userData?.user?.username || null,
+            username: finalUsername,
             display_name: userData?.user?.display_name || null,
             pfp_url: userData?.user?.pfp_url || userData?.user?.pfpUrl || userData?.user?.pfp || null
           };
         } catch (error) {
           console.warn(`Failed to load user data for FID ${entry.fid}:`, error);
+          // Если не удалось загрузить данные, используем FID для создания username
           return {
             ...entry,
-            username: null,
+            username: `user${entry.fid}`,
             display_name: null,
             pfp_url: null
           };
@@ -137,16 +143,22 @@ async function loadLeaderboardFallback() {
       leaderboard.map(async (entry) => {
         try {
           const userData = await getUserByFid(entry.fid);
+          // Извлекаем username - проверяем все возможные поля
+          const username = userData?.user?.username || null;
+          // Если username отсутствует, создаем его на основе FID (например, user2757)
+          const finalUsername = username || `user${entry.fid}`;
+          
           return {
             ...entry,
-            username: userData?.user?.username || null,
+            username: finalUsername,
             display_name: userData?.user?.display_name || null,
             pfp_url: userData?.user?.pfp_url || userData?.user?.pfpUrl || userData?.user?.pfp || null
           };
         } catch (error) {
+          // Если не удалось загрузить данные, используем FID для создания username
           return {
             ...entry,
-            username: null,
+            username: `user${entry.fid}`,
             display_name: null,
             pfp_url: null
           };
@@ -214,11 +226,9 @@ export function renderLeaderboard(leaderboard, container) {
       row.style.background = "transparent";
     });
     
-    const playerName = entry.username 
-      ? `@${entry.username}` 
-      : entry.display_name 
-        ? entry.display_name 
-        : `FID: ${entry.fid}`;
+    // Всегда показываем username в формате @username
+    // username уже гарантированно есть (либо из API, либо сгенерирован как user{fid})
+    const playerName = `@${entry.username}`;
     
     const rank = index + 1; // Номер в списке (начинается с 1)
     row.innerHTML = `

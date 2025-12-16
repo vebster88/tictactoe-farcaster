@@ -1626,7 +1626,8 @@ function refreshUserLabel() {
     // Загружаем и отображаем аватарку, если есть
     if (userAvatar) {
       // Проверяем все возможные варианты названия поля аватарки
-      const pfpUrl = s.farcaster?.pfpUrl || s.farcaster?.pfp_url || s.farcaster?.pfp;
+      // В сессии сохраняется как pfp_url (snake_case), но SDK возвращает pfpUrl (camelCase)
+      const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp;
       if (pfpUrl && typeof pfpUrl === 'string' && pfpUrl.trim().length > 0) {
         // Нормализация URL
         let normalizedUrl = pfpUrl.trim();
@@ -3077,26 +3078,11 @@ authBtn?.addEventListener("click", async () => {
       const backendOrigin = window.location.origin;
       let fullUserData = null;
       
-      // Пробуем getUser() - основной метод
+      // Пробуем getUser() - основной метод (SDK возвращает context.user напрямую)
+      let user = null;
       try {
-        const user = await farcasterSDK.getUser();
-        if (user && user.fid) {
-          // Проверяем все возможные поля для аватарки
-          // SDK возвращает pfpUrl (camelCase), поэтому проверяем его первым
-          const pfpUrl = user.pfpUrl || user.pfp_url || user.pfp || user.profile_picture || null;
-          fullUserData = {
-            fid: user.fid,
-            username: user.username,
-            displayName: user.display_name || user.displayName,
-            pfp_url: pfpUrl
-          };
-          
-          if (DEBUG_ENABLED && pfpUrl) {
-            addDebugLog('🖼️ Аватар найден', { pfpUrl, source: 'SDK.getUser()' });
-          } else if (DEBUG_ENABLED) {
-            addDebugLog('⚠️ Аватар не найден', { userKeys: Object.keys(user) });
-          }
-        } else {
+        user = await farcasterSDK.getUser();
+        if (!user || !user.fid) {
           throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
         }
       } catch (getUserError) {
@@ -3113,6 +3099,51 @@ authBtn?.addEventListener("click", async () => {
         }
       }
       
+      // Если получили данные из SDK, используем их напрямую (SDK - основной источник)
+      if (user && user.fid) {
+        // SDK возвращает: { fid, username, displayName, pfpUrl, ... }
+        // Согласно документации: sdk.context.user.pfpUrl (camelCase)
+        const pfpUrl = user.pfpUrl || null;
+        
+        if (DEBUG_ENABLED) {
+          addDebugLog('📦 Данные из SDK', { 
+            fid: user.fid,
+            username: user.username,
+            displayName: user.displayName,
+            pfpUrl: pfpUrl,
+            allKeys: Object.keys(user)
+          });
+        }
+        
+        const farcasterProfile = {
+          fid: user.fid,
+          username: user.username || user.displayName || `user_${user.fid}`,
+          display_name: user.displayName || user.username || `User ${user.fid}`,
+          pfp_url: pfpUrl  // Сохраняем как pfp_url для единообразия
+        };
+        
+        const session = {
+          schemaVersion: "1.0.0",
+          farcaster: farcasterProfile,
+          miniapp: true,
+          issuedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem("fc_session", JSON.stringify(session));
+        
+        if (DEBUG_ENABLED) {
+          addDebugLog('✅ Сессия сохранена', { 
+            fid: farcasterProfile.fid,
+            username: farcasterProfile.username,
+            pfp_url: farcasterProfile.pfp_url
+          });
+        }
+        
+        refreshUserLabel();
+        return;
+      }
+      
+      // Fallback: используем Quick Auth данные
       if (!fullUserData || !fullUserData.fid) {
         throw new Error('Не удалось получить данные пользователя');
       }
@@ -3135,9 +3166,10 @@ authBtn?.addEventListener("click", async () => {
       };
       
       if (DEBUG_ENABLED) {
-        addDebugLog('✅ Пользователь получен', {
+        addDebugLog('✅ Пользователь получен (Quick Auth fallback)', {
           fid: farcasterProfile.fid,
-          username: farcasterProfile.username
+          username: farcasterProfile.username,
+          pfp_url: farcasterProfile.pfp_url
         });
       }
       
@@ -3938,49 +3970,27 @@ refreshUserLabel();
                   return;
                 }
                 
-                const backendOrigin = window.location.origin;
-                
-                // Пытаемся получить полные данные через Quick Auth (для получения аватара)
-                let fullUserData = null;
-                try {
-                  fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
-                } catch (error) {
-                  // Если Quick Auth не работает, используем данные из SDK
-                  const pfpUrl = user.pfpUrl || user.pfp_url || user.pfp || user.profile_picture || null;
-                  const farcasterProfile = {
-                    fid: user.fid,
-                    username: user.username || user.displayName || `user_${user.fid}`,
-                    display_name: user.displayName || user.username || `User ${user.fid}`,
-                    pfp_url: pfpUrl
-                  };
-                  
-                  const session = getSession() || {};
-                  const updatedSession = {
-                    ...session,
-                    farcaster: farcasterProfile,
-                    miniapp: true,
-                    issuedAt: new Date().toISOString()
-                  };
-                  
-                  localStorage.setItem("fc_session", JSON.stringify(updatedSession));
-                  refreshUserLabel();
-                  return;
-                }
-                
-                if (!fullUserData || !fullUserData.fid) {
-                  return;
-                }
-                
+                // Согласно документации: sdk.context.user содержит { fid, username, displayName, pfpUrl, ... }
+                // Используем данные из SDK напрямую - это основной источник данных с аватаром
                 // SDK возвращает: { fid, username, displayName, pfpUrl, ... }
-                // Quick Auth возвращает: { fid, username, displayName, pfp_url, ... }
-                // Маппим в наш формат: { fid, username, display_name, pfp_url }
-                // Проверяем сначала camelCase (SDK), потом snake_case (Quick Auth)
-                const pfpUrl = fullUserData.pfpUrl || fullUserData.pfp_url || fullUserData.pfp || null;
+                // Согласно документации: pfpUrl (camelCase) - это правильное поле из sdk.context.user
+                const pfpUrl = user.pfpUrl || null;
+                
+                if (DEBUG_ENABLED) {
+                  addDebugLog('📦 Авто-авторизация: данные из SDK', { 
+                    fid: user.fid,
+                    username: user.username,
+                    displayName: user.displayName,
+                    pfpUrl: pfpUrl,
+                    allKeys: Object.keys(user)
+                  });
+                }
+                
                 const farcasterProfile = {
-                  fid: fullUserData.fid,
-                  username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
-                  display_name: fullUserData.displayName || fullUserData.username || `User ${fullUserData.fid}`,
-                  pfp_url: pfpUrl
+                  fid: user.fid,
+                  username: user.username || user.displayName || `user_${user.fid}`,
+                  display_name: user.displayName || user.username || `User ${user.fid}`,
+                  pfp_url: pfpUrl  // Сохраняем pfpUrl из SDK как pfp_url для единообразия
                 };
                 
                 const session = getSession() || {};
@@ -3993,8 +4003,18 @@ refreshUserLabel();
                 
                 localStorage.setItem("fc_session", JSON.stringify(updatedSession));
                 
+                if (DEBUG_ENABLED) {
+                  addDebugLog('✅ Авто-авторизация: сессия сохранена', { 
+                    fid: farcasterProfile.fid,
+                    username: farcasterProfile.username,
+                    pfp_url: farcasterProfile.pfp_url
+                  });
+                }
+                
                 // Убираем флаг автоматической авторизации
                 localStorage.removeItem('auto_auth_started');
+                
+                refreshUserLabel();
                 
                 // Обновляем UI для отображения имени пользователя
                 refreshUserLabel();
