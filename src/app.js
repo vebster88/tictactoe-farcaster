@@ -354,6 +354,9 @@ function initDebugUI() {
   }
 }
 
+// Экспортируем addDebugLog в window для использования в других модулях
+window.addDebugLog = addDebugLog;
+
 // Now we can safely use addDebugLog
 const root = document.body;
 const boardEl = document.getElementById("board");

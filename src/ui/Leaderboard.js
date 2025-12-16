@@ -1,5 +1,19 @@
 import { getUserByFid } from "../farcaster/client.js";
 
+// Функция для добавления логов в debug панель (если доступна)
+function addDebugLog(message, data = null) {
+  // Проверяем, доступна ли функция addDebugLog через window
+  if (typeof window !== 'undefined' && window.addDebugLog) {
+    window.addDebugLog(message, data);
+  }
+  // Также выводим в консоль для отладки
+  if (data !== null && data !== undefined) {
+    console.log(`[Leaderboard] ${message}`, data);
+  } else {
+    console.log(`[Leaderboard] ${message}`);
+  }
+}
+
 export async function loadLeaderboard() {
   const lang = localStorage.getItem("language") || "en";
   
@@ -76,51 +90,87 @@ export async function loadLeaderboard() {
     console.log(`[Leaderboard] Loaded ${leaderboard.length} entries`);
     
     // Загружаем информацию о пользователях для каждого FID
-    console.log('[Leaderboard] Начинаем загрузку данных пользователей для', leaderboard.length, 'записей');
+    addDebugLog(`📊 Начинаем загрузку данных пользователей для ${leaderboard.length} записей`);
     const leaderboardWithUsers = await Promise.all(
       leaderboard.map(async (entry) => {
         try {
-          console.log('[Leaderboard] Загружаем данные для FID', entry.fid);
+          addDebugLog(`🔍 Загружаем данные для FID ${entry.fid}`);
           const userData = await getUserByFid(entry.fid);
           
-          console.log('[Leaderboard] Получены данные для FID', entry.fid, ':', {
+          // Проверяем, что данные получены
+          if (!userData || !userData.user) {
+            addDebugLog(`⚠️ Данные пользователя не получены для FID ${entry.fid}`, { userData });
+            return {
+              ...entry,
+              username: `user${entry.fid}`,
+              display_name: null,
+              pfp_url: null
+            };
+          }
+          
+          addDebugLog(`✅ Получены данные для FID ${entry.fid}`, {
             hasUserData: !!userData,
             hasUser: !!userData?.user,
             userKeys: userData?.user ? Object.keys(userData.user) : [],
             username: userData?.user?.username,
+            usernameType: typeof userData?.user?.username,
+            usernameValue: userData?.user?.username,
             display_name: userData?.user?.display_name,
+            displayName: userData?.user?.displayName,
             pfp_url: userData?.user?.pfp_url,
             pfpUrl: userData?.user?.pfpUrl,
             pfp: userData?.user?.pfp
           });
           
           // Извлекаем username из данных пользователя
-          const username = userData?.user?.username || null;
+          // Проверяем все возможные варианты и убеждаемся, что это не пустая строка
+          const username = (userData.user.username && 
+                           typeof userData.user.username === 'string' && 
+                           userData.user.username.trim().length > 0) 
+                           ? userData.user.username.trim() 
+                           : null;
+          
           // Если username отсутствует, создаем его на основе FID (например, user2757)
+          // НО только если userData действительно не содержит username
           const finalUsername = username || `user${entry.fid}`;
           
+          if (!username) {
+            addDebugLog(`⚠️ Username не найден для FID ${entry.fid} - будет использован ${finalUsername}`, {
+              rawUsername: userData.user.username,
+              usernameType: typeof userData.user.username
+            });
+          } else {
+            addDebugLog(`✅ Username найден для FID ${entry.fid}: ${username}`);
+          }
+          
           // Извлекаем pfp_url - проверяем все возможные варианты
-          const pfp_url = userData?.user?.pfp_url || 
-                         userData?.user?.pfpUrl || 
+          // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
+          const pfp_url = userData?.user?.pfpUrl || 
+                         userData?.user?.pfp_url || 
                          userData?.user?.pfp || 
-                         (userData?.user?.profile?.pfp_url) ||
                          (userData?.user?.profile?.pfpUrl) ||
+                         (userData?.user?.profile?.pfp_url) ||
                          null;
           
-          console.log('[Leaderboard] Итоговые данные для FID', entry.fid, ':', {
+          // Извлекаем display_name - проверяем оба варианта (camelCase и snake_case)
+          const display_name = userData?.user?.displayName || 
+                              userData?.user?.display_name || 
+                              null;
+          
+          addDebugLog(`📋 Итоговые данные для FID ${entry.fid}`, {
             finalUsername,
             pfp_url,
-            display_name: userData?.user?.display_name
+            display_name
           });
           
           return {
             ...entry,
             username: finalUsername,
-            display_name: userData?.user?.display_name || null,
+            display_name: display_name,
             pfp_url: pfp_url
           };
         } catch (error) {
-          console.warn(`[Leaderboard] Failed to load user data for FID ${entry.fid}:`, error);
+          addDebugLog(`❌ Ошибка загрузки данных для FID ${entry.fid}`, { error: error.message });
           // Если не удалось загрузить данные, используем FID для создания username
           return {
             ...entry,
@@ -132,7 +182,7 @@ export async function loadLeaderboard() {
       })
     );
     
-    console.log('[Leaderboard] Загрузка данных пользователей завершена. Загружено:', leaderboardWithUsers.length, 'записей');
+    addDebugLog(`✅ Загрузка данных пользователей завершена. Загружено: ${leaderboardWithUsers.length} записей`);
     
     return leaderboardWithUsers;
   } catch (error) {
@@ -169,32 +219,65 @@ async function loadLeaderboardFallback() {
     const leaderboard = data.leaderboard || [];
     
     // Загружаем информацию о пользователях
-    console.log('[Leaderboard] Fallback: Начинаем загрузку данных пользователей для', leaderboard.length, 'записей');
+    addDebugLog(`📊 Fallback: Начинаем загрузку данных пользователей для ${leaderboard.length} записей`);
     return await Promise.all(
       leaderboard.map(async (entry) => {
         try {
           const userData = await getUserByFid(entry.fid);
-          // Извлекаем username - проверяем все возможные поля
-          const username = userData?.user?.username || null;
+          
+          // Проверяем, что данные получены
+          if (!userData || !userData.user) {
+            addDebugLog(`⚠️ Fallback: Данные пользователя не получены для FID ${entry.fid}`, { userData });
+            return {
+              ...entry,
+              username: `user${entry.fid}`,
+              display_name: null,
+              pfp_url: null
+            };
+          }
+          
+          // Извлекаем username - проверяем все возможные поля и убеждаемся, что это не пустая строка
+          const username = (userData.user.username && 
+                           typeof userData.user.username === 'string' && 
+                           userData.user.username.trim().length > 0) 
+                           ? userData.user.username.trim() 
+                           : null;
+          
           // Если username отсутствует, создаем его на основе FID (например, user2757)
+          // НО только если userData действительно не содержит username
           const finalUsername = username || `user${entry.fid}`;
           
+          if (!username) {
+            addDebugLog(`⚠️ Fallback: Username не найден для FID ${entry.fid} - будет использован ${finalUsername}`, {
+              rawUsername: userData.user.username,
+              usernameType: typeof userData.user.username
+            });
+          } else {
+            addDebugLog(`✅ Fallback: Username найден для FID ${entry.fid}: ${username}`);
+          }
+          
           // Извлекаем pfp_url - проверяем все возможные варианты
-          const pfp_url = userData?.user?.pfp_url || 
-                         userData?.user?.pfpUrl || 
+          // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
+          const pfp_url = userData?.user?.pfpUrl || 
+                         userData?.user?.pfp_url || 
                          userData?.user?.pfp || 
-                         (userData?.user?.profile?.pfp_url) ||
                          (userData?.user?.profile?.pfpUrl) ||
+                         (userData?.user?.profile?.pfp_url) ||
                          null;
+          
+          // Извлекаем display_name - проверяем оба варианта (camelCase и snake_case)
+          const display_name = userData?.user?.displayName || 
+                              userData?.user?.display_name || 
+                              null;
           
           return {
             ...entry,
             username: finalUsername,
-            display_name: userData?.user?.display_name || null,
+            display_name: display_name,
             pfp_url: pfp_url
           };
         } catch (error) {
-          console.warn(`[Leaderboard] Fallback: Failed to load user data for FID ${entry.fid}:`, error);
+          addDebugLog(`❌ Fallback: Ошибка загрузки данных для FID ${entry.fid}`, { error: error.message });
           // Если не удалось загрузить данные, используем FID для создания username
           return {
             ...entry,
