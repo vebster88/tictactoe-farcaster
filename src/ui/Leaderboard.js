@@ -76,23 +76,51 @@ export async function loadLeaderboard() {
     console.log(`[Leaderboard] Loaded ${leaderboard.length} entries`);
     
     // Загружаем информацию о пользователях для каждого FID
+    console.log('[Leaderboard] Начинаем загрузку данных пользователей для', leaderboard.length, 'записей');
     const leaderboardWithUsers = await Promise.all(
       leaderboard.map(async (entry) => {
         try {
+          console.log('[Leaderboard] Загружаем данные для FID', entry.fid);
           const userData = await getUserByFid(entry.fid);
+          
+          console.log('[Leaderboard] Получены данные для FID', entry.fid, ':', {
+            hasUserData: !!userData,
+            hasUser: !!userData?.user,
+            userKeys: userData?.user ? Object.keys(userData.user) : [],
+            username: userData?.user?.username,
+            display_name: userData?.user?.display_name,
+            pfp_url: userData?.user?.pfp_url,
+            pfpUrl: userData?.user?.pfpUrl,
+            pfp: userData?.user?.pfp
+          });
+          
           // Извлекаем username из данных пользователя
           const username = userData?.user?.username || null;
           // Если username отсутствует, создаем его на основе FID (например, user2757)
           const finalUsername = username || `user${entry.fid}`;
           
+          // Извлекаем pfp_url - проверяем все возможные варианты
+          const pfp_url = userData?.user?.pfp_url || 
+                         userData?.user?.pfpUrl || 
+                         userData?.user?.pfp || 
+                         (userData?.user?.profile?.pfp_url) ||
+                         (userData?.user?.profile?.pfpUrl) ||
+                         null;
+          
+          console.log('[Leaderboard] Итоговые данные для FID', entry.fid, ':', {
+            finalUsername,
+            pfp_url,
+            display_name: userData?.user?.display_name
+          });
+          
           return {
             ...entry,
             username: finalUsername,
             display_name: userData?.user?.display_name || null,
-            pfp_url: userData?.user?.pfp_url || userData?.user?.pfpUrl || userData?.user?.pfp || null
+            pfp_url: pfp_url
           };
         } catch (error) {
-          console.warn(`Failed to load user data for FID ${entry.fid}:`, error);
+          console.warn(`[Leaderboard] Failed to load user data for FID ${entry.fid}:`, error);
           // Если не удалось загрузить данные, используем FID для создания username
           return {
             ...entry,
@@ -103,6 +131,8 @@ export async function loadLeaderboard() {
         }
       })
     );
+    
+    console.log('[Leaderboard] Загрузка данных пользователей завершена. Загружено:', leaderboardWithUsers.length, 'записей');
     
     return leaderboardWithUsers;
   } catch (error) {
@@ -139,6 +169,7 @@ async function loadLeaderboardFallback() {
     const leaderboard = data.leaderboard || [];
     
     // Загружаем информацию о пользователях
+    console.log('[Leaderboard] Fallback: Начинаем загрузку данных пользователей для', leaderboard.length, 'записей');
     return await Promise.all(
       leaderboard.map(async (entry) => {
         try {
@@ -148,13 +179,22 @@ async function loadLeaderboardFallback() {
           // Если username отсутствует, создаем его на основе FID (например, user2757)
           const finalUsername = username || `user${entry.fid}`;
           
+          // Извлекаем pfp_url - проверяем все возможные варианты
+          const pfp_url = userData?.user?.pfp_url || 
+                         userData?.user?.pfpUrl || 
+                         userData?.user?.pfp || 
+                         (userData?.user?.profile?.pfp_url) ||
+                         (userData?.user?.profile?.pfpUrl) ||
+                         null;
+          
           return {
             ...entry,
             username: finalUsername,
             display_name: userData?.user?.display_name || null,
-            pfp_url: userData?.user?.pfp_url || userData?.user?.pfpUrl || userData?.user?.pfp || null
+            pfp_url: pfp_url
           };
         } catch (error) {
+          console.warn(`[Leaderboard] Fallback: Failed to load user data for FID ${entry.fid}:`, error);
           // Если не удалось загрузить данные, используем FID для создания username
           return {
             ...entry,

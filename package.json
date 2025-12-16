@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
-    "check-config": "node scripts/check-config.js"
+    "check-config": "node scripts/check-config.js",
+    "test:neynar": "node scripts/test-neynar-api.js"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.46.2",

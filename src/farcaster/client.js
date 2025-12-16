@@ -96,22 +96,81 @@ export async function getUserByFid(fid) {
     };
   }
 
+  // Проверяем наличие API ключа
+  if (!NEYNAR_API_KEY || NEYNAR_API_KEY === "your_neynar_api_key_here") {
+    console.warn('[getUserByFid] NEYNAR_API_KEY не установлен или имеет значение по умолчанию');
+    return null;
+  }
+
   try {
-    const response = await axios.get(`${NEYNAR_BASE_URL}/farcaster/user/bulk`, {
-      params: { fids: fid },
+    const url = `${NEYNAR_BASE_URL}/farcaster/user/bulk`;
+    const params = { fids: fid };
+    
+    console.log('[getUserByFid] Запрос к Neynar API:', {
+      url,
+      fid,
+      hasApiKey: !!NEYNAR_API_KEY,
+      apiKeyPreview: NEYNAR_API_KEY ? NEYNAR_API_KEY.substring(0, 10) + '...' : 'missing'
+    });
+    
+    const response = await axios.get(url, {
+      params: params,
       headers: { 'api_key': NEYNAR_API_KEY }
     });
     
+    console.log('[getUserByFid] Ответ от Neynar API для FID', fid, ':', {
+      status: response.status,
+      hasData: !!response.data,
+      hasUsers: !!response.data?.users,
+      usersCount: response.data?.users?.length || 0,
+      responseKeys: response.data ? Object.keys(response.data) : []
+    });
+    
     if (response.data?.users && response.data.users.length > 0) {
+      const user = response.data.users[0];
+      
+      // Детальное логирование структуры пользователя
+      console.log('[getUserByFid] Данные пользователя для FID', fid, ':', {
+        fid: user.fid,
+        username: user.username,
+        display_name: user.display_name,
+        displayName: user.displayName,
+        pfp_url: user.pfp_url,
+        pfpUrl: user.pfpUrl,
+        pfp: user.pfp,
+        allKeys: Object.keys(user),
+        // Проверяем вложенные объекты
+        pfpObject: user.pfp ? typeof user.pfp : 'not found',
+        profile: user.profile ? Object.keys(user.profile || {}) : 'not found'
+      });
+      
       return {
         schemaVersion: "1.0.0",
-        user: response.data.users[0]
+        user: user
       };
     }
     
+    console.warn('[getUserByFid] Пользователь не найден для FID', fid);
     return null;
   } catch (error) {
-    console.error("Error fetching user by FID:", error);
+    console.error('[getUserByFid] Ошибка при запросе к Neynar API для FID', fid, ':', error);
+    
+    // Детальное логирование ошибки
+    if (error.response) {
+      console.error('[getUserByFid] Детали ошибки ответа:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+    } else if (error.request) {
+      console.error('[getUserByFid] Запрос был отправлен, но ответа не получено:', {
+        request: error.request
+      });
+    } else {
+      console.error('[getUserByFid] Ошибка при настройке запроса:', error.message);
+    }
+    
     return null;
   }
 }
