@@ -1625,7 +1625,8 @@ function refreshUserLabel() {
       
     // Загружаем и отображаем аватарку, если есть
     if (userAvatar) {
-      const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp;
+      // Проверяем все возможные варианты названия поля аватарки
+      const pfpUrl = s.farcaster?.pfpUrl || s.farcaster?.pfp_url || s.farcaster?.pfp;
       if (pfpUrl && typeof pfpUrl === 'string' && pfpUrl.trim().length > 0) {
         // Нормализация URL
         let normalizedUrl = pfpUrl.trim();
@@ -1641,13 +1642,23 @@ function refreshUserLabel() {
         
         // Обработка ошибок загрузки
         userAvatar.onerror = () => {
+          console.warn('[refreshUserLabel] Failed to load avatar:', normalizedUrl);
           userAvatar.style.display = "none";
         };
         
         userAvatar.onload = () => {
           userAvatar.style.display = "block";
-          };
+          if (DEBUG_ENABLED) {
+            addDebugLog('✅ Аватар загружен', { url: normalizedUrl });
+          }
+        };
       } else {
+        if (DEBUG_ENABLED) {
+          addDebugLog('⚠️ Аватар не найден в сессии', { 
+            hasFarcaster: !!s.farcaster,
+            farcasterKeys: s.farcaster ? Object.keys(s.farcaster) : []
+          });
+        }
         userAvatar.style.display = "none";
       }
     }
@@ -3071,13 +3082,20 @@ authBtn?.addEventListener("click", async () => {
         const user = await farcasterSDK.getUser();
         if (user && user.fid) {
           // Проверяем все возможные поля для аватарки
-          const pfpUrl = user.pfp_url || user.pfpUrl || user.pfp || user.profile_picture || null;
+          // SDK возвращает pfpUrl (camelCase), поэтому проверяем его первым
+          const pfpUrl = user.pfpUrl || user.pfp_url || user.pfp || user.profile_picture || null;
           fullUserData = {
             fid: user.fid,
             username: user.username,
             displayName: user.display_name || user.displayName,
             pfp_url: pfpUrl
           };
+          
+          if (DEBUG_ENABLED && pfpUrl) {
+            addDebugLog('🖼️ Аватар найден', { pfpUrl, source: 'SDK.getUser()' });
+          } else if (DEBUG_ENABLED) {
+            addDebugLog('⚠️ Аватар не найден', { userKeys: Object.keys(user) });
+          }
         } else {
           throw new Error('SDK не вернул данные пользователя (user.fid отсутствует)');
         }
@@ -3100,7 +3118,14 @@ authBtn?.addEventListener("click", async () => {
       }
       
       // Проверяем все возможные поля для аватарки из fullUserData
-      const pfpUrl = fullUserData.pfp_url || fullUserData.pfpUrl || fullUserData.pfp || fullUserData.profile_picture || null;
+      // Quick Auth может вернуть pfp_url (snake_case) или pfpUrl (camelCase)
+      const pfpUrl = fullUserData.pfpUrl || fullUserData.pfp_url || fullUserData.pfp || fullUserData.profile_picture || null;
+      
+      if (DEBUG_ENABLED && pfpUrl) {
+        addDebugLog('🖼️ Аватар найден', { pfpUrl, source: 'Quick Auth' });
+      } else if (DEBUG_ENABLED) {
+        addDebugLog('⚠️ Аватар не найден', { fullUserDataKeys: Object.keys(fullUserData) });
+      }
       
       const farcasterProfile = {
         fid: fullUserData.fid,
@@ -3284,6 +3309,12 @@ inviteBtn?.addEventListener("click", async () => {
     if (leftPos + contextWidth > window.innerWidth) {
       // Размещаем слева от кнопки
       leftPos = inviteBtnRect.left - contextWidth - padding;
+      
+      // Проверяем, не выходит ли за левый край экрана
+      if (leftPos < padding) {
+        // Прижимаем к левому краю экрана
+        leftPos = padding;
+      }
     }
     
     // Проверяем, не выходит ли за нижний край экрана
@@ -3909,11 +3940,30 @@ refreshUserLabel();
                 
                 const backendOrigin = window.location.origin;
                 
-                // Пытаемся получить полные данные через Quick Auth
+                // Пытаемся получить полные данные через Quick Auth (для получения аватара)
                 let fullUserData = null;
                 try {
                   fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
                 } catch (error) {
+                  // Если Quick Auth не работает, используем данные из SDK
+                  const pfpUrl = user.pfpUrl || user.pfp_url || user.pfp || user.profile_picture || null;
+                  const farcasterProfile = {
+                    fid: user.fid,
+                    username: user.username || user.displayName || `user_${user.fid}`,
+                    display_name: user.displayName || user.username || `User ${user.fid}`,
+                    pfp_url: pfpUrl
+                  };
+                  
+                  const session = getSession() || {};
+                  const updatedSession = {
+                    ...session,
+                    farcaster: farcasterProfile,
+                    miniapp: true,
+                    issuedAt: new Date().toISOString()
+                  };
+                  
+                  localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+                  refreshUserLabel();
                   return;
                 }
                 
@@ -3921,9 +3971,11 @@ refreshUserLabel();
                   return;
                 }
                 
+                // SDK возвращает: { fid, username, displayName, pfpUrl, ... }
                 // Quick Auth возвращает: { fid, username, displayName, pfp_url, ... }
                 // Маппим в наш формат: { fid, username, display_name, pfp_url }
-                const pfpUrl = fullUserData.pfp_url || fullUserData.pfpUrl || fullUserData.pfp || null;
+                // Проверяем сначала camelCase (SDK), потом snake_case (Quick Auth)
+                const pfpUrl = fullUserData.pfpUrl || fullUserData.pfp_url || fullUserData.pfp || null;
                 const farcasterProfile = {
                   fid: fullUserData.fid,
                   username: fullUserData.username || fullUserData.displayName || `user_${fullUserData.fid}`,
