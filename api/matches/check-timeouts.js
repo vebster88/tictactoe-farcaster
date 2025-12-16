@@ -1,5 +1,6 @@
 import { getPlayerMatches, saveMatch, recordLeaderboardOutcomeForMatch } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS, TURN_TIMEOUT_MS } from "../../lib/matches/schema.js";
+import { normalizeFidToNumber } from "../../src/utils/normalize.js";
 
 async function checkMatchTimeout(match) {
   if (match.status !== MATCH_STATUS.ACTIVE || match.gameState.finished) {
@@ -56,9 +57,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "fid is required" });
     }
 
-    const normalizedFid = typeof fidValue === "string" ? parseInt(fidValue, 10) : fidValue;
+    const normalizedFid = normalizeFidToNumber(fidValue);
 
-    if (Number.isNaN(normalizedFid)) {
+    if (normalizedFid === null) {
       return res.status(400).json({ error: "fid must be a valid number" });
     }
 

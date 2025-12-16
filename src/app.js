@@ -14,6 +14,7 @@ import { createSignedKey } from "./farcaster/signer.js";
 import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 import { APP_VERSION } from "./version.js";
+import { normalizeFidToString, normalizeMatchId } from "./utils/normalize.js";
 
 // Debug logging - can be controlled via environment variable
 const DEBUG_ENABLED = import.meta.env.VITE_DEBUG === "true" || 
@@ -434,44 +435,9 @@ const matchDataStore = {
   unchangedCycles: 0
 };
 
-function normalizeMatchIdValue(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "object") {
-    if ("matchId" in value && value.matchId !== null && value.matchId !== undefined) {
-      return normalizeMatchIdValue(value.matchId);
-    }
-    if ("id" in value && value.id !== null && value.id !== undefined) {
-      return normalizeMatchIdValue(value.id);
-    }
-    return null;
-  }
-  try {
-    return String(value);
-  } catch {
-    return null;
-  }
-}
-
-function normalizeFidValue(fid) {
-  if (fid === null || fid === undefined) return null;
-  if (typeof fid === "object") {
-    if ("fid" in fid) return normalizeFidValue(fid.fid);
-    if ("id" in fid) return normalizeFidValue(fid.id);
-  }
-  if (typeof fid === "string") {
-    const trimmed = fid.trim();
-    if (!trimmed) return null;
-    return trimmed;
-  }
-  if (Number.isFinite(fid)) {
-    return String(fid);
-  }
-  try {
-    return String(fid);
-  } catch (error) {
-    return null;
-  }
-}
+// Use imported utility functions instead of local duplicates
+const normalizeMatchIdValue = normalizeMatchId;
+const normalizeFidValue = normalizeFidToString;
 
 function getNumericPlayerFid() {
   const session = getSession();

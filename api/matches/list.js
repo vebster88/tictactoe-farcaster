@@ -1,5 +1,6 @@
 import { getPlayerMatches, getAvailableMatches } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS } from "../../lib/matches/schema.js";
+import { normalizeFidToNumber } from "../../src/utils/normalize.js";
 
 const CACHE_TTL_MS = 12000; // Увеличено для снижения KV запросов
 const responseCache = new Map();
@@ -60,9 +61,9 @@ export default async function handler(req, res) {
     }
 
     // Convert fid to number for consistency (FID is always a number)
-    const playerFid = typeof fid === 'string' ? parseInt(fid, 10) : fid;
+    const playerFid = normalizeFidToNumber(fid);
     
-    if (isNaN(playerFid)) {
+    if (playerFid === null) {
       return res.status(400).json({ error: "fid must be a valid number" });
     }
 
