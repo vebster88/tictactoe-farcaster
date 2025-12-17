@@ -2299,15 +2299,44 @@ async function checkPendingMatches() {
     return isPlayerInMatch && isNotLoaded;
   });
   
-  // Если найден новый активный матч игрока, принудительно обновляем снапшот
+  // Если найден новый активный матч игрока, принудительно обновляем снапшот и загружаем матч
   if (hasNewActiveMatch) {
     try {
       matches = await getMatchesSnapshot({
-        reason: "pending_matches_check",
+        reason: "pending_matches_check_active_found",
         forceFetch: true  // Принудительное обновление для получения актуальных данных
       });
+      
+      // После обновления снапшота ищем активный матч игрока и загружаем его
+      const newActiveMatch = matches.find(match => {
+        if (match.status !== "active" || match.gameState?.finished) return false;
+        const matchPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+        const matchPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
+        const isPlayerInMatch = matchPlayer1Fid === normalizedPlayerFid || matchPlayer2Fid === normalizedPlayerFid;
+        const isNotLoaded = !currentMatch.matchState || currentMatch.matchId !== match.matchId;
+        return isPlayerInMatch && isNotLoaded;
+      });
+      
+      if (newActiveMatch) {
+        // Автоматически загружаем матч
+        await loadMatch(newActiveMatch.matchId);
+        mode = "pvp-farcaster";
+        if (settingsMode) settingsMode.value = "pvp-farcaster";
+        updateUIForMode();
+        updateMatchUI();
+        
+        const lang = getLanguage();
+        showToast(
+          lang === "ru" ? "Противник принял матч!" : "Opponent accepted the match!",
+          "success"
+        );
+        
+        // Останавливаем проверку pending, так как теперь есть активный матч
+        stopPendingMatchesCheck();
+        return null;
+      }
     } catch (error) {
-      console.warn("Error refreshing matches snapshot:", error);
+      console.warn("Error refreshing matches snapshot or loading active match:", error);
     }
   }
 
@@ -2931,7 +2960,34 @@ function updateMatchUI() {
   }
   
   // Update board state from match
-  state = match.gameState;
+  // ВАЖНО: Не перезаписываем состояние доски, если это наш ход, который еще не синхронизирован
+  // Проверяем, есть ли расхождение между локальным состоянием и состоянием с сервера
+  const serverBoard = match.gameState.board;
+  const localBoard = state.board;
+  const serverTurn = match.gameState.turn;
+  const localTurn = state.turn;
+  
+  // Если локальный ход опережает серверный (наш ход еще не синхронизирован),
+  // не перезаписываем состояние доски полностью
+  if (localTurn > serverTurn) {
+    // Наш ход еще не синхронизирован - сохраняем локальное состояние доски
+    // Но обновляем другие поля из match.gameState
+    const preservedBoard = JSON.parse(JSON.stringify(localBoard));
+    state = { ...match.gameState, board: preservedBoard };
+    
+    if (DEBUG_ENABLED) {
+      addDebugLog('⏳ Сохраняем локальное состояние доски (ход еще не синхронизирован)', {
+        localTurn,
+        serverTurn,
+        localBoard,
+        serverBoard
+      });
+    }
+  } else {
+    // Состояние синхронизировано - используем состояние с сервера
+    state = match.gameState;
+  }
+  
   render();
   updateMatchSymbolCache(match, null, { source: "update_match_ui" });
   
