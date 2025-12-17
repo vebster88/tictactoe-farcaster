@@ -133,34 +133,66 @@ export async function getUsersByFids(fids) {
 
   try {
     const url = `${NEYNAR_BASE_URL}/farcaster/user/bulk`;
-    // Neynar API принимает массив FID через параметр fids
-    // Пробуем передать массив, если не сработает - передадим строку с запятыми
-    const params = { fids: fids };
+    // Neynar API принимает FID через параметр fids как строку с запятыми или массив
+    // Нормализуем FID к числам и передаем как строку с запятыми (более надежно)
+    const normalizedFids = fids.map(fid => Number(fid)).filter(fid => !isNaN(fid));
+    const fidsString = normalizedFids.join(',');
+    const params = { fids: fidsString };
     
     if (typeof window !== 'undefined' && window.addDebugLog) {
       window.addDebugLog(`🔍 [getUsersByFids] Batch запрос для ${fids.length} FID`, {
         fids: fids,
+        normalizedFids: normalizedFids,
+        fidsString: fidsString,
         hasApiKey: !!NEYNAR_API_KEY
       });
     }
+    
+    console.log('[getUsersByFids] Запрос к Neynar API:', {
+      url,
+      params,
+      fidsCount: normalizedFids.length
+    });
     
     const response = await axios.get(url, {
       params: params,
       headers: { 'api_key': NEYNAR_API_KEY }
     });
     
+    console.log('[getUsersByFids] Ответ от Neynar API:', {
+      status: response.status,
+      hasData: !!response.data,
+      hasUsers: !!response.data?.users,
+      usersCount: response.data?.users?.length || 0,
+      responseKeys: response.data ? Object.keys(response.data) : []
+    });
+    
     if (response.data?.users && Array.isArray(response.data.users)) {
+      if (typeof window !== 'undefined' && window.addDebugLog) {
+        window.addDebugLog(`✅ [getUsersByFids] Получено ${response.data.users.length} пользователей из ${normalizedFids.length} запрошенных`, {
+          requestedFids: normalizedFids,
+          receivedFids: response.data.users.map(u => u.fid)
+        });
+      }
+      
       // Создаем Map для быстрого поиска по FID
       const usersMap = new Map();
       response.data.users.forEach(user => {
-        usersMap.set(user.fid, {
+        usersMap.set(Number(user.fid), {
           schemaVersion: "1.0.0",
           user: user
         });
       });
       
       // Возвращаем данные в том же порядке, что и запрошенные FID
-      return fids.map(fid => usersMap.get(fid) || null);
+      // Нормализуем FID к числам для сравнения
+      return normalizedFids.map(fid => usersMap.get(Number(fid)) || null);
+    }
+    
+    if (typeof window !== 'undefined' && window.addDebugLog) {
+      window.addDebugLog(`⚠️ [getUsersByFids] API не вернул массив users`, {
+        responseData: response.data
+      });
     }
     
     return fids.map(() => null);
