@@ -1675,7 +1675,11 @@ function refreshUserLabel() {
         if (rawPfpUrl && typeof rawPfpUrl === 'string' && rawPfpUrl.trim().length > 0) {
           // Нормализация URL
           let normalizedUrl = rawPfpUrl.trim();
-          if (!/^https?:\/\//i.test(normalizedUrl)) {
+          // Если это относительный путь (начинается с /), используем текущий origin
+          if (normalizedUrl.startsWith('/')) {
+            normalizedUrl = window.location.origin + normalizedUrl;
+          } else if (!/^https?:\/\//i.test(normalizedUrl)) {
+            // Если это не относительный путь и не абсолютный URL, добавляем https://
             normalizedUrl = 'https://' + normalizedUrl;
           }
 

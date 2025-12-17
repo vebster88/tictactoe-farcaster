@@ -104,8 +104,18 @@ export async function getUserByAddress(address) {
 
 // Получить профиль пользователя по FID (для отображения информации о противнике)
 export async function getUserByFid(fid) {
+  // Логируем начало запроса
+  const mockForRead = isMockForRead();
+  if (typeof window !== 'undefined' && window.addDebugLog) {
+    window.addDebugLog(`🔍 [getUserByFid] Начало запроса для FID ${fid}`, {
+      isMockForRead: mockForRead,
+      hasApiKey: !!NEYNAR_API_KEY,
+      apiKeyPreview: NEYNAR_API_KEY ? "***" + NEYNAR_API_KEY.slice(-4) : "undefined"
+    });
+  }
+  
   // Для чтения профиля по FID достаточно API-ключа, signer не обязателен
-  if (isMockForRead()) {
+  if (mockForRead) {
     // В mock режиме генерируем данные на основе FID
     // Это не точное соответствие, но для тестирования достаточно
     const fidHash = Math.abs(fid) % 10000;
@@ -125,6 +135,12 @@ export async function getUserByFid(fid) {
   // Проверяем наличие API ключа
   if (!NEYNAR_API_KEY || NEYNAR_API_KEY === "your_neynar_api_key_here") {
     console.warn('[getUserByFid] NEYNAR_API_KEY не установлен или имеет значение по умолчанию');
+    if (typeof window !== 'undefined' && window.addDebugLog) {
+      window.addDebugLog(`⚠️ [getUserByFid] API ключ не установлен для FID ${fid}`, {
+        hasApiKey: !!NEYNAR_API_KEY,
+        apiKeyValue: NEYNAR_API_KEY || "undefined"
+      });
+    }
     return null;
   }
 
@@ -182,19 +198,37 @@ export async function getUserByFid(fid) {
     console.error('[getUserByFid] Ошибка при запросе к Neynar API для FID', fid, ':', error);
     
     // Детальное логирование ошибки
+    let errorDetails = {};
     if (error.response) {
-      console.error('[getUserByFid] Детали ошибки ответа:', {
+      errorDetails = {
+        type: 'response_error',
         status: error.response.status,
         statusText: error.response.statusText,
         data: error.response.data,
         headers: error.response.headers
-      });
+      };
+      console.error('[getUserByFid] Детали ошибки ответа:', errorDetails);
     } else if (error.request) {
-      console.error('[getUserByFid] Запрос был отправлен, но ответа не получено:', {
+      errorDetails = {
+        type: 'request_error',
+        message: 'Запрос был отправлен, но ответа не получено',
         request: error.request
-      });
+      };
+      console.error('[getUserByFid] Запрос был отправлен, но ответа не получено:', errorDetails);
     } else {
-      console.error('[getUserByFid] Ошибка при настройке запроса:', error.message);
+      errorDetails = {
+        type: 'setup_error',
+        message: error.message
+      };
+      console.error('[getUserByFid] Ошибка при настройке запроса:', errorDetails);
+    }
+    
+    // Логируем в debug панель, если доступна
+    if (typeof window !== 'undefined' && window.addDebugLog) {
+      window.addDebugLog(`❌ [getUserByFid] Ошибка для FID ${fid}`, {
+        error: error.message,
+        ...errorDetails
+      });
     }
     
     return null;
