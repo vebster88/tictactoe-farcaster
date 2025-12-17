@@ -570,18 +570,72 @@ export function renderLeaderboard(leaderboard, container) {
     }
     
     const rank = index + 1; // Номер в списке (начинается с 1)
-    row.innerHTML = `
-      <td style="text-align: center; padding: 12px 8px; color: var(--muted); font-weight: 600;">${rank}</td>
-      <td style="padding: 12px 8px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          ${avatarUrl ? `<img src="${avatarUrl}" alt="${playerName}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);" onerror="this.style.display='none';" />` : ""}
-          <span>${playerName}</span>
-        </div>
-      </td>
-      <td style="text-align: center; padding: 12px 8px; color: var(--win); font-weight: 600;">${entry.wins || 0}</td>
-      <td style="text-align: center; padding: 12px 8px; color: var(--muted);">${entry.draws || 0}</td>
-      <td style="text-align: center; padding: 12px 8px; color: var(--lose);">${entry.losses || 0}</td>
-    `;
+    
+    // Создаем ячейки
+    const rankCell = document.createElement("td");
+    rankCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--muted); font-weight: 600;";
+    rankCell.textContent = rank;
+    
+    const playerCell = document.createElement("td");
+    playerCell.style.cssText = "padding: 12px 8px;";
+    
+    const playerDiv = document.createElement("div");
+    playerDiv.style.cssText = "display: flex; align-items: center; gap: 8px;";
+    
+    // Создаем элемент аватара программно для лучшей обработки ошибок
+    if (avatarUrl) {
+      const avatarImg = document.createElement("img");
+      avatarImg.src = avatarUrl;
+      avatarImg.alt = playerName;
+      avatarImg.style.cssText = "width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);";
+      avatarImg.crossOrigin = "anonymous";
+      avatarImg.loading = "lazy";
+      
+      // Обработка успешной загрузки
+      avatarImg.onload = () => {
+        if (typeof window !== 'undefined' && window.addDebugLog) {
+          window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { url: avatarUrl });
+        }
+      };
+      
+      // Обработка ошибки загрузки с логированием
+      avatarImg.onerror = (e) => {
+        avatarImg.style.display = 'none';
+        if (typeof window !== 'undefined' && window.addDebugLog) {
+          window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
+            url: avatarUrl,
+            fid: entry.fid || 'unknown',
+            username: entry.username
+          });
+        }
+        console.warn(`[Leaderboard] Failed to load avatar for ${playerName}:`, avatarUrl);
+      };
+      
+      playerDiv.appendChild(avatarImg);
+    }
+    
+    const usernameSpan = document.createElement("span");
+    usernameSpan.textContent = playerName;
+    playerDiv.appendChild(usernameSpan);
+    playerCell.appendChild(playerDiv);
+    
+    const winsCell = document.createElement("td");
+    winsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--win); font-weight: 600;";
+    winsCell.textContent = entry.wins || 0;
+    
+    const drawsCell = document.createElement("td");
+    drawsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--muted);";
+    drawsCell.textContent = entry.draws || 0;
+    
+    const lossesCell = document.createElement("td");
+    lossesCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--lose);";
+    lossesCell.textContent = entry.losses || 0;
+    
+    row.appendChild(rankCell);
+    row.appendChild(playerCell);
+    row.appendChild(winsCell);
+    row.appendChild(drawsCell);
+    row.appendChild(lossesCell);
     tbody.appendChild(row);
   });
   
