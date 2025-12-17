@@ -1597,6 +1597,16 @@ function refreshUserLabel() {
   const authWrapper = authBtn?.closest('.auth-wrapper');
   const userLabel = document.getElementById("user-label");
   const userAvatar = document.getElementById("user-avatar");
+
+  if (DEBUG_ENABLED) {
+    addDebugLog('👤 refreshUserLabel state', {
+      isAuthorized,
+      hasSession: !!s,
+      hasFarcaster: !!s?.farcaster,
+      farcasterKeys: s?.farcaster ? Object.keys(s.farcaster) : [],
+      hasUserAvatarElement: !!userAvatar
+    });
+  }
   
   // Проверяем, что userLabel существует
   if (!userLabel) {
@@ -1630,35 +1640,53 @@ function refreshUserLabel() {
     if (userAvatar) {
       // Проверяем все возможные варианты названия поля аватарки
       // В сессии сохраняется как pfp_url (snake_case), но SDK возвращает pfpUrl (camelCase)
-      const pfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp;
-      if (pfpUrl && typeof pfpUrl === 'string' && pfpUrl.trim().length > 0) {
+      const rawPfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp || null;
+
+      if (DEBUG_ENABLED) {
+        addDebugLog('🧩 Данные для аватара из сессии', {
+          rawPfpUrl,
+          farcaster: s.farcaster || null
+        });
+      }
+
+      if (rawPfpUrl && typeof rawPfpUrl === 'string' && rawPfpUrl.trim().length > 0) {
         // Нормализация URL
-        let normalizedUrl = pfpUrl.trim();
+        let normalizedUrl = rawPfpUrl.trim();
         if (!/^https?:\/\//i.test(normalizedUrl)) {
           normalizedUrl = 'https://' + normalizedUrl;
         }
-        
-        userAvatar.src = normalizedUrl;
-        userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
-        userAvatar.style.display = "block";
-        userAvatar.crossOrigin = "anonymous";
-        userAvatar.loading = "lazy";
-        
-        // Обработка ошибок загрузки
-        userAvatar.onerror = () => {
-          console.warn('[refreshUserLabel] Failed to load avatar:', normalizedUrl);
-          userAvatar.style.display = "none";
-        };
-        
-        userAvatar.onload = () => {
+
+        // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
+        const testImg = new Image();
+        testImg.crossOrigin = 'anonymous';
+
+        testImg.onload = () => {
+          userAvatar.src = normalizedUrl;
+          userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
           userAvatar.style.display = "block";
+          userAvatar.crossOrigin = "anonymous";
+          userAvatar.loading = "lazy";
+
           if (DEBUG_ENABLED) {
-            addDebugLog('✅ Аватар загружен', { url: normalizedUrl });
+            addDebugLog('✅ Аватар предзагружен и установлен', { url: normalizedUrl });
           }
         };
+
+        testImg.onerror = () => {
+          userAvatar.style.display = "none";
+          if (DEBUG_ENABLED) {
+            addDebugLog('❌ Не удалось загрузить аватар', { url: normalizedUrl });
+          }
+        };
+
+        if (DEBUG_ENABLED) {
+          addDebugLog('🔄 Пытаемся загрузить аватар', { url: normalizedUrl });
+        }
+
+        testImg.src = normalizedUrl;
       } else {
         if (DEBUG_ENABLED) {
-          addDebugLog('⚠️ Аватар не найден в сессии', { 
+          addDebugLog('⚠️ Аватар не найден в сессии (нет pfpUrl)', { 
             hasFarcaster: !!s.farcaster,
             farcasterKeys: s.farcaster ? Object.keys(s.farcaster) : []
           });
