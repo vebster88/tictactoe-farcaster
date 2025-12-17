@@ -524,6 +524,9 @@ export function renderLeaderboard(leaderboard, container) {
     return;
   }
   
+  // Определяем, мобильное ли устройство
+  const isMobile = window.innerWidth <= 768;
+  
   // Создаем обертку для таблицы с прокруткой
   const tableWrapper = document.createElement("div");
   tableWrapper.style.cssText = `
@@ -535,25 +538,27 @@ export function renderLeaderboard(leaderboard, container) {
   
   // Создаем таблицу
   const table = document.createElement("table");
+  const tableFontSize = isMobile ? '0.8rem' : '0.9rem';
+  const tablePadding = isMobile ? '8px 4px' : '12px 8px';
   table.style.cssText = `
     width: 100%;
-    min-width: 100%;
-    max-width: 100%;
     border-collapse: collapse;
-    font-size: 0.9rem;
-    table-layout: auto;
+    font-size: ${tableFontSize};
+    table-layout: fixed;
     box-sizing: border-box;
   `;
   
   // Заголовок таблицы
   const thead = document.createElement("thead");
+  const rankWidth = isMobile ? '35px' : '45px';
+  const statsWidth = isMobile ? '55px' : '70px';
   thead.innerHTML = `
     <tr style="border-bottom: 2px solid rgba(255, 255, 255, 0.2);">
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 40px; width: 50px; box-sizing: border-box;">#</th>
-      <th style="text-align: left; padding: 12px 8px; font-weight: 600; min-width: 120px; box-sizing: border-box;">${lang === "ru" ? "Игрок" : "Player"}</th>
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;">${lang === "ru" ? "Победы" : "Wins"}</th>
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;">${lang === "ru" ? "Ничья" : "Draws"}</th>
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;">${lang === "ru" ? "Поражения" : "Losses"}</th>
+      <th style="text-align: center; padding: ${tablePadding}; font-weight: 600; width: ${rankWidth}; box-sizing: border-box;">#</th>
+      <th style="text-align: left; padding: ${tablePadding}; font-weight: 600; box-sizing: border-box;">${lang === "ru" ? "Игрок" : "Player"}</th>
+      <th style="text-align: center; padding: ${tablePadding}; font-weight: 600; width: ${statsWidth}; box-sizing: border-box;">${lang === "ru" ? "Победы" : "Wins"}</th>
+      <th style="text-align: center; padding: ${tablePadding}; font-weight: 600; width: ${statsWidth}; box-sizing: border-box;">${lang === "ru" ? "Ничья" : "Draws"}</th>
+      <th style="text-align: center; padding: ${tablePadding}; font-weight: 600; width: ${statsWidth}; box-sizing: border-box;">${lang === "ru" ? "Поражения" : "Losses"}</th>
     </tr>
   `;
   table.appendChild(thead);
@@ -609,13 +614,15 @@ export function renderLeaderboard(leaderboard, container) {
     playerCell.style.cssText = "padding: 12px 8px;";
     
     const playerDiv = document.createElement("div");
-    playerDiv.style.cssText = "display: flex; align-items: center; gap: 8px;";
+    const avatarGap = isMobile ? '6px' : '8px';
+    const avatarSize = isMobile ? '28px' : '32px';
+    playerDiv.style.cssText = `display: flex; align-items: center; gap: ${avatarGap}; min-width: 0;`;
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
-      avatarImg.style.cssText = "width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);";
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0;`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://');
@@ -719,19 +726,20 @@ export function renderLeaderboard(leaderboard, container) {
     
     const usernameSpan = document.createElement("span");
     usernameSpan.textContent = playerName;
+    usernameSpan.style.cssText = "overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;";
     playerDiv.appendChild(usernameSpan);
     playerCell.appendChild(playerDiv);
     
     const winsCell = document.createElement("td");
-    winsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--win); font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;";
+    winsCell.style.cssText = `text-align: center; padding: ${tablePadding}; color: var(--win); font-weight: 600; box-sizing: border-box;`;
     winsCell.textContent = entry.wins || 0;
     
     const drawsCell = document.createElement("td");
-    drawsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--muted); min-width: 60px; width: 80px; box-sizing: border-box;";
+    drawsCell.style.cssText = `text-align: center; padding: ${tablePadding}; color: var(--muted); box-sizing: border-box;`;
     drawsCell.textContent = entry.draws || 0;
     
     const lossesCell = document.createElement("td");
-    lossesCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--lose); min-width: 60px; width: 80px; box-sizing: border-box;";
+    lossesCell.style.cssText = `text-align: center; padding: ${tablePadding}; color: var(--lose); box-sizing: border-box;`;
     lossesCell.textContent = entry.losses || 0;
     
     row.appendChild(rankCell);
