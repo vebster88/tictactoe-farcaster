@@ -63,6 +63,10 @@
   ],
   "rewrites": [
     {
+      "source": "/(.*\\.(jpg|jpeg|png|gif|svg|ico|webp|woff|woff2|ttf|eot))",
+      "destination": "/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
