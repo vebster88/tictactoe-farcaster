@@ -36,19 +36,8 @@ function isMockData(userData, fid) {
   // Если хотя бы одно условие не выполнено - это реальные данные из Neynar API
   const isMock = isMockPfp && isMockUsername;
   
-  // Дополнительная проверка: если pfp_url содержит "imagedelivery.net" или другие реальные CDN,
-  // это точно не моковые данные, даже если username совпадает
-  const hasRealCdnUrl = pfp_url && typeof pfp_url === 'string' && 
-    (pfp_url.includes('imagedelivery.net') || 
-     pfp_url.includes('cloudinary.com') || 
-     pfp_url.includes('ipfs.io') ||
-     (pfp_url.startsWith('http') && !pfp_url.includes('/assets/images/hero.jpg')));
-  
-  if (hasRealCdnUrl) {
-    return false; // Реальные данные из CDN
-  }
-  
-  // Проверка на username вида !{fid} - это означает, что у пользователя нет нормального username
+  // ВАЖНО: Проверка на username вида !{fid} должна быть ПЕРВОЙ
+  // Это означает, что у пользователя нет нормального username
   // Такие пользователи считаются не-Farcaster (были сгенерированы нами ранее)
   // Нормализуем оба значения к строке для корректного сравнения
   const fidNum = Number(fid);
@@ -60,7 +49,19 @@ function isMockData(userData, fid) {
                              (typeof fid === 'string' && usernameStr === `!${fid}`);
   
   if (isFidBasedUsername) {
-    return true; // Это не-Farcaster пользователь с сгенерированным FID
+    return true; // Это не-Farcaster пользователь с сгенерированным FID (даже если есть реальный CDN URL)
+  }
+  
+  // Дополнительная проверка: если pfp_url содержит "imagedelivery.net" или другие реальные CDN,
+  // это точно не моковые данные, даже если username совпадает
+  const hasRealCdnUrl = pfp_url && typeof pfp_url === 'string' && 
+    (pfp_url.includes('imagedelivery.net') || 
+     pfp_url.includes('cloudinary.com') || 
+     pfp_url.includes('ipfs.io') ||
+     (pfp_url.startsWith('http') && !pfp_url.includes('/assets/images/hero.jpg')));
+  
+  if (hasRealCdnUrl) {
+    return false; // Реальные данные из CDN (только если username не начинается с !)
   }
   
   return isMock;
@@ -567,6 +568,21 @@ export function renderLeaderboard(leaderboard, container) {
     let avatarUrl = entry.pfp_url || null;
     if (avatarUrl && avatarUrl.startsWith('/')) {
       avatarUrl = window.location.origin + avatarUrl;
+      if (typeof window !== 'undefined' && window.addDebugLog) {
+        window.addDebugLog(`🔄 Нормализован URL аватара для ${playerName}`, { 
+          original: entry.pfp_url,
+          normalized: avatarUrl
+        });
+      }
+    }
+    
+    // Логируем информацию об аватаре для отладки
+    if (typeof window !== 'undefined' && window.addDebugLog && avatarUrl) {
+      window.addDebugLog(`🖼️ Аватар для ${playerName}`, { 
+        url: avatarUrl,
+        fid: entry.fid,
+        username: entry.username
+      });
     }
     
     const rank = index + 1; // Номер в списке (начинается с 1)
