@@ -23,7 +23,28 @@ export default async function handler(req, res) {
     return res.status(200).send(buffer);
     
   } catch (error) {
-    console.error('PNG Icon generation error:', error);
+    // Игнорируем ошибки Fontconfig - они не критичны для работы
+    if (error.message && error.message.includes('Fontconfig')) {
+      console.warn('Fontconfig warning (ignored):', error.message);
+      // Пробуем снова - ошибка Fontconfig не должна блокировать генерацию
+      try {
+        const { size = '512' } = req.query;
+        const iconSize = parseInt(size);
+        const supportedSizes = [16, 32, 48, 64, 96, 128, 192, 256, 512, 1024];
+        const finalSize = supportedSizes.includes(iconSize) ? iconSize : 512;
+        const pngDataUrl = await generatePNGIcon(finalSize);
+        const base64Data = pngDataUrl.split(',')[1];
+        const buffer = Buffer.from(base64Data, 'base64');
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Content-Disposition', `inline; filename="tictactoe-icon-${finalSize}.png"`);
+        return res.status(200).send(buffer);
+      } catch (retryError) {
+        console.error('PNG Icon generation error after retry:', retryError);
+      }
+    } else {
+      console.error('PNG Icon generation error:', error);
+    }
     
     // Fallback - возвращаем HTML страницу для генерации PNG
     const fallbackHTML = generateFallbackPNG(req.query.size || '512');
@@ -36,6 +57,13 @@ export default async function handler(req, res) {
 async function generatePNGIcon(size) {
   // Используем canvas напрямую (без jsdom для избежания проблем с ES модулями)
   const { createCanvas } = await import('canvas');
+  
+  // Устанавливаем переменные окружения для Fontconfig, чтобы избежать ошибок на Vercel
+  // Эти ошибки не критичны, так как мы используем встроенные шрифты (sans-serif)
+  if (typeof process !== 'undefined') {
+    process.env.FONTCONFIG_PATH = process.env.FONTCONFIG_PATH || '/etc/fonts';
+    process.env.FONTCONFIG_FILE = process.env.FONTCONFIG_FILE || '/etc/fonts/fonts.conf';
+  }
   
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext('2d');
@@ -108,7 +136,8 @@ function drawIcon(ctx, size) {
   // Рисуем символы
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `900 ${120 * scale}px Arial`;
+  // Используем встроенные шрифты canvas (sans-serif) вместо Arial для избежания проблем с Fontconfig
+  ctx.font = `900 ${120 * scale}px sans-serif`;
   
   // X символы
   ctx.fillStyle = xGradient;
@@ -117,7 +146,7 @@ function drawIcon(ctx, size) {
   ctx.fillText('X', 500 * scale, 480 * scale);
   
   // O символы
-  ctx.font = `900 ${100 * scale}px Arial`;
+  ctx.font = `900 ${100 * scale}px sans-serif`;
   ctx.fillStyle = oGradient;
   ctx.fillText('O', 500 * scale, 120 * scale);
   ctx.fillText('O', 120 * scale, 480 * scale);
@@ -135,7 +164,7 @@ function drawIcon(ctx, size) {
   // Подпись (только для больших размеров)
   if (size >= 128) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.font = `bold ${32 * scale}px Arial`;
+    ctx.font = `bold ${32 * scale}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.fillText('TicTacToe', size / 2, 960 * scale);
   }
