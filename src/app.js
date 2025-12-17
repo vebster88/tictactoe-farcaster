@@ -1351,7 +1351,17 @@ function maybeBotMove() {
 function handleMove(idx) {
   if (state.finished || botThinking) return;
   const res = applyMove(state, idx);
-  if (!res.ok) return;
+  if (!res.ok) {
+    const lang = getLanguage();
+    if (res.reason === "occupied") {
+      showToast(lang === "ru" ? "Эта клетка уже занята" : "This cell is already occupied", "error");
+    } else if (res.reason === "finished") {
+      showToast(lang === "ru" ? "Игра уже завершена" : "Game is already finished", "error");
+    } else if (res.reason === "out_of_bounds") {
+      showToast(lang === "ru" ? "Неверный ход" : "Invalid move", "error");
+    }
+    return;
+  }
   state = res.state;
   if (state.finished) {
     if (state.winner) recordOutcome("win");
@@ -1555,8 +1565,29 @@ boardEl.addEventListener("click", async (e) => {
       updateMatchUI();
     } catch (error) {
       const lang = getLanguage();
-      const errorMessage = error?.message || error?.toString() || (lang === "ru" ? "Неизвестная ошибка" : "Unknown error");
-      showToast(lang === "ru" ? `Ошибка хода: ${errorMessage}` : `Move error: ${errorMessage}`, "error");
+      const errorMessage = error?.message || error?.toString() || "";
+      
+      // Улучшаем сообщения об ошибках для пользователя
+      let userMessage = "";
+      if (errorMessage.includes("occupied") || errorMessage.includes("Invalid move: occupied")) {
+        userMessage = lang === "ru" ? "Эта клетка уже занята" : "This cell is already occupied";
+      } else if (errorMessage.includes("finished") || errorMessage.includes("Game is finished")) {
+        userMessage = lang === "ru" ? "Игра уже завершена" : "Game is already finished";
+      } else if (errorMessage.includes("out_of_bounds") || errorMessage.includes("Invalid move")) {
+        userMessage = lang === "ru" ? "Неверный ход" : "Invalid move";
+      } else if (errorMessage.includes("Not your turn")) {
+        userMessage = lang === "ru" ? "Сейчас не ваш ход" : "Not your turn";
+      } else if (errorMessage) {
+        // Для других ошибок показываем оригинальное сообщение, но упрощенное
+        userMessage = errorMessage.replace(/Failed to make move: /g, "").replace(/Failed to send move: /g, "");
+        if (userMessage.includes("Invalid move: occupied")) {
+          userMessage = lang === "ru" ? "Эта клетка уже занята" : "This cell is already occupied";
+        }
+      } else {
+        userMessage = lang === "ru" ? "Неизвестная ошибка" : "Unknown error";
+      }
+      
+      showToast(userMessage, "error");
       console.error("Move error:", error);
     } finally {
       isMakingMove = false;
