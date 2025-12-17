@@ -1584,6 +1584,7 @@ function refreshUserLabel() {
   
   // Проверяем авторизацию: либо через кошелек (address), либо через Farcaster (farcaster)
   const isAuthorized = !!(s?.address || s?.farcaster);
+  const isFarcasterUser = !!s?.farcaster?.fid;
   
   const lang = getLanguage();
   const texts = {
@@ -1601,6 +1602,7 @@ function refreshUserLabel() {
   if (DEBUG_ENABLED) {
     addDebugLog('👤 refreshUserLabel state', {
       isAuthorized,
+      isFarcasterUser,
       hasSession: !!s,
       hasFarcaster: !!s?.farcaster,
       farcasterKeys: s?.farcaster ? Object.keys(s.farcaster) : [],
@@ -1615,19 +1617,38 @@ function refreshUserLabel() {
   }
   
   if (isAuthorized) {
-    // Приоритет: отображаем Farcaster username, если есть
     let displayText = "";
-    if (s.farcaster?.username) {
-      displayText = `@${s.farcaster.username}`;
-    } else if (s.farcaster?.display_name) {
-      displayText = s.farcaster.display_name;
-    } else if (s.farcaster?.fid) {
-      displayText = `FID: ${s.farcaster.fid}`;
-    } else if (s.address) {
-      // Fallback на адрес кошелька
-      displayText = s.address.slice(0, 6) + "…" + s.address.slice(-4);
+
+    if (isFarcasterUser) {
+      // Пользователь из Farcaster: показываем username / display_name / FID
+      if (s.farcaster?.username) {
+        displayText = `@${s.farcaster.username}`;
+      } else if (s.farcaster?.display_name) {
+        displayText = s.farcaster.display_name;
+      } else if (s.farcaster?.fid) {
+        displayText = `FID: ${s.farcaster.fid}`;
+      } else {
+        displayText = t.signedIn;
+      }
     } else {
-      displayText = t.signedIn;
+      // Пользователь НЕ из Farcaster: генерируем стабильный anonId и имя вида @user67
+      let anonId = s?.anonId;
+      if (!anonId) {
+        // Простой диапазон 1–99, можно расширить при необходимости
+        anonId = Math.floor(Math.random() * 99) + 1;
+        const updatedSession = {
+          ...(s || {}),
+          anonId
+        };
+        try {
+          localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+        } catch (e) {
+          if (DEBUG_ENABLED) {
+            addDebugLog('⚠️ Не удалось сохранить anonId в сессию', { error: e?.message || String(e) });
+          }
+        }
+      }
+      displayText = `@user${anonId}`;
     }
     
     // Устанавливаем текст и принудительно показываем элемент
@@ -1638,60 +1659,75 @@ function refreshUserLabel() {
       
     // Загружаем и отображаем аватарку, если есть
     if (userAvatar) {
-      // Проверяем все возможные варианты названия поля аватарки
-      // В сессии сохраняется как pfp_url (snake_case), но SDK возвращает pfpUrl (camelCase)
-      const rawPfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp || null;
-
-      if (DEBUG_ENABLED) {
-        addDebugLog('🧩 Данные для аватара из сессии', {
-          rawPfpUrl,
-          farcaster: s.farcaster || null
-        });
-      }
-
-      if (rawPfpUrl && typeof rawPfpUrl === 'string' && rawPfpUrl.trim().length > 0) {
-        // Нормализация URL
-        let normalizedUrl = rawPfpUrl.trim();
-        if (!/^https?:\/\//i.test(normalizedUrl)) {
-          normalizedUrl = 'https://' + normalizedUrl;
-        }
-
-        // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
-        const testImg = new Image();
-        testImg.crossOrigin = 'anonymous';
-
-        testImg.onload = () => {
-          userAvatar.src = normalizedUrl;
-          userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
-          userAvatar.style.display = "block";
-          userAvatar.crossOrigin = "anonymous";
-          userAvatar.loading = "lazy";
-
-          if (DEBUG_ENABLED) {
-            addDebugLog('✅ Аватар предзагружен и установлен', { url: normalizedUrl });
-          }
-        };
-
-        testImg.onerror = () => {
-          userAvatar.style.display = "none";
-          if (DEBUG_ENABLED) {
-            addDebugLog('❌ Не удалось загрузить аватар', { url: normalizedUrl });
-          }
-        };
+      if (isFarcasterUser) {
+        // Пользователь из Farcaster: используем pfp из профиля
+        // Проверяем все возможные варианты названия поля аватарки
+        // В сессии сохраняется как pfp_url (snake_case), но SDK возвращает pfpUrl (camelCase)
+        const rawPfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp || null;
 
         if (DEBUG_ENABLED) {
-          addDebugLog('🔄 Пытаемся загрузить аватар', { url: normalizedUrl });
-        }
-
-        testImg.src = normalizedUrl;
-      } else {
-        if (DEBUG_ENABLED) {
-          addDebugLog('⚠️ Аватар не найден в сессии (нет pfpUrl)', { 
-            hasFarcaster: !!s.farcaster,
-            farcasterKeys: s.farcaster ? Object.keys(s.farcaster) : []
+          addDebugLog('🧩 Данные для аватара из сессии (Farcaster)', {
+            rawPfpUrl,
+            farcaster: s.farcaster || null
           });
         }
-        userAvatar.style.display = "none";
+
+        if (rawPfpUrl && typeof rawPfpUrl === 'string' && rawPfpUrl.trim().length > 0) {
+          // Нормализация URL
+          let normalizedUrl = rawPfpUrl.trim();
+          if (!/^https?:\/\//i.test(normalizedUrl)) {
+            normalizedUrl = 'https://' + normalizedUrl;
+          }
+
+          // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
+          const testImg = new Image();
+          testImg.crossOrigin = 'anonymous';
+
+          testImg.onload = () => {
+            userAvatar.src = normalizedUrl;
+            userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
+            userAvatar.style.display = "block";
+            userAvatar.crossOrigin = "anonymous";
+            userAvatar.loading = "lazy";
+
+            if (DEBUG_ENABLED) {
+              addDebugLog('✅ Аватар предзагружен и установлен', { url: normalizedUrl });
+            }
+          };
+
+          testImg.onerror = () => {
+            userAvatar.style.display = "none";
+            if (DEBUG_ENABLED) {
+              addDebugLog('❌ Не удалось загрузить аватар', { url: normalizedUrl });
+            }
+          };
+
+          if (DEBUG_ENABLED) {
+            addDebugLog('🔄 Пытаемся загрузить аватар', { url: normalizedUrl });
+          }
+
+          testImg.src = normalizedUrl;
+        } else {
+          if (DEBUG_ENABLED) {
+            addDebugLog('⚠️ Аватар не найден в сессии (нет pfpUrl)', { 
+              hasFarcaster: !!s.farcaster,
+              farcasterKeys: s.farcaster ? Object.keys(s.farcaster) : []
+            });
+          }
+          userAvatar.style.display = "none";
+        }
+      } else {
+        // Не Farcaster-пользователь: всегда ставим дефолтный аватар hero.jpg
+        const defaultAvatar = "/assets/images/hero.jpg";
+        userAvatar.src = defaultAvatar;
+        userAvatar.alt = "User avatar";
+        userAvatar.style.display = "block";
+        userAvatar.crossOrigin = "anonymous";
+        userAvatar.loading = "lazy";
+
+        if (DEBUG_ENABLED) {
+          addDebugLog('🖼️ Установлен дефолтный аватар для не-Farcaster пользователя', { url: defaultAvatar });
+        }
       }
     }
     
