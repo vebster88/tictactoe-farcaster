@@ -32,7 +32,23 @@ function isMockData(userData, fid) {
   const isMockPfp = pfp_url === "/assets/images/hero.jpg";
   const isMockUsername = username === expectedMockUsername;
   
-  return isMockPfp && isMockUsername;
+  // Если оба условия выполнены - это точно моковые данные
+  // Если хотя бы одно условие не выполнено - это реальные данные из Neynar API
+  const isMock = isMockPfp && isMockUsername;
+  
+  // Дополнительная проверка: если pfp_url содержит "imagedelivery.net" или другие реальные CDN,
+  // это точно не моковые данные, даже если username совпадает
+  const hasRealCdnUrl = pfp_url && typeof pfp_url === 'string' && 
+    (pfp_url.includes('imagedelivery.net') || 
+     pfp_url.includes('cloudinary.com') || 
+     pfp_url.includes('ipfs.io') ||
+     (pfp_url.startsWith('http') && !pfp_url.includes('/assets/images/hero.jpg')));
+  
+  if (hasRealCdnUrl) {
+    return false; // Реальные данные из CDN
+  }
+  
+  return isMock;
 }
 
 // Функция для генерации стабильного anonId на основе FID (для не-Farcaster пользователей)
@@ -156,6 +172,13 @@ export async function loadLeaderboard() {
           // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
           const isMock = isMockData(userData, entry.fid);
           
+          addDebugLog(`🔍 Проверка моковых данных для FID ${entry.fid}`, {
+            isMock,
+            pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
+            username: userData.user.username || null,
+            fid: entry.fid
+          });
+          
           if (isMock) {
             // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
             const anonId = getAnonIdFromFid(entry.fid);
@@ -163,7 +186,8 @@ export async function loadLeaderboard() {
             
             addDebugLog(`🔷 Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
               anonId,
-              fid: entry.fid
+              fid: entry.fid,
+              reason: 'Моковые данные определены'
             });
             
             return {
@@ -294,6 +318,13 @@ async function loadLeaderboardFallback() {
           // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
           const isMock = isMockData(userData, entry.fid);
           
+          addDebugLog(`🔍 Fallback: Проверка моковых данных для FID ${entry.fid}`, {
+            isMock,
+            pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
+            username: userData.user.username || null,
+            fid: entry.fid
+          });
+          
           if (isMock) {
             // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
             const anonId = getAnonIdFromFid(entry.fid);
@@ -301,7 +332,8 @@ async function loadLeaderboardFallback() {
             
             addDebugLog(`🔷 Fallback: Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
               anonId,
-              fid: entry.fid
+              fid: entry.fid,
+              reason: 'Моковые данные определены'
             });
             
             return {
