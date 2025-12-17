@@ -603,59 +603,105 @@ export function renderLeaderboard(leaderboard, container) {
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
       avatarImg.style.cssText = "width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);";
-      avatarImg.loading = "lazy";
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://');
       const isSameOrigin = isExternalUrl && avatarUrl.startsWith(window.location.origin);
       
       // Устанавливаем crossOrigin только для нашего origin
-      // Для внешних доменов (imagedelivery.net и другие CDN) не используем crossOrigin,
-      // так как это может вызвать CORS ошибки, если сервер не настроен правильно
       if (isSameOrigin) {
         // Для нашего origin используем crossOrigin для безопасности
         avatarImg.crossOrigin = "anonymous";
       } else {
-        // Для внешних доменов не устанавливаем crossOrigin
-        avatarImg.crossOrigin = null;
+        // Для внешних доменов явно не устанавливаем crossOrigin (не null, а просто не устанавливаем)
+        // Это важно для некоторых CDN
+        avatarImg.removeAttribute('crossorigin');
       }
+      
+      // ВАЖНО: Сначала добавляем элемент в DOM, потом устанавливаем обработчики и src
+      // Это гарантирует, что браузер правильно обработает загрузку
+      playerDiv.appendChild(avatarImg);
+      
+      // Устанавливаем loading после добавления в DOM
+      avatarImg.loading = "lazy";
       
       // Обработка успешной загрузки
       avatarImg.onload = () => {
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
             url: avatarUrl,
-            crossOrigin: avatarImg.crossOrigin
+            crossOrigin: avatarImg.crossOrigin || 'not set',
+            naturalWidth: avatarImg.naturalWidth,
+            naturalHeight: avatarImg.naturalHeight
           });
         }
       };
       
       // Обработка ошибки загрузки с детальным логированием
       avatarImg.onerror = (e) => {
-        avatarImg.style.display = 'none';
-        if (typeof window !== 'undefined' && window.addDebugLog) {
-          window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
-            url: avatarUrl,
-            fid: entry.fid || 'unknown',
-            username: entry.username,
-            crossOrigin: avatarImg.crossOrigin,
-            isExternal: isExternalUrl,
-            isSameOrigin: isSameOrigin,
-            errorType: 'Image load error',
-            note: 'Проверьте доступность URL и CORS настройки сервера'
-          });
+        // Проверяем, действительно ли произошла ошибка или это ложное срабатывание
+        if (avatarImg.complete && avatarImg.naturalWidth === 0) {
+          // Изображение помечено как загруженное, но имеет нулевой размер - это ошибка
+          avatarImg.style.display = 'none';
+          
+          if (typeof window !== 'undefined' && window.addDebugLog) {
+            window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
+              url: avatarUrl,
+              fid: entry.fid || 'unknown',
+              username: entry.username,
+              crossOrigin: avatarImg.crossOrigin || 'not set',
+              isExternal: isExternalUrl,
+              isSameOrigin: isSameOrigin,
+              complete: avatarImg.complete,
+              naturalWidth: avatarImg.naturalWidth,
+              naturalHeight: avatarImg.naturalHeight,
+              errorType: 'Image load error - zero size',
+              note: 'Изображение помечено как загруженное, но имеет нулевой размер'
+            });
+          }
+        } else {
+          // Обычная ошибка загрузки
+          avatarImg.style.display = 'none';
+          
+          if (typeof window !== 'undefined' && window.addDebugLog) {
+            window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
+              url: avatarUrl,
+              fid: entry.fid || 'unknown',
+              username: entry.username,
+              crossOrigin: avatarImg.crossOrigin || 'not set',
+              isExternal: isExternalUrl,
+              isSameOrigin: isSameOrigin,
+              complete: avatarImg.complete,
+              naturalWidth: avatarImg.naturalWidth,
+              naturalHeight: avatarImg.naturalHeight,
+              errorType: 'Image load error',
+              note: 'Проверьте доступность URL и CORS настройки сервера'
+            });
+          }
         }
+        
         console.warn(`[Leaderboard] Failed to load avatar for ${playerName}:`, avatarUrl, {
-          crossOrigin: avatarImg.crossOrigin,
+          crossOrigin: avatarImg.crossOrigin || 'not set',
           isExternal: isExternalUrl,
-          isSameOrigin: isSameOrigin
+          isSameOrigin: isSameOrigin,
+          complete: avatarImg.complete,
+          naturalWidth: avatarImg.naturalWidth,
+          naturalHeight: avatarImg.naturalHeight
         });
       };
       
-      // Устанавливаем src после настройки всех обработчиков
-      avatarImg.src = avatarUrl;
-      
-      playerDiv.appendChild(avatarImg);
+      // Устанавливаем src ПОСЛЕ добавления в DOM и регистрации обработчиков
+      // Используем requestAnimationFrame, чтобы гарантировать, что элемент в DOM
+      requestAnimationFrame(() => {
+        avatarImg.src = avatarUrl;
+        
+        if (typeof window !== 'undefined' && window.addDebugLog) {
+          window.addDebugLog(`🔄 Начало загрузки аватара для ${playerName}`, { 
+            url: avatarUrl,
+            crossOrigin: avatarImg.crossOrigin || 'not set'
+          });
+        }
+      });
     }
     
     const usernameSpan = document.createElement("span");
