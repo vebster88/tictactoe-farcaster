@@ -48,6 +48,15 @@ function isMockData(userData, fid) {
     return false; // Реальные данные из CDN
   }
   
+  // Проверка на username вида !{fid} - это означает, что у пользователя нет нормального username
+  // Такие пользователи считаются не-Farcaster (были сгенерированы нами ранее)
+  const fidStr = String(fid);
+  const isFidBasedUsername = username === `!${fidStr}` || username === `!${fid}`;
+  
+  if (isFidBasedUsername) {
+    return true; // Это не-Farcaster пользователь с сгенерированным FID
+  }
+  
   return isMock;
 }
 
@@ -462,12 +471,18 @@ export function renderLeaderboard(leaderboard, container) {
     // username уже гарантированно есть (либо из API, либо сгенерирован как user{fid})
     const playerName = `@${entry.username}`;
     
+    // Нормализуем URL аватара: если это относительный путь, добавляем origin
+    let avatarUrl = entry.pfp_url || null;
+    if (avatarUrl && avatarUrl.startsWith('/')) {
+      avatarUrl = window.location.origin + avatarUrl;
+    }
+    
     const rank = index + 1; // Номер в списке (начинается с 1)
     row.innerHTML = `
       <td style="text-align: center; padding: 12px 8px; color: var(--muted); font-weight: 600;">${rank}</td>
       <td style="padding: 12px 8px;">
         <div style="display: flex; align-items: center; gap: 8px;">
-          ${entry.pfp_url ? `<img src="${entry.pfp_url}" alt="${playerName}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);" onerror="this.style.display='none';" />` : ""}
+          ${avatarUrl ? `<img src="${avatarUrl}" alt="${playerName}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2);" onerror="this.style.display='none';" />` : ""}
           <span>${playerName}</span>
         </div>
       </td>
