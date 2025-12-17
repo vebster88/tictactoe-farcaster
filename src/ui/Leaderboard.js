@@ -1,4 +1,4 @@
-import { getUserByFid } from "../farcaster/client.js";
+import { getUserByFid, getUsersByFids } from "../farcaster/client.js";
 
 // Функция для добавления логов в debug панель (если доступна)
 function addDebugLog(message, data = null) {
@@ -66,6 +66,30 @@ function getAnonIdFromFid(fid) {
   // Используем простой хеш для генерации стабильного числа от 1 до 99
   const hash = Math.abs(fid) % 99;
   return hash + 1; // От 1 до 99
+}
+
+// Rate limiting для Neynar API (6 запросов в 60 секунд для FREE плана)
+let requestTimestamps = [];
+const MAX_REQUESTS_PER_WINDOW = 5; // Оставляем запас
+const WINDOW_MS = 60000; // 60 секунд
+
+async function waitForRateLimit() {
+  const now = Date.now();
+  // Очищаем старые временные метки (старше 60 секунд)
+  requestTimestamps = requestTimestamps.filter(ts => (now - ts) < WINDOW_MS);
+  
+  // Если достигнут лимит, ждем
+  if (requestTimestamps.length >= MAX_REQUESTS_PER_WINDOW) {
+    const oldestRequest = Math.min(...requestTimestamps);
+    const waitTime = WINDOW_MS - (now - oldestRequest) + 1000; // +1 секунда запас
+    addDebugLog(`⏳ Rate limit: ждем ${Math.ceil(waitTime / 1000)} секунд перед следующим запросом`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    // Рекурсивно проверяем снова после ожидания
+    return waitForRateLimit();
+  }
+  
+  // Регистрируем новый запрос
+  requestTimestamps.push(Date.now());
 }
 
 export async function loadLeaderboard() {
@@ -143,130 +167,135 @@ export async function loadLeaderboard() {
     
     console.log(`[Leaderboard] Loaded ${leaderboard.length} entries`);
     
-    // Загружаем информацию о пользователях для каждого FID
+    // Загружаем информацию о пользователях для каждого FID используя batch-запрос
     addDebugLog(`📊 Начинаем загрузку данных пользователей для ${leaderboard.length} записей`);
-    const leaderboardWithUsers = await Promise.all(
-      leaderboard.map(async (entry) => {
-        try {
-          addDebugLog(`🔍 Загружаем данные для FID ${entry.fid}`);
-          const userData = await getUserByFid(entry.fid);
-          
-          // Проверяем, что данные получены
-          if (!userData || !userData.user) {
-            addDebugLog(`⚠️ Данные пользователя не получены для FID ${entry.fid}`, { userData });
-            // Если данных нет, считаем не-Farcaster пользователем
-            const anonId = getAnonIdFromFid(entry.fid);
-            return {
-              ...entry,
-              username: `user${anonId}`,
-              display_name: null,
-              pfp_url: "/assets/images/hero.jpg"
-            };
-          }
-          
-          addDebugLog(`✅ Получены данные для FID ${entry.fid}`, {
-            hasUserData: !!userData,
-            hasUser: !!userData?.user,
-            userKeys: userData?.user ? Object.keys(userData.user) : [],
-            username: userData?.user?.username,
-            usernameType: typeof userData?.user?.username,
-            usernameValue: userData?.user?.username,
-            display_name: userData?.user?.display_name,
-            displayName: userData?.user?.displayName,
-            pfp_url: userData?.user?.pfp_url,
-            pfpUrl: userData?.user?.pfpUrl,
-            pfp: userData?.user?.pfp
-          });
-          
-          // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
-          const isMock = isMockData(userData, entry.fid);
-          
-          addDebugLog(`🔍 Проверка моковых данных для FID ${entry.fid}`, {
-            isMock,
-            pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
-            username: userData.user.username || null,
-            fid: entry.fid
-          });
-          
-          if (isMock) {
-            // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
-            const anonId = getAnonIdFromFid(entry.fid);
-            const finalUsername = `user${anonId}`;
-            
-            addDebugLog(`🔷 Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
-              anonId,
-              fid: entry.fid,
-              reason: 'Моковые данные определены'
-            });
-            
-            return {
-              ...entry,
-              username: finalUsername,
-              display_name: null,
-              pfp_url: "/assets/images/hero.jpg"
-            };
-          }
-          
-          // Farcaster пользователь: используем реальные данные из API
-          // Извлекаем username из данных пользователя
-          // Проверяем все возможные варианты и убеждаемся, что это не пустая строка
-          const username = (userData.user.username && 
-                           typeof userData.user.username === 'string' && 
-                           userData.user.username.trim().length > 0) 
-                           ? userData.user.username.trim() 
-                           : null;
-          
-          // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
-          const finalUsername = username || `user${entry.fid}`;
-          
-          if (!username) {
-            addDebugLog(`⚠️ Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
-              rawUsername: userData.user.username,
-              usernameType: typeof userData.user.username
-            });
-          } else {
-            addDebugLog(`✅ Username найден для Farcaster FID ${entry.fid}: ${username}`);
-          }
-          
-          // Извлекаем pfp_url - проверяем все возможные варианты
-          // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
-          const pfp_url = userData?.user?.pfpUrl || 
-                         userData?.user?.pfp_url || 
-                         userData?.user?.pfp || 
-                         (userData?.user?.profile?.pfpUrl) ||
-                         (userData?.user?.profile?.pfp_url) ||
-                         null;
-          
-          // Извлекаем display_name - проверяем оба варианта (camelCase и snake_case)
-          const display_name = userData?.user?.displayName || 
-                              userData?.user?.display_name || 
-                              null;
-          
-          addDebugLog(`📋 Итоговые данные для Farcaster FID ${entry.fid}`, {
-            finalUsername,
-            pfp_url,
-            display_name
-          });
-          
-          return {
-            ...entry,
-            username: finalUsername,
-            display_name: display_name,
-            pfp_url: pfp_url
-          };
-        } catch (error) {
-          addDebugLog(`❌ Ошибка загрузки данных для FID ${entry.fid}`, { error: error.message });
-          // Если не удалось загрузить данные, считаем не-Farcaster пользователем
-          const anonId = getAnonIdFromFid(entry.fid);
-          return {
-            ...entry,
-            username: `user${anonId}`,
-            display_name: null,
-            pfp_url: "/assets/images/hero.jpg"
-          };
-        }
-      })
-    );
+    
+    // Собираем все FID
+    const fids = leaderboard.map(entry => entry.fid);
+    
+    // Используем rate limiting перед batch-запросом
+    await waitForRateLimit();
+    
+    // Делаем один batch-запрос для всех FID
+    addDebugLog(`🔍 Batch запрос для ${fids.length} FID: ${fids.join(', ')}`);
+    const allUserData = await getUsersByFids(fids);
+    
+    // Создаем Map для быстрого поиска данных по FID
+    const userDataMap = new Map();
+    fids.forEach((fid, index) => {
+      if (allUserData[index]) {
+        userDataMap.set(fid, allUserData[index]);
+      }
+    });
+    
+    // Обрабатываем каждую запись лидерборда
+    const leaderboardWithUsers = leaderboard.map((entry) => {
+      const userData = userDataMap.get(entry.fid);
+      
+      // Проверяем, что данные получены
+      if (!userData || !userData.user) {
+        addDebugLog(`⚠️ Данные пользователя не получены для FID ${entry.fid}`, { userData });
+        // Если данных нет, считаем не-Farcaster пользователем
+        const anonId = getAnonIdFromFid(entry.fid);
+        return {
+          ...entry,
+          username: `user${anonId}`,
+          display_name: null,
+          pfp_url: "/assets/images/hero.jpg"
+        };
+      }
+      
+      addDebugLog(`✅ Получены данные для FID ${entry.fid}`, {
+        hasUserData: !!userData,
+        hasUser: !!userData?.user,
+        userKeys: userData?.user ? Object.keys(userData.user) : [],
+        username: userData?.user?.username,
+        usernameType: typeof userData?.user?.username,
+        usernameValue: userData?.user?.username,
+        display_name: userData?.user?.display_name,
+        displayName: userData?.user?.displayName,
+        pfp_url: userData?.user?.pfp_url,
+        pfpUrl: userData?.user?.pfpUrl,
+        pfp: userData?.user?.pfp
+      });
+      
+      // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
+      const isMock = isMockData(userData, entry.fid);
+      
+      addDebugLog(`🔍 Проверка моковых данных для FID ${entry.fid}`, {
+        isMock,
+        pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
+        username: userData.user.username || null,
+        fid: entry.fid
+      });
+      
+      if (isMock) {
+        // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
+        const anonId = getAnonIdFromFid(entry.fid);
+        const finalUsername = `user${anonId}`;
+        
+        addDebugLog(`🔷 Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
+          anonId,
+          fid: entry.fid,
+          reason: 'Моковые данные определены'
+        });
+        
+        return {
+          ...entry,
+          username: finalUsername,
+          display_name: null,
+          pfp_url: "/assets/images/hero.jpg"
+        };
+      }
+      
+      // Farcaster пользователь: используем реальные данные из API
+      // Извлекаем username из данных пользователя
+      // Проверяем все возможные варианты и убеждаемся, что это не пустая строка
+      const username = (userData.user.username && 
+                       typeof userData.user.username === 'string' && 
+                       userData.user.username.trim().length > 0) 
+                       ? userData.user.username.trim() 
+                       : null;
+      
+      // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
+      const finalUsername = username || `user${entry.fid}`;
+      
+      if (!username) {
+        addDebugLog(`⚠️ Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
+          rawUsername: userData.user.username,
+          usernameType: typeof userData.user.username
+        });
+      } else {
+        addDebugLog(`✅ Username найден для Farcaster FID ${entry.fid}: ${username}`);
+      }
+      
+      // Извлекаем pfp_url - проверяем все возможные варианты
+      // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
+      const pfp_url = userData?.user?.pfpUrl || 
+                     userData?.user?.pfp_url || 
+                     userData?.user?.pfp || 
+                     (userData?.user?.profile?.pfpUrl) ||
+                     (userData?.user?.profile?.pfp_url) ||
+                     null;
+      
+      // Извлекаем display_name - проверяем оба варианта (camelCase и snake_case)
+      const display_name = userData?.user?.displayName || 
+                          userData?.user?.display_name || 
+                          null;
+      
+      addDebugLog(`📋 Итоговые данные для Farcaster FID ${entry.fid}`, {
+        finalUsername,
+        pfp_url,
+        display_name
+      });
+      
+      return {
+        ...entry,
+        username: finalUsername,
+        display_name: display_name,
+        pfp_url: pfp_url
+      };
+    });
     
     addDebugLog(`✅ Загрузка данных пользователей завершена. Загружено: ${leaderboardWithUsers.length} записей`);
     
@@ -304,108 +333,114 @@ async function loadLeaderboardFallback() {
     const data = await response.json();
     const leaderboard = data.leaderboard || [];
     
-    // Загружаем информацию о пользователях
+    // Загружаем информацию о пользователях используя batch-запрос
     addDebugLog(`📊 Fallback: Начинаем загрузку данных пользователей для ${leaderboard.length} записей`);
-    return await Promise.all(
-      leaderboard.map(async (entry) => {
-        try {
-          const userData = await getUserByFid(entry.fid);
-          
-          // Проверяем, что данные получены
-          if (!userData || !userData.user) {
-            addDebugLog(`⚠️ Fallback: Данные пользователя не получены для FID ${entry.fid}`, { userData });
-            // Если данных нет, считаем не-Farcaster пользователем
-            const anonId = getAnonIdFromFid(entry.fid);
-            return {
-              ...entry,
-              username: `user${anonId}`,
-              display_name: null,
-              pfp_url: "/assets/images/hero.jpg"
-            };
-          }
-          
-          // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
-          const isMock = isMockData(userData, entry.fid);
-          
-          addDebugLog(`🔍 Fallback: Проверка моковых данных для FID ${entry.fid}`, {
-            isMock,
-            pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
-            username: userData.user.username || null,
-            fid: entry.fid
-          });
-          
-          if (isMock) {
-            // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
-            const anonId = getAnonIdFromFid(entry.fid);
-            const finalUsername = `user${anonId}`;
-            
-            addDebugLog(`🔷 Fallback: Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
-              anonId,
-              fid: entry.fid,
-              reason: 'Моковые данные определены'
-            });
-            
-            return {
-              ...entry,
-              username: finalUsername,
-              display_name: null,
-              pfp_url: "/assets/images/hero.jpg"
-            };
-          }
-          
-          // Farcaster пользователь: используем реальные данные из API
-          // Извлекаем username - проверяем все возможные поля и убеждаемся, что это не пустая строка
-          const username = (userData.user.username && 
-                           typeof userData.user.username === 'string' && 
-                           userData.user.username.trim().length > 0) 
-                           ? userData.user.username.trim() 
-                           : null;
-          
-          // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
-          const finalUsername = username || `user${entry.fid}`;
-          
-          if (!username) {
-            addDebugLog(`⚠️ Fallback: Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
-              rawUsername: userData.user.username,
-              usernameType: typeof userData.user.username
-            });
-          } else {
-            addDebugLog(`✅ Fallback: Username найден для Farcaster FID ${entry.fid}: ${username}`);
-          }
-          
-          // Извлекаем pfp_url - проверяем все возможные варианты
-          // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
-          const pfp_url = userData?.user?.pfpUrl || 
-                         userData?.user?.pfp_url || 
-                         userData?.user?.pfp || 
-                         (userData?.user?.profile?.pfpUrl) ||
-                         (userData?.user?.profile?.pfp_url) ||
-                         null;
-          
-          // Извлекаем display_name - проверяем оба варианта (camelCase и snake_case)
-          const display_name = userData?.user?.displayName || 
-                              userData?.user?.display_name || 
-                              null;
-          
-          return {
-            ...entry,
-            username: finalUsername,
-            display_name: display_name,
-            pfp_url: pfp_url
-          };
-        } catch (error) {
-          addDebugLog(`❌ Fallback: Ошибка загрузки данных для FID ${entry.fid}`, { error: error.message });
-          // Если не удалось загрузить данные, считаем не-Farcaster пользователем
-          const anonId = getAnonIdFromFid(entry.fid);
-          return {
-            ...entry,
-            username: `user${anonId}`,
-            display_name: null,
-            pfp_url: "/assets/images/hero.jpg"
-          };
-        }
-      })
-    );
+    
+    // Собираем все FID
+    const fids = leaderboard.map(entry => entry.fid);
+    
+    // Используем rate limiting перед batch-запросом
+    await waitForRateLimit();
+    
+    // Делаем один batch-запрос для всех FID
+    addDebugLog(`🔍 Fallback: Batch запрос для ${fids.length} FID: ${fids.join(', ')}`);
+    const allUserData = await getUsersByFids(fids);
+    
+    // Создаем Map для быстрого поиска данных по FID
+    const userDataMap = new Map();
+    fids.forEach((fid, index) => {
+      if (allUserData[index]) {
+        userDataMap.set(fid, allUserData[index]);
+      }
+    });
+    
+    // Обрабатываем каждую запись лидерборда
+    return leaderboard.map((entry) => {
+      const userData = userDataMap.get(entry.fid);
+      
+      // Проверяем, что данные получены
+      if (!userData || !userData.user) {
+        addDebugLog(`⚠️ Fallback: Данные пользователя не получены для FID ${entry.fid}`, { userData });
+        // Если данных нет, считаем не-Farcaster пользователем
+        const anonId = getAnonIdFromFid(entry.fid);
+        return {
+          ...entry,
+          username: `user${anonId}`,
+          display_name: null,
+          pfp_url: "/assets/images/hero.jpg"
+        };
+      }
+      
+      // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
+      const isMock = isMockData(userData, entry.fid);
+      
+      addDebugLog(`🔍 Fallback: Проверка моковых данных для FID ${entry.fid}`, {
+        isMock,
+        pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
+        username: userData.user.username || null,
+        fid: entry.fid
+      });
+      
+      if (isMock) {
+        // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
+        const anonId = getAnonIdFromFid(entry.fid);
+        const finalUsername = `user${anonId}`;
+        
+        addDebugLog(`🔷 Fallback: Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
+          anonId,
+          fid: entry.fid,
+          reason: 'Моковые данные определены'
+        });
+        
+        return {
+          ...entry,
+          username: finalUsername,
+          display_name: null,
+          pfp_url: "/assets/images/hero.jpg"
+        };
+      }
+      
+      // Farcaster пользователь: используем реальные данные из API
+      // Извлекаем username - проверяем все возможные поля и убеждаемся, что это не пустая строка
+      const username = (userData.user.username && 
+                       typeof userData.user.username === 'string' && 
+                       userData.user.username.trim().length > 0) 
+                       ? userData.user.username.trim() 
+                       : null;
+      
+      // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
+      const finalUsername = username || `user${entry.fid}`;
+      
+      if (!username) {
+        addDebugLog(`⚠️ Fallback: Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
+          rawUsername: userData.user.username,
+          usernameType: typeof userData.user.username
+        });
+      } else {
+        addDebugLog(`✅ Fallback: Username найден для Farcaster FID ${entry.fid}: ${username}`);
+      }
+      
+      // Извлекаем pfp_url - проверяем все возможные варианты
+      // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
+      const pfp_url = userData?.user?.pfpUrl || 
+                     userData?.user?.pfp_url || 
+                     userData?.user?.pfp || 
+                     (userData?.user?.profile?.pfpUrl) ||
+                     (userData?.user?.profile?.pfp_url) ||
+                     null;
+      
+      // Извлекаем display_name - проверяем оба варианта (camelCase и snake_case)
+      const display_name = userData?.user?.displayName || 
+                          userData?.user?.display_name || 
+                          null;
+      
+      return {
+        ...entry,
+        username: finalUsername,
+        display_name: display_name,
+        pfp_url: pfp_url
+      };
+    });
   } catch (error) {
     console.error("[Leaderboard] Fallback also failed:", error);
     return [];

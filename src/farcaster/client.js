@@ -102,6 +102,115 @@ export async function getUserByAddress(address) {
   }
 }
 
+// Получить профили нескольких пользователей по FID (batch-запрос для лидерборда)
+export async function getUsersByFids(fids) {
+  if (!Array.isArray(fids) || fids.length === 0) {
+    return [];
+  }
+  
+  // Для чтения профилей по FID достаточно API-ключа, signer не обязателен
+  if (isMockForRead()) {
+    // В mock режиме генерируем данные для каждого FID
+    return fids.map(fid => {
+      const fidHash = Math.abs(fid) % 10000;
+      return {
+        schemaVersion: "1.0.0",
+        user: {
+          fid: fid,
+          username: `user${fidHash}`,
+          display_name: `User ${fidHash}`,
+          pfp_url: "/assets/images/hero.jpg"
+        }
+      };
+    });
+  }
+
+  // Проверяем наличие API ключа
+  if (!NEYNAR_API_KEY || NEYNAR_API_KEY === "your_neynar_api_key_here") {
+    console.warn('[getUsersByFids] NEYNAR_API_KEY не установлен или имеет значение по умолчанию');
+    return fids.map(() => null);
+  }
+
+  try {
+    const url = `${NEYNAR_BASE_URL}/farcaster/user/bulk`;
+    // Neynar API принимает массив FID через параметр fids
+    // Пробуем передать массив, если не сработает - передадим строку с запятыми
+    const params = { fids: fids };
+    
+    if (typeof window !== 'undefined' && window.addDebugLog) {
+      window.addDebugLog(`🔍 [getUsersByFids] Batch запрос для ${fids.length} FID`, {
+        fids: fids,
+        hasApiKey: !!NEYNAR_API_KEY
+      });
+    }
+    
+    const response = await axios.get(url, {
+      params: params,
+      headers: { 'api_key': NEYNAR_API_KEY }
+    });
+    
+    if (response.data?.users && Array.isArray(response.data.users)) {
+      // Создаем Map для быстрого поиска по FID
+      const usersMap = new Map();
+      response.data.users.forEach(user => {
+        usersMap.set(user.fid, {
+          schemaVersion: "1.0.0",
+          user: user
+        });
+      });
+      
+      // Возвращаем данные в том же порядке, что и запрошенные FID
+      return fids.map(fid => usersMap.get(fid) || null);
+    }
+    
+    return fids.map(() => null);
+  } catch (error) {
+    console.error('[getUsersByFids] Ошибка при batch-запросе к Neynar API:', error);
+    
+    // Детальное логирование ошибки
+    let errorDetails = {};
+    if (error.response) {
+      errorDetails = {
+        type: 'response_error',
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      };
+      
+      // Обработка ошибки 429 (Rate Limit)
+      if (error.response.status === 429) {
+        const retryAfter = error.response.headers['retry-after'] || 60;
+        if (typeof window !== 'undefined' && window.addDebugLog) {
+          window.addDebugLog(`⚠️ [getUsersByFids] Rate limit exceeded, retry after ${retryAfter}s`, {
+            fids: fids,
+            retryAfter: retryAfter,
+            ...errorDetails
+          });
+        }
+      }
+    } else if (error.request) {
+      errorDetails = {
+        type: 'request_error',
+        message: 'Запрос был отправлен, но ответа не получено'
+      };
+    } else {
+      errorDetails = {
+        type: 'setup_error',
+        message: error.message
+      };
+    }
+    
+    if (typeof window !== 'undefined' && window.addDebugLog) {
+      window.addDebugLog(`❌ [getUsersByFids] Ошибка для ${fids.length} FID`, {
+        error: error.message,
+        ...errorDetails
+      });
+    }
+    
+    return fids.map(() => null);
+  }
+}
+
 // Получить профиль пользователя по FID (для отображения информации о противнике)
 export async function getUserByFid(fid) {
   // Логируем начало запроса
