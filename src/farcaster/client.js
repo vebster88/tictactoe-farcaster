@@ -4,6 +4,16 @@ const NEYNAR_API_KEY = import.meta.env.VITE_NEYNAR_API_KEY;
 const NEYNAR_SIGNER_UUID = import.meta.env.VITE_NEYNAR_SIGNER_UUID;
 const NEYNAR_BASE_URL = "https://api.neynar.com/v2";
 
+// Mock режим для операций ЧТЕНИЯ (лидерборд, поиск пользователей и т.п.)
+// Для чтения нам НЕ нужен signer UUID, только рабочий API-ключ
+function isMockForRead() {
+  const mockMode = import.meta.env.VITE_FARCASTER_MOCK === "true";
+  const noApiKey = !NEYNAR_API_KEY || NEYNAR_API_KEY === "your_neynar_api_key_here";
+  return mockMode || noApiKey;
+}
+
+// Mock режим для операций ЗАПИСИ (публикация кастов и т.п.)
+// Для записи требуется и API-ключ, и signer UUID
 function isMock() {
   const mockMode = import.meta.env.VITE_FARCASTER_MOCK === "true";
   const noApiKey = !NEYNAR_API_KEY || NEYNAR_API_KEY === "your_neynar_api_key_here";
@@ -39,7 +49,8 @@ function isMock() {
 
 // Получить профиль пользователя по Ethereum адресу
 export async function getUserByAddress(address) {
-  if (isMock()) {
+  // Для чтения профиля по адресу достаточно API-ключа, signer не обязателен
+  if (isMockForRead()) {
     // Генерируем уникальные данные на основе адреса кошелька
     // Используем хеш адреса для детерминированной генерации
     const addressHash = address.toLowerCase().split('').reduce((hash, char) => {
@@ -93,7 +104,8 @@ export async function getUserByAddress(address) {
 
 // Получить профиль пользователя по FID (для отображения информации о противнике)
 export async function getUserByFid(fid) {
-  if (isMock()) {
+  // Для чтения профиля по FID достаточно API-ключа, signer не обязателен
+  if (isMockForRead()) {
     // В mock режиме генерируем данные на основе FID
     // Это не точное соответствие, но для тестирования достаточно
     const fidHash = Math.abs(fid) % 10000;
@@ -191,7 +203,8 @@ export async function getUserByFid(fid) {
 
 // Поиск пользователя по username
 export async function searchUserByUsername(username) {
-  if (isMock()) {
+  // Поиск по username — только чтение, signer не требуется
+  if (isMockForRead()) {
     // В mock режиме генерируем данные на основе username
     const usernameHash = username.toLowerCase().split('').reduce((hash, char) => {
       return ((hash << 5) - hash) + char.charCodeAt(0);
