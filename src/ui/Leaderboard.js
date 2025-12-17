@@ -50,8 +50,14 @@ function isMockData(userData, fid) {
   
   // Проверка на username вида !{fid} - это означает, что у пользователя нет нормального username
   // Такие пользователи считаются не-Farcaster (были сгенерированы нами ранее)
-  const fidStr = String(fid);
-  const isFidBasedUsername = username === `!${fidStr}` || username === `!${fid}`;
+  // Нормализуем оба значения к строке для корректного сравнения
+  const fidNum = Number(fid);
+  const fidStr = String(fidNum);
+  const usernameStr = String(username || '');
+  // Проверяем оба варианта: !22575 и !{fid} (на случай разных форматов)
+  const isFidBasedUsername = usernameStr === `!${fidStr}` || 
+                             usernameStr === `!${fidNum}` ||
+                             (typeof fid === 'string' && usernameStr === `!${fid}`);
   
   if (isFidBasedUsername) {
     return true; // Это не-Farcaster пользователь с сгенерированным FID
@@ -73,6 +79,12 @@ let requestTimestamps = [];
 const MAX_REQUESTS_PER_WINDOW = 5; // Оставляем запас
 const WINDOW_MS = 60000; // 60 секунд
 
+// Кэширование и защита от повторных запросов
+let leaderboardCache = null;
+let leaderboardCacheTime = 0;
+let leaderboardLoading = false;
+const LEADERBOARD_CACHE_TTL = 30000; // 30 секунд
+
 async function waitForRateLimit() {
   const now = Date.now();
   // Очищаем старые временные метки (старше 60 секунд)
@@ -93,9 +105,30 @@ async function waitForRateLimit() {
 }
 
 export async function loadLeaderboard() {
-  const lang = localStorage.getItem("language") || "en";
+  // Проверяем кэш
+  const now = Date.now();
+  if (leaderboardCache && (now - leaderboardCacheTime) < LEADERBOARD_CACHE_TTL) {
+    addDebugLog('📦 Используем кэшированные данные лидерборда');
+    return leaderboardCache;
+  }
+  
+  // Защита от повторных запросов
+  if (leaderboardLoading) {
+    addDebugLog('⏳ Лидерборд уже загружается, ждем...');
+    // Ждем завершения текущего запроса
+    while (leaderboardLoading) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    // После завершения проверяем кэш снова
+    if (leaderboardCache) {
+      return leaderboardCache;
+    }
+  }
+  
+  leaderboardLoading = true;
   
   try {
+    const lang = localStorage.getItem("language") || "en";
     // Определяем базовый URL для API: используем dev API если указан
     // Проверяем localStorage (для отладки) и переменную окружения
     let apiBase = window.location.origin;
@@ -299,18 +332,42 @@ export async function loadLeaderboard() {
     
     addDebugLog(`✅ Загрузка данных пользователей завершена. Загружено: ${leaderboardWithUsers.length} записей`);
     
+    // Сохраняем в кэш
+    leaderboardCache = leaderboardWithUsers;
+    leaderboardCacheTime = Date.now();
+    
     return leaderboardWithUsers;
   } catch (error) {
     console.error("Error loading leaderboard:", error);
     
+    // В случае ошибки очищаем кэш
+    leaderboardCache = null;
+    leaderboardCacheTime = 0;
+    
     // Fallback на текущий origin если dev API недоступен
     if (error.message?.includes('fetch') || error.message?.includes('CORS') || error.message?.includes('HTML')) {
       console.log(`[Leaderboard] Network error, trying fallback to ${window.location.origin}`);
-      return await loadLeaderboardFallback();
+      const fallbackResult = await loadLeaderboardFallback();
+      // Сохраняем fallback результат в кэш
+      if (fallbackResult && fallbackResult.length > 0) {
+        leaderboardCache = fallbackResult;
+        leaderboardCacheTime = Date.now();
+      }
+      return fallbackResult;
     }
     
     return [];
+  } finally {
+    // Сбрасываем флаг загрузки
+    leaderboardLoading = false;
   }
+}
+
+// Функция для очистки кэша (можно вызвать при необходимости)
+export function clearLeaderboardCache() {
+  leaderboardCache = null;
+  leaderboardCacheTime = 0;
+  addDebugLog('🗑️ Кэш лидерборда очищен');
 }
 
 // Fallback функция для загрузки с текущего origin
