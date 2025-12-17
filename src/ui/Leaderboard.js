@@ -14,6 +14,35 @@ function addDebugLog(message, data = null) {
   }
 }
 
+// Функция для определения, являются ли данные моковыми (не из реального Farcaster)
+function isMockData(userData, fid) {
+  if (!userData || !userData.user) {
+    return true;
+  }
+  
+  const pfp_url = userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null;
+  const username = userData.user.username || null;
+  
+  // Моковые данные имеют:
+  // 1. pfp_url === "/assets/images/hero.jpg"
+  // 2. username === `user${fidHash}` где fidHash = Math.abs(fid) % 10000
+  const fidHash = Math.abs(fid) % 10000;
+  const expectedMockUsername = `user${fidHash}`;
+  
+  const isMockPfp = pfp_url === "/assets/images/hero.jpg";
+  const isMockUsername = username === expectedMockUsername;
+  
+  return isMockPfp && isMockUsername;
+}
+
+// Функция для генерации стабильного anonId на основе FID (для не-Farcaster пользователей)
+// Возвращает число от 1 до 99, которое будет одинаковым для одного и того же FID
+function getAnonIdFromFid(fid) {
+  // Используем простой хеш для генерации стабильного числа от 1 до 99
+  const hash = Math.abs(fid) % 99;
+  return hash + 1; // От 1 до 99
+}
+
 export async function loadLeaderboard() {
   const lang = localStorage.getItem("language") || "en";
   
@@ -100,11 +129,13 @@ export async function loadLeaderboard() {
           // Проверяем, что данные получены
           if (!userData || !userData.user) {
             addDebugLog(`⚠️ Данные пользователя не получены для FID ${entry.fid}`, { userData });
+            // Если данных нет, считаем не-Farcaster пользователем
+            const anonId = getAnonIdFromFid(entry.fid);
             return {
               ...entry,
-              username: `user${entry.fid}`,
+              username: `user${anonId}`,
               display_name: null,
-              pfp_url: null
+              pfp_url: "/assets/images/hero.jpg"
             };
           }
           
@@ -122,6 +153,28 @@ export async function loadLeaderboard() {
             pfp: userData?.user?.pfp
           });
           
+          // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
+          const isMock = isMockData(userData, entry.fid);
+          
+          if (isMock) {
+            // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
+            const anonId = getAnonIdFromFid(entry.fid);
+            const finalUsername = `user${anonId}`;
+            
+            addDebugLog(`🔷 Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
+              anonId,
+              fid: entry.fid
+            });
+            
+            return {
+              ...entry,
+              username: finalUsername,
+              display_name: null,
+              pfp_url: "/assets/images/hero.jpg"
+            };
+          }
+          
+          // Farcaster пользователь: используем реальные данные из API
           // Извлекаем username из данных пользователя
           // Проверяем все возможные варианты и убеждаемся, что это не пустая строка
           const username = (userData.user.username && 
@@ -130,17 +183,16 @@ export async function loadLeaderboard() {
                            ? userData.user.username.trim() 
                            : null;
           
-          // Если username отсутствует, создаем его на основе FID (например, user2757)
-          // НО только если userData действительно не содержит username
+          // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
           const finalUsername = username || `user${entry.fid}`;
           
           if (!username) {
-            addDebugLog(`⚠️ Username не найден для FID ${entry.fid} - будет использован ${finalUsername}`, {
+            addDebugLog(`⚠️ Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
               rawUsername: userData.user.username,
               usernameType: typeof userData.user.username
             });
           } else {
-            addDebugLog(`✅ Username найден для FID ${entry.fid}: ${username}`);
+            addDebugLog(`✅ Username найден для Farcaster FID ${entry.fid}: ${username}`);
           }
           
           // Извлекаем pfp_url - проверяем все возможные варианты
@@ -157,7 +209,7 @@ export async function loadLeaderboard() {
                               userData?.user?.display_name || 
                               null;
           
-          addDebugLog(`📋 Итоговые данные для FID ${entry.fid}`, {
+          addDebugLog(`📋 Итоговые данные для Farcaster FID ${entry.fid}`, {
             finalUsername,
             pfp_url,
             display_name
@@ -171,12 +223,13 @@ export async function loadLeaderboard() {
           };
         } catch (error) {
           addDebugLog(`❌ Ошибка загрузки данных для FID ${entry.fid}`, { error: error.message });
-          // Если не удалось загрузить данные, используем FID для создания username
+          // Если не удалось загрузить данные, считаем не-Farcaster пользователем
+          const anonId = getAnonIdFromFid(entry.fid);
           return {
             ...entry,
-            username: `user${entry.fid}`,
+            username: `user${anonId}`,
             display_name: null,
-            pfp_url: null
+            pfp_url: "/assets/images/hero.jpg"
           };
         }
       })
@@ -228,14 +281,38 @@ async function loadLeaderboardFallback() {
           // Проверяем, что данные получены
           if (!userData || !userData.user) {
             addDebugLog(`⚠️ Fallback: Данные пользователя не получены для FID ${entry.fid}`, { userData });
+            // Если данных нет, считаем не-Farcaster пользователем
+            const anonId = getAnonIdFromFid(entry.fid);
             return {
               ...entry,
-              username: `user${entry.fid}`,
+              username: `user${anonId}`,
               display_name: null,
-              pfp_url: null
+              pfp_url: "/assets/images/hero.jpg"
             };
           }
           
+          // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
+          const isMock = isMockData(userData, entry.fid);
+          
+          if (isMock) {
+            // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
+            const anonId = getAnonIdFromFid(entry.fid);
+            const finalUsername = `user${anonId}`;
+            
+            addDebugLog(`🔷 Fallback: Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
+              anonId,
+              fid: entry.fid
+            });
+            
+            return {
+              ...entry,
+              username: finalUsername,
+              display_name: null,
+              pfp_url: "/assets/images/hero.jpg"
+            };
+          }
+          
+          // Farcaster пользователь: используем реальные данные из API
           // Извлекаем username - проверяем все возможные поля и убеждаемся, что это не пустая строка
           const username = (userData.user.username && 
                            typeof userData.user.username === 'string' && 
@@ -243,17 +320,16 @@ async function loadLeaderboardFallback() {
                            ? userData.user.username.trim() 
                            : null;
           
-          // Если username отсутствует, создаем его на основе FID (например, user2757)
-          // НО только если userData действительно не содержит username
+          // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
           const finalUsername = username || `user${entry.fid}`;
           
           if (!username) {
-            addDebugLog(`⚠️ Fallback: Username не найден для FID ${entry.fid} - будет использован ${finalUsername}`, {
+            addDebugLog(`⚠️ Fallback: Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
               rawUsername: userData.user.username,
               usernameType: typeof userData.user.username
             });
           } else {
-            addDebugLog(`✅ Fallback: Username найден для FID ${entry.fid}: ${username}`);
+            addDebugLog(`✅ Fallback: Username найден для Farcaster FID ${entry.fid}: ${username}`);
           }
           
           // Извлекаем pfp_url - проверяем все возможные варианты
@@ -278,12 +354,13 @@ async function loadLeaderboardFallback() {
           };
         } catch (error) {
           addDebugLog(`❌ Fallback: Ошибка загрузки данных для FID ${entry.fid}`, { error: error.message });
-          // Если не удалось загрузить данные, используем FID для создания username
+          // Если не удалось загрузить данные, считаем не-Farcaster пользователем
+          const anonId = getAnonIdFromFid(entry.fid);
           return {
             ...entry,
-            username: `user${entry.fid}`,
+            username: `user${anonId}`,
             display_name: null,
-            pfp_url: null
+            pfp_url: "/assets/images/hero.jpg"
           };
         }
       })
