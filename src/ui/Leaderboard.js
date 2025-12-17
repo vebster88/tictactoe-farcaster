@@ -524,23 +524,36 @@ export function renderLeaderboard(leaderboard, container) {
     return;
   }
   
+  // Создаем обертку для таблицы с прокруткой
+  const tableWrapper = document.createElement("div");
+  tableWrapper.style.cssText = `
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+  `;
+  
   // Создаем таблицу
   const table = document.createElement("table");
   table.style.cssText = `
     width: 100%;
+    min-width: 100%;
+    max-width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
+    table-layout: auto;
+    box-sizing: border-box;
   `;
   
   // Заголовок таблицы
   const thead = document.createElement("thead");
   thead.innerHTML = `
     <tr style="border-bottom: 2px solid rgba(255, 255, 255, 0.2);">
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600; width: 50px;">#</th>
-      <th style="text-align: left; padding: 12px 8px; font-weight: 600;">${lang === "ru" ? "Игрок" : "Player"}</th>
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600;">${lang === "ru" ? "Победы" : "Wins"}</th>
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600;">${lang === "ru" ? "Ничья" : "Draws"}</th>
-      <th style="text-align: center; padding: 12px 8px; font-weight: 600;">${lang === "ru" ? "Поражения" : "Losses"}</th>
+      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 40px; width: 50px; box-sizing: border-box;">#</th>
+      <th style="text-align: left; padding: 12px 8px; font-weight: 600; min-width: 120px; box-sizing: border-box;">${lang === "ru" ? "Игрок" : "Player"}</th>
+      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;">${lang === "ru" ? "Победы" : "Wins"}</th>
+      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;">${lang === "ru" ? "Ничья" : "Draws"}</th>
+      <th style="text-align: center; padding: 12px 8px; font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;">${lang === "ru" ? "Поражения" : "Losses"}</th>
     </tr>
   `;
   table.appendChild(thead);
@@ -710,15 +723,15 @@ export function renderLeaderboard(leaderboard, container) {
     playerCell.appendChild(playerDiv);
     
     const winsCell = document.createElement("td");
-    winsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--win); font-weight: 600;";
+    winsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--win); font-weight: 600; min-width: 60px; width: 80px; box-sizing: border-box;";
     winsCell.textContent = entry.wins || 0;
     
     const drawsCell = document.createElement("td");
-    drawsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--muted);";
+    drawsCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--muted); min-width: 60px; width: 80px; box-sizing: border-box;";
     drawsCell.textContent = entry.draws || 0;
     
     const lossesCell = document.createElement("td");
-    lossesCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--lose);";
+    lossesCell.style.cssText = "text-align: center; padding: 12px 8px; color: var(--lose); min-width: 60px; width: 80px; box-sizing: border-box;";
     lossesCell.textContent = entry.losses || 0;
     
     row.appendChild(rankCell);
@@ -730,7 +743,8 @@ export function renderLeaderboard(leaderboard, container) {
   });
   
   table.appendChild(tbody);
-  container.appendChild(table);
+  tableWrapper.appendChild(table);
+  container.appendChild(tableWrapper);
 }
 
 
