@@ -97,11 +97,29 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
     return;
   }
 
+  // ВАЖНО: Фильтруем завершенные матчи (защита от зависших матчей после таймаута)
+  const activeMatches = matches.filter(match => {
+    // Исключаем завершенные матчи
+    if (match?.status === "finished" || match?.gameState?.finished) {
+      return false;
+    }
+    // Показываем только pending и active матчи
+    return match?.status === "pending" || match?.status === "active";
+  });
+
+  if (activeMatches.length === 0) {
+    const noMatchesText = lang === "ru" 
+      ? "Нет активных матчей"
+      : "No active matches";
+    contentHost.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted);">${noMatchesText}</div>`;
+    return;
+  }
+
   // Загружаем информацию о противниках асинхронно
   const opponentInfoMap = new Map();
   const opponentFids = new Set();
   
-  matches.forEach(match => {
+  activeMatches.forEach(match => {
     const normalizedPlayerFid = typeof playerFid === 'string' ? parseInt(playerFid, 10) : playerFid;
     const normalizedPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
     const normalizedPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === 'string' ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
@@ -124,7 +142,7 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
     }
   }));
 
-  const matchCards = matches.map(match => {
+  const matchCards = activeMatches.map(match => {
     // Normalize FIDs for comparison (handle string vs number)
     const normalizedPlayerFid = typeof playerFid === 'string' ? parseInt(playerFid, 10) : playerFid;
     const normalizedPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === 'string' ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;

@@ -97,9 +97,11 @@ export default async function handler(req, res) {
     const allMatches = Array.from(allMatchesMap.values());
     console.log(`[list] Total unique matches: ${allMatches.length}`);
 
-    // Filter to only pending and active matches
+    // Filter to only pending and active matches (exclude finished matches)
     const activeMatches = allMatches.filter(
-      match => match && (match.status === MATCH_STATUS.PENDING || match.status === MATCH_STATUS.ACTIVE)
+      match => match && 
+        (match.status === MATCH_STATUS.PENDING || match.status === MATCH_STATUS.ACTIVE) &&
+        !match.gameState?.finished
     );
     console.log(`[list] Filtered to ${activeMatches.length} active/pending matches`);
 
