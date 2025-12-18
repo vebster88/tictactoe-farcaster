@@ -169,12 +169,7 @@ h1 .btn-settings-inline {
 }
 
 .user-avatar {
-  position: absolute;
-  /* Позиционирование справа от кнопки Sign Out */
-  left: calc(100% + 8px);
-  /* Позиционирование по центру кнопки вертикально */
-  top: 50%;
-  margin-top: -17px; /* Половина высоты аватарки (34px) */
+  /* Аватарка в потоке документа, справа от кнопки Sign Out */
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -183,6 +178,7 @@ h1 .btn-settings-inline {
   pointer-events: none;
   z-index: 2;
   background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+  /* Выравнивание по горизонтали с кнопкой Sign Out через flexbox в auth-wrapper */
 }
 
 .user-label {
@@ -564,7 +560,6 @@ h1 .btn-settings-inline {
   .user-avatar {
     width: 34px;
     height: 34px;
-    margin-top: -17px; /* Половина высоты аватарки (34px) */
   }
   
   .user-label {
