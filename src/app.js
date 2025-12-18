@@ -917,6 +917,11 @@ function showToast(message, type = "info") {
   }, 3000);
 }
 
+// Экспортируем showToast глобально для использования в других модулях (например, MatchesList.js)
+if (typeof window !== 'undefined') {
+  window.showToast = showToast;
+}
+
 async function ensurePendingInviteLimit(session) {
   const lang = getLanguage();
   const playerFidRaw = session?.farcaster?.fid ?? session?.fid;
@@ -3632,7 +3637,12 @@ inviteBtn?.addEventListener("click", async () => {
               ? `Не удалось создать инвайт: ${errorMsg}`
               : `Failed to create invite: ${errorMsg}`;
           }
-    alert(errorMsg);
+    // Используем showToast вместо alert для совместимости с мини-апп Farcaster
+    if (typeof window !== 'undefined' && window.showToast) {
+      window.showToast(errorMsg, "error");
+    } else {
+      alert(errorMsg); // Fallback для старых браузеров
+    }
   }
         resolve();
       };
@@ -3875,7 +3885,12 @@ function initPrivateMatchSearch(modal, session, onResolve) {
             ? `Не удалось создать приватный инвайт: ${errorMsg}`
             : `Failed to create private invite: ${errorMsg}`;
         }
-        alert(errorMsg);
+        // Используем showToast вместо alert для совместимости с мини-апп Farcaster
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast(errorMsg, "error");
+        } else {
+          alert(errorMsg); // Fallback для старых браузеров
+        }
       } finally {
         // Включаем кнопку обратно
         if (sendBtn) sendBtn.disabled = false;

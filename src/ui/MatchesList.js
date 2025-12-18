@@ -321,7 +321,13 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
             : "You already have 2 active matches. Finish one to accept a new one.";
         }
         
-        alert(errorMsg);
+        // Используем showToast вместо alert для совместимости с мини-апп Farcaster
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast(errorMsg, "error");
+        } else {
+          // Fallback для старых браузеров или если showToast недоступна
+          alert(errorMsg);
+        }
       }
     });
   });
