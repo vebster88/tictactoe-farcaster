@@ -52,11 +52,11 @@
           <button id="btn-leaderboard" class="btn" type="button" style="display: none;">Leaderboard</button>
           <button id="btn-dev-toggle" class="btn" type="button" title="Developer mode" style="display: none;">🔧</button>
           <div class="auth-wrapper">
+            <button id="btn-auth" class="btn" type="button">Sign In</button>
             <div class="auth-group">
               <img id="user-avatar" class="user-avatar" alt="User avatar" style="display: none;" />
               <span id="user-label" aria-live="polite" class="user-label"></span>
             </div>
-            <button id="btn-auth" class="btn" type="button">Sign In</button>
             <div class="auth-actions" style="display: flex; gap: 8px; align-items: center;">
               <button id="btn-invite" class="btn" type="button" style="display: none;">Start PVP</button>
               <button id="btn-publish-result" class="btn" type="button" disabled style="display: none;">Publish</button>
@@ -91,7 +91,7 @@
         <div style="position: relative; display: flex; align-items: center; gap: 8px; margin-top: 8px;">
           <img id="opponent-avatar" alt="Opponent" style="display: none; width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.3);" />
           <!-- Match Switcher (показывается только при наличии 2+ активных матчей) -->
-          <div id="match-switcher" style="display: none; position: relative; align-items: center; gap: 4px;">
+          <div id="match-switcher" style="display: none; position: relative; display: flex; align-items: center; gap: 4px;">
             <button id="match-switcher-prev" class="btn" type="button" style="padding: 4px 8px; font-size: 1.2rem; min-width: auto;" title="Previous match">←</button>
             <button id="match-switcher-next" class="btn" type="button" style="padding: 4px 8px; font-size: 1.2rem; min-width: auto;" title="Next match">→</button>
           </div>

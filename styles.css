@@ -157,19 +157,24 @@ h1 .btn-settings-inline {
 }
 
 .auth-group {
-  /* Контейнер для user-avatar и user-label */
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+  /* Контейнер для user-label - не занимает место в потоке */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   pointer-events: none;
+  /* Позволяем user-label позиционироваться относительно auth-wrapper */
   overflow: visible;
 }
 
 .user-avatar {
-  position: relative;
-  /* Позиционирование слева от кнопки Sign Out */
-  display: inline-block;
-  vertical-align: middle;
+  position: absolute;
+  /* Позиционирование справа от кнопки Sign Out */
+  left: calc(100% + 8px);
+  /* Позиционирование по центру кнопки вертикально */
+  top: 50%;
+  margin-top: -17px; /* Половина высоты аватарки (34px) */
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -178,7 +183,6 @@ h1 .btn-settings-inline {
   pointer-events: none;
   z-index: 2;
   background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
-  margin-right: 8px;
 }
 
 .user-label {
