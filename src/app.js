@@ -1547,7 +1547,7 @@ boardEl.addEventListener("click", async (e) => {
                       console.error("Failed to load next match:", error);
                       localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
                     }
-                  }, 2000);
+                  }, 500); // Уменьшено с 2000ms до 500ms
                 }
               }
             } catch (error) {
@@ -1562,7 +1562,9 @@ boardEl.addEventListener("click", async (e) => {
       // Обновим только lastSyncTurn, чтобы отслеживать прогресс
       lastSyncTurn = state.turn;
       
-      updateMatchUI();
+      // НЕ вызываем updateMatchUI() сразу после хода
+      // Состояние уже обновлено через render(), а updateMatchUI() вызовется через событие match-synced
+      // Это предотвращает перезапись локального состояния доски до синхронизации с сервером
     } catch (error) {
       const lang = getLanguage();
       const errorMessage = error?.message || error?.toString() || "";
@@ -2150,7 +2152,7 @@ window.addEventListener("match-synced", async () => {
                       console.error("Failed to load next match:", error);
                       localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
                     }
-                  }, 2000);
+                  }, 500); // Уменьшено с 2000ms до 500ms
                 }
               }
             } catch (error) {
@@ -3091,6 +3093,66 @@ function updateMatchUI() {
       showStatus(lang === "ru" ? `Ваш ход: ${mySymbol}` : `Your turn: ${mySymbol}`);
     } else {
       showStatus(lang === "ru" ? `Ожидание хода противника...` : `Waiting for opponent...`);
+    }
+  }
+
+  // Проверяем завершение матча и немедленно переключаемся, если нужно
+  // Используем оптимизированный подход: кэш, если свежий, forceFetch только если устарел
+  if (match.gameState.finished) {
+    const storedSwitched = localStorage.getItem(`match_switched_${currentMatch.matchId}`);
+    if (!storedSwitched) {
+      // Немедленно проверяем наличие других активных матчей
+      (async () => {
+        try {
+          const session = getSession();
+          const playerFid = session?.farcaster?.fid || session?.fid;
+          if (playerFid && mode === "pvp-farcaster") {
+            // Используем кэш, если он свежий (не старше 12 секунд)
+            // forceFetch только если кэш устарел
+            const now = Date.now();
+            const cacheAge = now - matchDataStore.lastFetchedAt;
+            const useForceFetch = cacheAge > MATCH_POLL_CONFIG.cacheStaleMs;
+            
+            const matches = await getMatchesSnapshot({
+              reason: "match_finished_immediate_switch",
+              forceFetch: useForceFetch  // Принудительно только если кэш устарел
+            });
+            
+            const activeMatches = matches.filter(m => 
+              m.status === "active" && 
+              !m.gameState.finished && 
+              m.matchId !== currentMatch.matchId
+            );
+            
+            if (activeMatches.length > 0) {
+              const nextMatch = activeMatches[0];
+              localStorage.setItem(`match_switched_${currentMatch.matchId}`, "true");
+              
+              // Уменьшаем задержку с 2000ms до 500ms для более быстрого переключения
+              setTimeout(async () => {
+                try {
+                  await loadMatch(nextMatch.matchId);
+                  mode = "pvp-farcaster";
+                  if (settingsMode) settingsMode.value = "pvp-farcaster";
+                  updateUIForMode();
+                  updateMatchUI();
+                  const nextLang = getLanguage();
+                  showToast(
+                    nextLang === "ru" ? "Переключено на другой активный матч" : "Switched to another active match",
+                    "info"
+                  );
+                } catch (error) {
+                  console.error("Failed to load next match:", error);
+                  localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
+                }
+              }, 500); // Уменьшено с 2000ms до 500ms
+            }
+          }
+        } catch (error) {
+          console.warn("Failed to auto-switch to next match:", error);
+          localStorage.removeItem(`match_switched_${currentMatch.matchId}`);
+        }
+      })();
     }
   }
 }
