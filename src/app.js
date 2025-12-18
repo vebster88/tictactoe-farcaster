@@ -953,9 +953,102 @@ function showToast(message, type = "info") {
   }, 3000);
 }
 
-// Экспортируем showToast глобально для использования в других модулях (например, MatchesList.js)
+// Кастомная функция alert, которая работает в iframe (Farcaster desktop)
+function showAlert(message) {
+  // Проверяем, работаем ли мы в iframe
+  const isInIframe = window.parent !== window;
+  
+  // В iframe используем кастомное модальное окно
+  if (isInIframe) {
+    // Создаем модальное окно
+    const modal = document.createElement('div');
+    modal.id = 'custom-alert-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    `;
+    
+    const lang = getLanguage();
+    const okText = lang === "ru" ? "OK" : "OK";
+    
+    modal.innerHTML = `
+      <div style="
+        background: rgba(30, 30, 30, 0.95);
+        color: white;
+        padding: 24px;
+        border-radius: 12px;
+        max-width: 400px;
+        width: 100%;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+      ">
+        <div style="
+          margin-bottom: 20px;
+          font-size: 16px;
+          line-height: 1.5;
+          word-wrap: break-word;
+        ">${escapeHtml(message)}</div>
+        <button id="custom-alert-ok" style="
+          width: 100%;
+          padding: 12px 24px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">${okText}</button>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Фокус на кнопке
+    const okButton = document.getElementById('custom-alert-ok');
+    okButton.focus();
+    
+    // Обработчик закрытия
+    const closeModal = () => {
+      modal.remove();
+    };
+    
+    okButton.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeModal();
+      }
+    });
+    
+    // Закрытие по Escape
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  } else {
+    // В обычном браузере используем стандартный alert
+    alert(message);
+  }
+}
+
+// Экспортируем showToast и showAlert глобально для использования в других модулях
 if (typeof window !== 'undefined') {
   window.showToast = showToast;
+  window.showAlert = showAlert;
 }
 
 async function ensurePendingInviteLimit(session) {
@@ -992,7 +1085,12 @@ async function ensurePendingInviteLimit(session) {
         lang === "ru"
           ? "У вас уже есть 2 активных матча. Завершите один из них, чтобы создать новый."
           : "You already have 2 active matches. Finish one to create a new one.";
-      alert(message);
+      // Используем showAlert для работы в iframe
+      if (typeof window !== 'undefined' && window.showAlert) {
+        window.showAlert(message);
+      } else {
+        alert(message); // Fallback
+      }
       return false;
     }
 
@@ -3692,9 +3790,13 @@ inviteBtn?.addEventListener("click", async () => {
               ? `Не удалось создать инвайт: ${errorMsg}`
               : `Failed to create invite: ${errorMsg}`;
           }
-    // Для ошибок превышения лимита матчей используем alert (не toast)
+    // Для ошибок превышения лимита матчей используем showAlert (работает в iframe)
     if (errorMsg.includes("2 active matches")) {
-      alert(errorMsg);
+      if (typeof window !== 'undefined' && window.showAlert) {
+        window.showAlert(errorMsg);
+      } else {
+        alert(errorMsg); // Fallback
+      }
     } else {
       // Для других ошибок используем showToast
       if (typeof window !== 'undefined' && window.showToast) {
@@ -3945,9 +4047,13 @@ function initPrivateMatchSearch(modal, session, onResolve) {
             ? `Не удалось создать приватный инвайт: ${errorMsg}`
             : `Failed to create private invite: ${errorMsg}`;
         }
-        // Для ошибок превышения лимита матчей используем alert (не toast)
+        // Для ошибок превышения лимита матчей используем showAlert (работает в iframe)
         if (errorMsg.includes("2 active matches")) {
-          alert(errorMsg);
+          if (typeof window !== 'undefined' && window.showAlert) {
+            window.showAlert(errorMsg);
+          } else {
+            alert(errorMsg); // Fallback
+          }
         } else {
           // Для других ошибок используем showToast
           if (typeof window !== 'undefined' && window.showToast) {

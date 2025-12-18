@@ -339,9 +339,13 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
             : "You already have 2 active matches. Finish one to accept a new one.";
         }
         
-        // Для ошибок превышения лимита матчей используем alert (не toast)
+        // Для ошибок превышения лимита матчей используем showAlert (работает в iframe)
         if (errorMsg.includes("2 active matches")) {
-          alert(errorMsg);
+          if (typeof window !== 'undefined' && window.showAlert) {
+            window.showAlert(errorMsg);
+          } else {
+            alert(errorMsg); // Fallback
+          }
         } else {
           // Для других ошибок используем showToast
           if (typeof window !== 'undefined' && window.showToast) {
