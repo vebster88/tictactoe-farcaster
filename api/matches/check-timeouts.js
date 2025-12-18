@@ -1,6 +1,7 @@
 import { getPlayerMatches, saveMatch, recordLeaderboardOutcomeForMatch } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS, TURN_TIMEOUT_MS } from "../../lib/matches/schema.js";
 import { normalizeFidToNumber } from "../../src/utils/normalize.js";
+import { invalidateListCacheForFid } from "./list.js";
 
 async function checkMatchTimeout(match) {
   if (match.status !== MATCH_STATUS.ACTIVE || match.gameState.finished) {
@@ -74,6 +75,14 @@ export default async function handler(req, res) {
       const timeoutMatch = await checkMatchTimeout(match);
       if (timeoutMatch) {
         timeoutMatches.push(timeoutMatch);
+        
+        // Инвалидируем кэш списка матчей для обоих игроков
+        if (timeoutMatch.player1Fid) {
+          invalidateListCacheForFid(timeoutMatch.player1Fid);
+        }
+        if (timeoutMatch.player2Fid) {
+          invalidateListCacheForFid(timeoutMatch.player2Fid);
+        }
       }
     }
 

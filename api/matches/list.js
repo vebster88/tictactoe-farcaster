@@ -33,6 +33,13 @@ function cloneMatches(data) {
   }
 }
 
+// Экспортируемая функция для инвалидации кэша списка матчей
+export function invalidateListCacheForFid(fid) {
+  const cacheKey = String(fid);
+  responseCache.delete(cacheKey);
+  console.log(`[list] Invalidated cache for FID ${fid}`);
+}
+
 export default async function handler(req, res) {
   console.log(`[list] Request received: ${req.method} ${req.url}`);
   
