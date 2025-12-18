@@ -25,6 +25,16 @@ export async function loadMatchesList(container, playerFid, options = {}) {
     }
 
     console.log('[MatchesList] Received matches:', matches.length, matches);
+    // Логируем pending матчи для отладки
+    const pendingMatches = matches.filter(m => m?.status === "pending");
+    if (pendingMatches.length > 0) {
+      console.log('[MatchesList] Pending matches found:', pendingMatches.map(m => ({
+        matchId: m.matchId,
+        player1Fid: m.player1Fid,
+        player2Fid: m.player2Fid,
+        status: m.status
+      })));
+    }
     const shouldDispatch = !Array.isArray(prefetchedMatches);
     if (shouldDispatch && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("player-matches-updated", { detail: { matches, playerFid } }));
@@ -259,7 +269,17 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
     matchCard.appendChild(matchIdContainer);
     
     // Добавляем кнопку Accept Challenge после Match ID
-    if (match.status === "pending" && !isPlayer1 && !normalizedPlayer2Fid) {
+    // Показываем кнопку для pending матчей, где:
+    // 1. Матч в статусе pending
+    // 2. Текущий игрок НЕ является player1 (не создатель матча)
+    // 3. player2Fid отсутствует (матч еще не принят)
+    // Для доступных матчей (от других игроков) isPlayer1 будет false, так как normalizedPlayer1Fid !== normalizedPlayerFid
+    const canAccept = match.status === "pending" && 
+                      normalizedPlayer1Fid !== null &&
+                      normalizedPlayer1Fid !== normalizedPlayerFid && // Текущий игрок не является player1
+                      !normalizedPlayer2Fid; // Матч еще не принят
+    
+    if (canAccept) {
       const acceptBtn = document.createElement("button");
       acceptBtn.className = "btn accept-match-btn";
       acceptBtn.dataset.matchId = match.matchId;
