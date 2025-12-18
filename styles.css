@@ -417,8 +417,9 @@ h1 .btn-settings-inline {
   bottom: 20px;
   display: grid;
   gap: 12px;
-  z-index: 1000;
+  z-index: 999999; /* Максимальный z-index для работы в iframe (Farcaster desktop) */
   max-width: 400px;
+  pointer-events: none; /* Позволяет кликать сквозь контейнер */
 }
 
 .toast {
@@ -430,6 +431,7 @@ h1 .btn-settings-inline {
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
   animation: toastSlide 0.3s ease-out;
+  pointer-events: auto; /* Восстанавливаем клики для самого toast */
 }
 
 @keyframes toastSlide {

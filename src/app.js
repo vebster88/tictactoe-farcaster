@@ -888,8 +888,38 @@ function t(_key, dict) {
 function showStatus(msg) { statusEl.textContent = msg; }
 
 function showToast(message, type = "info") {
-  const toastsContainer = document.getElementById("toasts");
-  if (!toastsContainer) return;
+  // Пытаемся найти контейнер
+  let toastsContainer = document.getElementById("toasts");
+  
+  // Если контейнер не найден, создаем его динамически
+  if (!toastsContainer) {
+    toastsContainer = document.createElement("div");
+    toastsContainer.id = "toasts";
+    toastsContainer.className = "toasts";
+    toastsContainer.setAttribute("aria-live", "polite");
+    toastsContainer.setAttribute("aria-atomic", "true");
+    
+    // Проверяем, работаем ли мы в iframe (Farcaster desktop)
+    const isInIframe = window.parent !== window;
+    
+    toastsContainer.style.cssText = `
+      position: fixed;
+      top: ${isInIframe ? '20px' : 'auto'};
+      right: 20px;
+      bottom: ${isInIframe ? 'auto' : '20px'};
+      display: grid;
+      gap: 12px;
+      z-index: 999999;
+      max-width: 400px;
+      pointer-events: none;
+    `;
+    
+    document.body.appendChild(toastsContainer);
+    
+    if (DEBUG_ENABLED) {
+      addDebugLog('🔧 [showToast] Контейнер toasts создан динамически', { isInIframe });
+    }
+  }
   
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
@@ -902,9 +932,15 @@ function showToast(message, type = "info") {
     margin-bottom: 8px;
     box-shadow: var(--shadow-lg);
     animation: toastSlide 0.3s ease-out;
+    pointer-events: auto;
+    z-index: 999999;
   `;
   
   toastsContainer.appendChild(toast);
+  
+  if (DEBUG_ENABLED) {
+    addDebugLog(`📢 [showToast] Показано уведомление: ${message}`, { type, isInIframe: window.parent !== window });
+  }
   
   // Auto remove after 3 seconds
   setTimeout(() => {
