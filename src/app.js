@@ -241,7 +241,7 @@ window.updateDebugModal = function() {
       <div style="margin-bottom: 10px; padding: 8px; background: #111; border-radius: 4px; font-size: 11px; color: #888;">
         ${debugStatus}
       </div>
-      ${uniqueLogs.slice(-50).map(log => 
+      ${uniqueLogs.slice(-50).reverse().map(log => 
         `<div style="margin: 8px 0; padding: 8px; border-bottom: 1px solid #222; border-left: 3px solid #0f0;">
           <div style="display: flex; gap: 10px; margin-bottom: 4px;">
             <span style="color: #888; font-size: 10px;">[${log.time}]</span>
