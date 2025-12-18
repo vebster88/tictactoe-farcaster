@@ -1,4 +1,4 @@
-import { getPlayerMatches, getAvailableMatches } from "../../lib/matches/kv-helper.js";
+import { getPlayerMatches, getAvailableMatches, saveMatch, recordLeaderboardOutcomeForMatch } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS } from "../../lib/matches/schema.js";
 import { normalizeFidToNumber } from "../../src/utils/normalize.js";
 
@@ -105,12 +105,84 @@ export default async function handler(req, res) {
     console.log(`[list] Total unique matches: ${allMatches.length}`);
 
     // Filter to only pending and active matches (exclude finished matches)
-    const activeMatches = allMatches.filter(
+    let activeMatches = allMatches.filter(
       match => match && 
         (match.status === MATCH_STATUS.PENDING || match.status === MATCH_STATUS.ACTIVE) &&
         !match.gameState?.finished
     );
     console.log(`[list] Filtered to ${activeMatches.length} active/pending matches`);
+
+    // ВАЖНО: Проверяем таймауты для активных матчей перед возвратом
+    // Это гарантирует, что зависшие матчи будут обновлены
+    const now = new Date();
+    const matchesToUpdate = [];
+    
+    for (const match of activeMatches) {
+      if (match.status === MATCH_STATUS.ACTIVE && !match.gameState?.finished && match.lastMoveAt) {
+        const lastMoveAt = new Date(match.lastMoveAt);
+        const timeSinceLastMove = now - lastMoveAt;
+        
+        if (timeSinceLastMove >= match.turnTimeout) {
+          // Таймаут - обновляем матч
+          const currentTurnSymbol = match.gameState.next;
+          const winnerSymbol = currentTurnSymbol === "X" ? "O" : "X";
+          
+          const updatedMatch = {
+            ...match,
+            status: MATCH_STATUS.FINISHED,
+            gameState: {
+              ...match.gameState,
+              finished: true,
+              winner: winnerSymbol
+            },
+            updatedAt: now.toISOString()
+          };
+          
+          matchesToUpdate.push(updatedMatch);
+        }
+      }
+    }
+    
+    // Обновляем матчи с таймаутом
+    if (matchesToUpdate.length > 0) {
+      console.log(`[list] Found ${matchesToUpdate.length} matches with timeout, updating...`);
+      
+      for (const updatedMatch of matchesToUpdate) {
+        try {
+          await saveMatch(updatedMatch);
+          await recordLeaderboardOutcomeForMatch(updatedMatch);
+          
+          // Инвалидируем кэш для обоих игроков
+          if (updatedMatch.player1Fid) {
+            invalidateListCacheForFid(updatedMatch.player1Fid);
+          }
+          if (updatedMatch.player2Fid) {
+            invalidateListCacheForFid(updatedMatch.player2Fid);
+          }
+        } catch (error) {
+          console.error(`[list] Failed to update match ${updatedMatch.matchId} after timeout:`, error);
+        }
+      }
+      
+      // Перезагружаем список матчей после обновления
+      const updatedPlayerMatches = await getPlayerMatches(playerFid, { includeFinished: false });
+      const updatedAvailableMatches = await getAvailableMatches(playerFid);
+      
+      const updatedAllMatchesMap = new Map();
+      [...updatedPlayerMatches, ...updatedAvailableMatches].forEach(match => {
+        if (match && match.matchId) {
+          updatedAllMatchesMap.set(match.matchId, match);
+        }
+      });
+      
+      activeMatches = Array.from(updatedAllMatchesMap.values()).filter(
+        match => match && 
+          (match.status === MATCH_STATUS.PENDING || match.status === MATCH_STATUS.ACTIVE) &&
+          !match.gameState?.finished
+      );
+      
+      console.log(`[list] After timeout check: ${activeMatches.length} active/pending matches`);
+    }
 
     // Sort by updatedAt descending (most recent first)
     activeMatches.sort((a, b) => {
