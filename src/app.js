@@ -3692,11 +3692,16 @@ inviteBtn?.addEventListener("click", async () => {
               ? `Не удалось создать инвайт: ${errorMsg}`
               : `Failed to create invite: ${errorMsg}`;
           }
-    // Используем showToast вместо alert для совместимости с мини-апп Farcaster
-    if (typeof window !== 'undefined' && window.showToast) {
-      window.showToast(errorMsg, "error");
+    // Для ошибок превышения лимита матчей используем alert (не toast)
+    if (errorMsg.includes("2 active matches")) {
+      alert(errorMsg);
     } else {
-      alert(errorMsg); // Fallback для старых браузеров
+      // Для других ошибок используем showToast
+      if (typeof window !== 'undefined' && window.showToast) {
+        window.showToast(errorMsg, "error");
+      } else {
+        alert(errorMsg); // Fallback для старых браузеров
+      }
     }
   }
         resolve();
@@ -3940,11 +3945,16 @@ function initPrivateMatchSearch(modal, session, onResolve) {
             ? `Не удалось создать приватный инвайт: ${errorMsg}`
             : `Failed to create private invite: ${errorMsg}`;
         }
-        // Используем showToast вместо alert для совместимости с мини-апп Farcaster
-        if (typeof window !== 'undefined' && window.showToast) {
-          window.showToast(errorMsg, "error");
+        // Для ошибок превышения лимита матчей используем alert (не toast)
+        if (errorMsg.includes("2 active matches")) {
+          alert(errorMsg);
         } else {
-          alert(errorMsg); // Fallback для старых браузеров
+          // Для других ошибок используем showToast
+          if (typeof window !== 'undefined' && window.showToast) {
+            window.showToast(errorMsg, "error");
+          } else {
+            alert(errorMsg); // Fallback для старых браузеров
+          }
         }
       } finally {
         // Включаем кнопку обратно
