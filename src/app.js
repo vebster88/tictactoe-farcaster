@@ -976,7 +976,11 @@ async function ensurePendingInviteLimit(session) {
     });
     // Проверяем общее количество активных + pending матчей (лимит 2)
     const activeOrPendingMatches = (matches || []).filter((match) => {
+      // Исключаем завершенные матчи (статус FINISHED или gameState.finished)
+      if (match?.status === "finished" || match?.gameState?.finished) return false;
+      
       if (match?.status !== "active" && match?.status !== "pending") return false;
+      
       // Проверяем, является ли игрок участником матча (player1 или player2)
       const player1Fid = match.player1Fid ? String(match.player1Fid) : null;
       const player2Fid = match.player2Fid ? String(match.player2Fid) : null;
@@ -3060,11 +3064,26 @@ function updateMatchUI() {
               const currentMatch = getCurrentMatch();
               const isWinner = (updatedMatch.player1Symbol === updatedMatch.gameState.winner && updatedMatch.player1Fid === currentMatch.playerFid) ||
                                (updatedMatch.player2Symbol === updatedMatch.gameState.winner && updatedMatch.player2Fid === currentMatch.playerFid);
-          if (updatedMatch.gameState.winner) {
-            recordOutcome(isWinner ? "win" : "loss", currentMatch.matchId);
-          } else {
-            recordOutcome("draw", currentMatch.matchId);
-          }
+              if (updatedMatch.gameState.winner) {
+                recordOutcome(isWinner ? "win" : "loss", currentMatch.matchId);
+              } else {
+                recordOutcome("draw", currentMatch.matchId);
+              }
+            }
+            
+            // ВАЖНО: Принудительно обновляем список матчей после таймаута,
+            // чтобы завершенный матч не считался активным при создании нового
+            try {
+              await getMatchesSnapshot({
+                reason: "timeout_refresh",
+                forceFetch: true
+              });
+              
+              if (DEBUG_ENABLED) {
+                addDebugLog('🔄 [onTimeout] Обновлен список матчей после таймаута');
+              }
+            } catch (error) {
+              console.warn("Failed to refresh matches after timeout:", error);
             }
           }
         }
