@@ -2441,12 +2441,33 @@ async function checkPendingMatches() {
   // Нормализуем FID игрока
   const normalizedPlayerFid = typeof playerFid === "string" ? parseInt(playerFid, 10) : playerFid;
   
+  // Проверяем наличие pending-матчей, созданных этим игроком
+  // Если есть pending-матчи, принудительно обновляем снапшот для обнаружения новых активных матчей
+  const myPendingMatches = matches.filter((match) => {
+    if (match.status !== "pending") return false;
+    const creatorFid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+    return creatorFid === normalizedPlayerFid;
+  });
+  
+  // Если есть pending-матчи, созданные этим игроком, принудительно обновляем снапшот
+  // чтобы обнаружить, не стал ли какой-то из них активным
+  if (myPendingMatches.length > 0) {
+    try {
+      matches = await getMatchesSnapshot({
+        reason: "pending_matches_check_force_refresh",
+        forceFetch: true  // Принудительное обновление для обнаружения новых активных матчей
+      });
+    } catch (error) {
+      console.warn("Error refreshing matches snapshot for pending check:", error);
+    }
+  }
+  
   // Проверяем наличие активных матчей игрока (где игрок является участником)
   // Это может быть матч, который только что был принят
   // ВАЖНО: Проверяем новые активные матчи ПЕРЕД проверкой на остановку,
   // чтобы не пропустить матчи, которые только что стали активными
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2458',message:'checkPendingMatches - BEFORE hasNewActiveMatch check',data:{normalizedPlayerFid,matchesCount:matches.length,activeMatches:matches.filter(m=>m.status==='active').map(m=>({id:m.matchId,player1Fid:m.player1Fid,player2Fid:m.player2Fid,finished:m.gameState?.finished})),currentMatchId:currentMatch.matchId,hasCurrentMatch:!!currentMatch.matchState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2458',message:'checkPendingMatches - BEFORE hasNewActiveMatch check',data:{normalizedPlayerFid,matchesCount:matches.length,activeMatches:matches.filter(m=>m.status==='active').map(m=>({id:m.matchId,player1Fid:m.player1Fid,player2Fid:m.player2Fid,finished:m.gameState?.finished})),currentMatchId:currentMatch.matchId,hasCurrentMatch:!!currentMatch.matchState,myPendingCount:myPendingMatches.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
   const hasNewActiveMatch = matches.some(match => {
     if (match.status !== "active" || match.gameState?.finished) return false;
@@ -2462,9 +2483,9 @@ async function checkPendingMatches() {
   fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2467',message:'checkPendingMatches - AFTER hasNewActiveMatch check',data:{hasNewActiveMatch},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
   
-  // Проверяем наличие pending-матчей, созданных этим игроком
-  // Если есть pending-матчи, продолжаем проверку даже при наличии активного матча
-  let myPendingMatches = matches.filter((match) => {
+  // Пересчитываем pending-матчи после возможного обновления matches
+  // (если matches был обновлен через forceFetch в блоке выше)
+  myPendingMatches = matches.filter((match) => {
     if (match.status !== "pending") return false;
     const creatorFid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
     return creatorFid === normalizedPlayerFid;
