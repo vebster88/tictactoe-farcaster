@@ -1,4 +1,4 @@
-import { saveMatch, getMatch, getPlayerMatches } from "../../lib/matches/kv-helper.js";
+import { saveMatch, getMatch, getPlayerMatches, invalidateAllPlayerActiveMatchesCache } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS } from "../../lib/matches/schema.js";
 
 export default async function handler(req, res) {
@@ -39,6 +39,10 @@ export default async function handler(req, res) {
     if (existingMatch) {
       return res.status(409).json({ error: "Match already exists" });
     }
+
+    // ВАЖНО: Инвалидируем все кэши перед проверкой лимита, чтобы получить актуальные данные
+    // Это предотвращает race condition при одновременных запросах
+    invalidateAllPlayerActiveMatchesCache(normalizedPlayer1Fid);
 
     // Check if player already has 2 active or pending matches (total limit is 2)
     const playerMatches = await getPlayerMatches(normalizedPlayer1Fid, { includeFinished: false });
