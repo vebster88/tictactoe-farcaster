@@ -324,17 +324,8 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
         return;
       }
       try {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MatchesList.js:327',message:'acceptMatch CALLED',data:{matchId,player2Fid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         await acceptMatch(matchId, player2Fid);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MatchesList.js:328',message:'acceptMatch SUCCESS, loading match',data:{matchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         await loadMatch(matchId);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MatchesList.js:329',message:'match loaded, dispatching match-loaded event',data:{matchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         window.dispatchEvent(new CustomEvent("match-loaded", { detail: { matchId } }));
         const modal = document.getElementById("matches-modal");
         if (modal) modal.setAttribute("aria-hidden", "true");

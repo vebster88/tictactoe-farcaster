@@ -38,9 +38,6 @@ export async function getMatch(matchId) {
 }
 
 export async function acceptMatch(matchId, player2Fid) {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'match-api.js:40',message:'acceptMatch ENTRY',data:{matchId,player2Fid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
   try {
     const response = await fetch(`${API_BASE}/api/matches/accept`, {
       method: "POST",
@@ -52,21 +49,11 @@ export async function acceptMatch(matchId, player2Fid) {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: "Unknown error" }));
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'match-api.js:51',message:'acceptMatch ERROR',data:{status:response.status,error:error.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       throw new Error(error.error || `HTTP error! status: ${response.status}`);
     }
 
-    const result = await response.json();
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'match-api.js:55',message:'acceptMatch SUCCESS',data:{matchId:result.matchId,status:result.status,player2Fid:result.player2Fid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    return result;
+    return await response.json();
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'match-api.js:57',message:'acceptMatch EXCEPTION',data:{error:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     throw new Error(`Failed to accept match: ${error.message}`);
   }
 }
