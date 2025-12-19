@@ -2464,7 +2464,7 @@ async function checkPendingMatches() {
   
   // Проверяем наличие pending-матчей, созданных этим игроком
   // Если есть pending-матчи, продолжаем проверку даже при наличии активного матча
-  const myPendingMatches = matches.filter((match) => {
+  let myPendingMatches = matches.filter((match) => {
     if (match.status !== "pending") return false;
     const creatorFid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
     return creatorFid === normalizedPlayerFid;
@@ -2541,8 +2541,9 @@ async function checkPendingMatches() {
     }
   }
 
-  // Фильтруем только свои pending матчи (созданные этим игроком)
-  let myPendingMatches = matches.filter((match) => {
+  // Пересчитываем pending-матчи после возможного обновления matches
+  // (если matches был обновлен через forceFetch в блоке выше)
+  myPendingMatches = matches.filter((match) => {
     if (match.status !== "pending") return false;
     const creatorFid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
     return creatorFid === normalizedPlayerFid;
