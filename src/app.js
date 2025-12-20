@@ -2488,8 +2488,7 @@ async function checkPendingMatches() {
   
   // ВАЖНО: Если текущий матч имеет статус "pending" в локальном состоянии,
   // принудительно обновляем снапшот, чтобы обнаружить, не стал ли он "active" на сервере
-  const currentMatchStatus = currentMatch.matchState?.status;
-  if (currentMatch.matchState && currentMatch.matchId && currentMatchStatus === "pending") {
+  if (currentMatch.matchState && currentMatch.matchId && currentMatch.matchState.status === "pending") {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2476',message:'checkPendingMatches - current match is pending, forcing refresh',data:{currentMatchId:currentMatch.matchId,currentMatchStatus},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
@@ -2515,16 +2514,24 @@ async function checkPendingMatches() {
   // #endregion
   
   // Сначала проверяем, не изменился ли статус уже загруженного матча с "pending" на "active"
+  const currentMatchStatus = currentMatch.matchState?.status;
+  
+  // Проверяем сохраненный статус из localStorage (статус при первой загрузке)
+  const storedInitialStatus = currentMatch.matchId && typeof window !== 'undefined' 
+    ? localStorage.getItem(`match_status_${currentMatch.matchId}`) 
+    : null;
+  
   const activeMatchThatBecameActive = matches.find(match => {
     if (match.status !== "active" || match.gameState?.finished) return false;
     const matchPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
     const matchPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
     const isPlayerInMatch = matchPlayer1Fid === normalizedPlayerFid || matchPlayer2Fid === normalizedPlayerFid;
     const isCurrentMatch = currentMatch.matchId === match.matchId;
-    const statusChangedToActive = currentMatchStatus === "pending" && match.status === "active";
+    // Проверяем, изменился ли статус с "pending" на "active" (используем сохраненный начальный статус)
+    const statusChangedToActive = (storedInitialStatus === "pending" || currentMatchStatus === "pending") && match.status === "active";
     // #region agent log
   if (isCurrentMatch && match.status === "active") {
-      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2470',message:'checkPendingMatches - checking if current match became active',data:{matchId:match.matchId,matchStatus:match.status,currentMatchStatus,isPlayerInMatch,isCurrentMatch,statusChangedToActive},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2470',message:'checkPendingMatches - checking if current match became active',data:{matchId:match.matchId,matchStatus:match.status,currentMatchStatus,storedInitialStatus,isPlayerInMatch,isCurrentMatch,statusChangedToActive},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     }
     // #endregion
     return isPlayerInMatch && isCurrentMatch && statusChangedToActive;
@@ -4041,6 +4048,10 @@ inviteBtn?.addEventListener("click", async () => {
   
   try {
     const { payload, res, matchCreated } = await sendInvite(session, { visibility });
+    // Сохраняем статус "pending" при создании матча, чтобы отследить изменение статуса
+    if (matchCreated && typeof window !== 'undefined' && payload.matchId) {
+      localStorage.setItem(`match_status_${payload.matchId}`, "pending");
+    }
     const msg = lang === "ru"
       ? `Инвайт создан!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch в API: ${matchCreated ? "да" : "нет"}`
       : `Invite created!\n\nMatch ID: ${payload.matchId}\nCast ID: ${res.castId || "ok"}\nMatch in API: ${matchCreated ? "yes" : "no"}`;
@@ -4280,6 +4291,10 @@ function initPrivateMatchSearch(modal, session, onResolve) {
           visibility: "private",
           skipPublish: true // Пропускаем автоматическую публикацию, сделаем вручную
         });
+        // Сохраняем статус "pending" при создании матча, чтобы отследить изменение статуса
+        if (matchCreated && typeof window !== 'undefined' && payload.matchId) {
+          localStorage.setItem(`match_status_${payload.matchId}`, "pending");
+        }
         
         // Публикуем cast с упоминанием пользователя (только один раз)
         const { publishInvite } = await import("./farcaster/client.js");
