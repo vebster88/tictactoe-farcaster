@@ -600,20 +600,8 @@ export function renderLeaderboard(leaderboard, container) {
       }
     }
     
-    // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
-    if (avatarUrl && avatarUrl.includes('imagedelivery.net')) {
-      // Если URL заканчивается на /rectcrop3, /rectcontain2 и т.д. без расширения, добавляем .jpg
-      if (avatarUrl.match(/\/rect(crop|contain)\d+$/)) {
-        const originalUrl = avatarUrl;
-        avatarUrl = avatarUrl + '.jpg';
-        if (typeof window !== 'undefined' && window.addDebugLog) {
-          window.addDebugLog(`🔧 Исправлен Cloudflare Images URL для ${playerName}`, { 
-            original: originalUrl,
-            fixed: avatarUrl
-          });
-        }
-      }
-    }
+    // УБИРАЕМ все модификации Cloudflare Images URL - используем как есть
+    // В старой версии (6061d97) эти URL работали без изменений
     
     // Логируем информацию об аватаре для отладки
     if (typeof window !== 'undefined' && window.addDebugLog && avatarUrl) {
@@ -649,14 +637,15 @@ export function renderLeaderboard(leaderboard, container) {
       const isExternalUrl = avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://');
       const isSameOrigin = isExternalUrl && avatarUrl.startsWith(window.location.origin);
       
-      // ВАЖНО: Устанавливаем crossOrigin ДО добавления в DOM и ДО установки src
-      // Это критично для правильной загрузки изображений с CORS
+      // Устанавливаем crossOrigin только для нашего origin
+      // Для внешних доменов явно не устанавливаем crossOrigin (не null, а просто не устанавливаем)
+      // Это важно для некоторых CDN, включая Cloudflare Images
       if (isSameOrigin) {
-        avatarImg.crossOrigin = "anonymous";
-      } else if (isExternalUrl) {
-        // Для Cloudflare Images и других CDN устанавливаем crossOrigin
+        // Для нашего origin используем crossOrigin для безопасности
         avatarImg.crossOrigin = "anonymous";
       } else {
+        // Для внешних доменов явно не устанавливаем crossOrigin
+        // Это важно для некоторых CDN
         avatarImg.removeAttribute('crossorigin');
       }
       

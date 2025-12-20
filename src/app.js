@@ -1879,22 +1879,30 @@ function refreshUserLabel() {
           normalizedUrl = 'https://' + normalizedUrl;
           }
 
-          // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
-          if (normalizedUrl.includes('imagedelivery.net')) {
-            if (normalizedUrl.match(/\/rect(crop|contain)\d+$/)) {
-              normalizedUrl = normalizedUrl + '.jpg';
-            }
-          }
+          // УБИРАЕМ модификации Cloudflare Images URL - используем как есть
+          // В старой версии (6061d97) эти URL работали без изменений
 
           // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
           const testImg = new Image();
-          testImg.crossOrigin = 'anonymous';
+          // Устанавливаем crossOrigin только для нашего origin
+          const isExternalUrl = normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://');
+          const isSameOrigin = isExternalUrl && normalizedUrl.startsWith(window.location.origin);
+          if (isSameOrigin) {
+            testImg.crossOrigin = 'anonymous';
+          } else {
+            testImg.removeAttribute('crossorigin');
+          }
 
           testImg.onload = () => {
             userAvatar.src = normalizedUrl;
             userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
             userAvatar.style.display = "block";
-            userAvatar.crossOrigin = "anonymous";
+            // Устанавливаем crossOrigin только для нашего origin
+            if (isSameOrigin) {
+              userAvatar.crossOrigin = "anonymous";
+            } else {
+              userAvatar.removeAttribute('crossorigin');
+            }
             userAvatar.loading = "lazy";
 
             if (DEBUG_ENABLED) {
@@ -2792,8 +2800,16 @@ async function updateOpponentAvatar() {
   if (opponentAvatarCache && opponentAvatarCache.fid === currentOpponentFid) {
     const opponentAvatar = document.getElementById("opponent-avatar");
     if (opponentAvatar && opponentAvatarCache.pfp_url) {
+      // Устанавливаем crossOrigin только для нашего origin
+      const isExternalUrl = opponentAvatarCache.pfp_url.startsWith('http://') || opponentAvatarCache.pfp_url.startsWith('https://');
+      const isSameOrigin = isExternalUrl && opponentAvatarCache.pfp_url.startsWith(window.location.origin);
+      
       opponentAvatar.style.display = "block";
-      opponentAvatar.crossOrigin = "anonymous"; // Устанавливаем ДО установки src
+      if (isSameOrigin) {
+        opponentAvatar.crossOrigin = "anonymous";
+      } else {
+        opponentAvatar.removeAttribute('crossorigin');
+      }
       opponentAvatar.src = opponentAvatarCache.pfp_url || "";
       opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
     } else if (opponentAvatar) {
@@ -2807,12 +2823,8 @@ async function updateOpponentAvatar() {
     if (userData?.user) {
       let pfpUrl = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || null;
       
-      // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
-      if (pfpUrl && pfpUrl.includes('imagedelivery.net')) {
-        if (pfpUrl.match(/\/rect(crop|contain)\d+$/)) {
-          pfpUrl = pfpUrl + '.jpg';
-        }
-      }
+      // УБИРАЕМ модификации Cloudflare Images URL - используем как есть
+      // В старой версии (6061d97) эти URL работали без изменений
       
       opponentAvatarCache = {
         fid: currentOpponentFid,
@@ -2823,8 +2835,16 @@ async function updateOpponentAvatar() {
       
       const opponentAvatar = document.getElementById("opponent-avatar");
       if (opponentAvatar && opponentAvatarCache.pfp_url) {
+        // Устанавливаем crossOrigin только для нашего origin
+        const isExternalUrl = opponentAvatarCache.pfp_url.startsWith('http://') || opponentAvatarCache.pfp_url.startsWith('https://');
+        const isSameOrigin = isExternalUrl && opponentAvatarCache.pfp_url.startsWith(window.location.origin);
+        
         opponentAvatar.style.display = "block";
-        opponentAvatar.crossOrigin = "anonymous"; // Устанавливаем ДО установки src
+        if (isSameOrigin) {
+          opponentAvatar.crossOrigin = "anonymous";
+        } else {
+          opponentAvatar.removeAttribute('crossorigin');
+        }
         opponentAvatar.src = opponentAvatarCache.pfp_url;
         opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
         opponentAvatar.onerror = () => {
@@ -3092,21 +3112,24 @@ async function updateMatchSwitcherTooltip(match) {
         const opponentName = userData.user.username 
           ? `@${userData.user.username}` 
           : userData.user.display_name || `FID: ${opponentFid}`;
-        let opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
+        const opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
         
-        // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
-        if (opponentAvatar && opponentAvatar.includes('imagedelivery.net')) {
-          if (opponentAvatar.match(/\/rect(crop|contain)\d+$/)) {
-            opponentAvatar = opponentAvatar + '.jpg';
-          }
-        }
+        // УБИРАЕМ модификации Cloudflare Images URL - используем как есть
+        // В старой версии (6061d97) эти URL работали без изменений
         
         const avatarEl = tooltipEl.querySelector("#match-switcher-opponent-avatar");
         const nameEl = tooltipEl.querySelector("#match-switcher-opponent-name");
         const infoEl = tooltipEl.querySelector("#match-switcher-match-info");
         
         if (avatarEl) {
-          avatarEl.crossOrigin = "anonymous"; // Устанавливаем ДО установки src
+          // Устанавливаем crossOrigin только для нашего origin
+          const isExternalUrl = opponentAvatar.startsWith('http://') || opponentAvatar.startsWith('https://');
+          const isSameOrigin = isExternalUrl && opponentAvatar.startsWith(window.location.origin);
+          if (isSameOrigin) {
+            avatarEl.crossOrigin = "anonymous";
+          } else {
+            avatarEl.removeAttribute('crossorigin');
+          }
           avatarEl.src = opponentAvatar;
           avatarEl.alt = opponentName;
         }
