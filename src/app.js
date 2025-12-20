@@ -2467,7 +2467,7 @@ async function checkPendingMatches() {
   // ВАЖНО: Проверяем новые активные матчи ПЕРЕД проверкой на остановку,
   // чтобы не пропустить матчи, которые только что стали активными
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2458',message:'checkPendingMatches - BEFORE hasNewActiveMatch check',data:{normalizedPlayerFid,matchesCount:matches.length,activeMatches:matches.filter(m=>m.status==='active').map(m=>({id:m.matchId,player1Fid:m.player1Fid,player2Fid:m.player2Fid,finished:m.gameState?.finished})),currentMatchId:currentMatch.matchId,hasCurrentMatch:!!currentMatch.matchState,myPendingCount:myPendingMatches.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2458',message:'checkPendingMatches - BEFORE hasNewActiveMatch check',data:{normalizedPlayerFid,matchesCount:matches.length,activeMatches:matches.filter(m=>m.status==='active').map(m=>({id:m.matchId,player1Fid:m.player1Fid,player2Fid:m.player2Fid,finished:m.gameState?.finished})),allMatches:matches.map(m=>({id:m.matchId,status:m.status,player1Fid:m.player1Fid,player2Fid:m.player2Fid,finished:m.gameState?.finished})),currentMatchId:currentMatch.matchId,hasCurrentMatch:!!currentMatch.matchState,myPendingCount:myPendingMatches.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
   const hasNewActiveMatch = matches.some(match => {
     if (match.status !== "active" || match.gameState?.finished) return false;
@@ -2508,10 +2508,16 @@ async function checkPendingMatches() {
   // Если найден новый активный матч игрока, принудительно обновляем снапшот и загружаем матч
   if (hasNewActiveMatch) {
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2509',message:'checkPendingMatches - hasNewActiveMatch=true, BEFORE getMatchesSnapshot',data:{matchesCount:matches.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       matches = await getMatchesSnapshot({
         reason: "pending_matches_check_active_found",
         forceFetch: true  // Принудительное обновление для получения актуальных данных
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2515',message:'checkPendingMatches - AFTER getMatchesSnapshot',data:{matchesCount:matches.length,activeMatches:matches.filter(m=>m.status==='active').map(m=>({id:m.matchId,player1Fid:m.player1Fid,player2Fid:m.player2Fid,finished:m.gameState?.finished}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       
       // После обновления снапшота ищем активный матч игрока и загружаем его
       const newActiveMatch = matches.find(match => {
@@ -2522,6 +2528,9 @@ async function checkPendingMatches() {
         const isNotLoaded = !currentMatch.matchState || currentMatch.matchId !== match.matchId;
         return isPlayerInMatch && isNotLoaded;
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2526',message:'checkPendingMatches - AFTER find newActiveMatch',data:{hasNewActiveMatch:!!newActiveMatch,matchId:newActiveMatch?.matchId,currentMatchId:currentMatch.matchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       
       if (newActiveMatch) {
         // Автоматически загружаем матч
