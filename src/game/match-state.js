@@ -20,11 +20,32 @@ export function getSyncInterval() {
   return syncInterval;
 }
 
+// Генерируем виртуальный FID на основе адреса кошелька для пользователей без Farcaster
+function getVirtualFidFromAddress(address) {
+  if (!address) return null;
+  // Простой хеш адреса в число (используем отрицательные числа для виртуальных FID)
+  let hash = 0;
+  for (let i = 0; i < address.length; i++) {
+    const char = address.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  // Используем отрицательные числа для виртуальных FID (реальные FID всегда положительные)
+  return -Math.abs(hash);
+}
+
 export function setCurrentMatch(matchId, matchState) {
   currentMatchId = matchId;
   currentMatchState = matchState;
   const session = getSession();
-  playerFid = session?.farcaster?.fid || session?.fid;
+  let rawFid = session?.farcaster?.fid || session?.fid;
+  
+  // Если нет FID, но есть адрес кошелька, создаем виртуальный FID
+  if ((rawFid === null || rawFid === undefined) && session?.address) {
+    rawFid = getVirtualFidFromAddress(session.address);
+  }
+  
+  playerFid = rawFid;
 }
 
 export function getCurrentMatch() {

@@ -313,14 +313,34 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
   contentHost.innerHTML = "";
   matchCards.forEach(card => contentHost.appendChild(card));
 
+  // Генерируем виртуальный FID на основе адреса кошелька для пользователей без Farcaster
+  function getVirtualFidFromAddress(address) {
+    if (!address) return null;
+    // Простой хеш адреса в число (используем отрицательные числа для виртуальных FID)
+    let hash = 0;
+    for (let i = 0; i < address.length; i++) {
+      const char = address.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Используем отрицательные числа для виртуальных FID (реальные FID всегда положительные)
+    return -Math.abs(hash);
+  }
+
   // Attach event handlers
   contentHost.querySelectorAll(".accept-match-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       const matchId = btn.dataset.matchId;
       const session = getSession();
-      const player2Fid = session?.farcaster?.fid || session?.fid;
+      let player2Fid = session?.farcaster?.fid || session?.fid;
+      
+      // Если нет FID, но есть адрес кошелька, создаем виртуальный FID
+      if ((player2Fid === null || player2Fid === undefined) && session?.address) {
+        player2Fid = getVirtualFidFromAddress(session.address);
+      }
+      
       if (!player2Fid) {
-        alert(lang === "ru" ? "Войдите через Farcaster" : "Sign in with Farcaster");
+        alert(lang === "ru" ? "Войдите через Farcaster или кошелек" : "Sign in with Farcaster or wallet");
         return;
       }
       try {

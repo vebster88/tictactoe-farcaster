@@ -19,13 +19,34 @@ export function buildInvitePayload(session, opts = {}) {
   };
 }
 
+// Генерируем виртуальный FID на основе адреса кошелька для пользователей без Farcaster
+function getVirtualFidFromAddress(address) {
+  if (!address) return null;
+  // Простой хеш адреса в число (используем отрицательные числа для виртуальных FID)
+  let hash = 0;
+  for (let i = 0; i < address.length; i++) {
+    const char = address.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  // Используем отрицательные числа для виртуальных FID (реальные FID всегда положительные)
+  return -Math.abs(hash);
+}
+
 export async function sendInvite(session, opts = {}) {
   const payload = buildInvitePayload(session, opts);
   
   // Create match in backend API (только один раз)
   let matchCreated = false;
   try {
-    const player1Fid = session?.farcaster?.fid || session?.fid;
+    // Получаем FID из Farcaster профиля или создаем виртуальный FID из адреса кошелька
+    let player1Fid = session?.farcaster?.fid || session?.fid;
+    
+    // Если нет FID, но есть адрес кошелька, создаем виртуальный FID
+    if (!player1Fid && session?.address) {
+      player1Fid = getVirtualFidFromAddress(session.address);
+    }
+    
     if (player1Fid) {
       await createMatch({
         matchId: payload.matchId,
