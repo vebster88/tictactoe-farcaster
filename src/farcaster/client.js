@@ -275,10 +275,34 @@ export async function getUsersByFids(fids) {
 
 // Получить профиль пользователя по FID (для отображения информации о противнике)
 export async function getUserByFid(fid) {
+  // Нормализуем FID к числу
+  const normalizedFid = Number(fid);
+  
+  // Проверяем, является ли FID виртуальным (отрицательным)
+  // Виртуальные FID не существуют в Farcaster, поэтому генерируем моковые данные
+  if (normalizedFid < 0 || isNaN(normalizedFid)) {
+    const fidHash = Math.abs(normalizedFid) % 10000;
+    if (typeof window !== 'undefined' && window.addDebugLog) {
+      window.addDebugLog(`🔷 [getUserByFid] Виртуальный FID ${normalizedFid}, генерируем моковые данные`, {
+        fid: normalizedFid,
+        fidHash: fidHash
+      });
+    }
+    return {
+      schemaVersion: "1.0.0",
+      user: {
+        fid: normalizedFid,
+        username: `user${fidHash}`,
+        display_name: `User ${fidHash}`,
+        pfp_url: "/assets/images/hero.jpg"
+      }
+    };
+  }
+  
   // Логируем начало запроса
   const mockForRead = isMockForRead();
   if (typeof window !== 'undefined' && window.addDebugLog) {
-    window.addDebugLog(`🔍 [getUserByFid] Начало запроса для FID ${fid}`, {
+    window.addDebugLog(`🔍 [getUserByFid] Начало запроса для FID ${normalizedFid}`, {
       isMockForRead: mockForRead,
       hasApiKey: !!NEYNAR_API_KEY,
       apiKeyPreview: NEYNAR_API_KEY ? "***" + NEYNAR_API_KEY.slice(-4) : "undefined"
@@ -289,13 +313,13 @@ export async function getUserByFid(fid) {
   if (mockForRead) {
     // В mock режиме генерируем данные на основе FID
     // Это не точное соответствие, но для тестирования достаточно
-    const fidHash = Math.abs(fid) % 10000;
+    const fidHash = Math.abs(normalizedFid) % 10000;
     // В тестовом режиме используем hero.jpg как аватарку
     const pfpUrl = "/assets/images/hero.jpg";
     return {
       schemaVersion: "1.0.0",
       user: {
-        fid: fid,
+        fid: normalizedFid,
         username: `user${fidHash}`,
         display_name: `User ${fidHash}`,
         pfp_url: pfpUrl
@@ -307,7 +331,7 @@ export async function getUserByFid(fid) {
   if (!NEYNAR_API_KEY || NEYNAR_API_KEY === "your_neynar_api_key_here") {
     console.warn('[getUserByFid] NEYNAR_API_KEY не установлен или имеет значение по умолчанию');
     if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`⚠️ [getUserByFid] API ключ не установлен для FID ${fid}`, {
+      window.addDebugLog(`⚠️ [getUserByFid] API ключ не установлен для FID ${normalizedFid}`, {
         hasApiKey: !!NEYNAR_API_KEY,
         apiKeyValue: NEYNAR_API_KEY || "undefined"
       });
@@ -317,11 +341,11 @@ export async function getUserByFid(fid) {
 
   try {
     const url = `${NEYNAR_BASE_URL}/farcaster/user/bulk`;
-    const params = { fids: fid };
+    const params = { fids: normalizedFid };
     
     console.log('[getUserByFid] Запрос к Neynar API:', {
       url,
-      fid,
+      fid: normalizedFid,
       hasApiKey: !!NEYNAR_API_KEY,
       apiKeyPreview: NEYNAR_API_KEY ? NEYNAR_API_KEY.substring(0, 10) + '...' : 'missing'
     });
@@ -331,7 +355,7 @@ export async function getUserByFid(fid) {
       headers: { 'api_key': NEYNAR_API_KEY }
     });
     
-    console.log('[getUserByFid] Ответ от Neynar API для FID', fid, ':', {
+    console.log('[getUserByFid] Ответ от Neynar API для FID', normalizedFid, ':', {
       status: response.status,
       hasData: !!response.data,
       hasUsers: !!response.data?.users,
@@ -343,7 +367,7 @@ export async function getUserByFid(fid) {
       const user = response.data.users[0];
       
       // Детальное логирование структуры пользователя
-      console.log('[getUserByFid] Данные пользователя для FID', fid, ':', {
+      console.log('[getUserByFid] Данные пользователя для FID', normalizedFid, ':', {
         fid: user.fid,
         username: user.username,
         display_name: user.display_name,
@@ -363,10 +387,10 @@ export async function getUserByFid(fid) {
       };
     }
     
-    console.warn('[getUserByFid] Пользователь не найден для FID', fid);
+    console.warn('[getUserByFid] Пользователь не найден для FID', normalizedFid);
     return null;
   } catch (error) {
-    console.error('[getUserByFid] Ошибка при запросе к Neynar API для FID', fid, ':', error);
+    console.error('[getUserByFid] Ошибка при запросе к Neynar API для FID', normalizedFid, ':', error);
     
     // Детальное логирование ошибки
     let errorDetails = {};
@@ -396,7 +420,7 @@ export async function getUserByFid(fid) {
     
     // Логируем в debug панель, если доступна
     if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`❌ [getUserByFid] Ошибка для FID ${fid}`, {
+      window.addDebugLog(`❌ [getUserByFid] Ошибка для FID ${normalizedFid}`, {
         error: error.message,
         ...errorDetails
       });
