@@ -132,62 +132,92 @@ export async function getUsersByFids(fids) {
   }
 
   try {
-    const url = `${NEYNAR_BASE_URL}/farcaster/user/bulk`;
-    // Neynar API принимает FID через параметр fids как строку с запятыми или массив
-    // Нормализуем FID к числам и передаем как строку с запятыми (более надежно)
+    // Разделяем FID на реальные (положительные) и виртуальные (отрицательные)
     const normalizedFids = fids.map(fid => Number(fid)).filter(fid => !isNaN(fid));
-    const fidsString = normalizedFids.join(',');
-    const params = { fids: fidsString };
+    const realFids = normalizedFids.filter(fid => fid > 0);
+    const virtualFids = normalizedFids.filter(fid => fid < 0);
     
-    if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`🔍 [getUsersByFids] Batch запрос для ${fids.length} FID`, {
-        fids: fids,
-        normalizedFids: normalizedFids,
-        fidsString: fidsString,
-        hasApiKey: !!NEYNAR_API_KEY
+    // Создаем Map для виртуальных FID (генерируем моковые данные)
+    const virtualUsersMap = new Map();
+    virtualFids.forEach(fid => {
+      const fidHash = Math.abs(fid) % 10000;
+      virtualUsersMap.set(fid, {
+        schemaVersion: "1.0.0",
+        user: {
+          fid: fid,
+          username: `user${fidHash}`,
+          display_name: `User ${fidHash}`,
+          pfp_url: "/assets/images/hero.jpg"
+        }
       });
-    }
-    
-    console.log('[getUsersByFids] Запрос к Neynar API:', {
-      url,
-      params,
-      fidsCount: normalizedFids.length
     });
     
-    const response = await axios.get(url, {
-      params: params,
-      headers: { 'api_key': NEYNAR_API_KEY }
-    });
-    
-    console.log('[getUsersByFids] Ответ от Neynar API:', {
-      status: response.status,
-      hasData: !!response.data,
-      hasUsers: !!response.data?.users,
-      usersCount: response.data?.users?.length || 0,
-      responseKeys: response.data ? Object.keys(response.data) : []
-    });
-    
-    if (response.data?.users && Array.isArray(response.data.users)) {
+    // Если есть реальные FID, делаем запрос к Neynar API
+    let realUsersMap = new Map();
+    if (realFids.length > 0) {
+      const url = `${NEYNAR_BASE_URL}/farcaster/user/bulk`;
+      const fidsString = realFids.join(',');
+      const params = { fids: fidsString };
+      
       if (typeof window !== 'undefined' && window.addDebugLog) {
-        window.addDebugLog(`✅ [getUsersByFids] Получено ${response.data.users.length} пользователей из ${normalizedFids.length} запрошенных`, {
-          requestedFids: normalizedFids,
-          receivedFids: response.data.users.map(u => u.fid)
+        window.addDebugLog(`🔍 [getUsersByFids] Batch запрос для ${realFids.length} реальных FID`, {
+          realFids: realFids,
+          virtualFids: virtualFids,
+          fidsString: fidsString,
+          hasApiKey: !!NEYNAR_API_KEY
         });
       }
       
-      // Создаем Map для быстрого поиска по FID
-      const usersMap = new Map();
-      response.data.users.forEach(user => {
-        usersMap.set(Number(user.fid), {
-          schemaVersion: "1.0.0",
-          user: user
-        });
+      console.log('[getUsersByFids] Запрос к Neynar API:', {
+        url,
+        params,
+        realFidsCount: realFids.length,
+        virtualFidsCount: virtualFids.length
       });
       
-      // Возвращаем данные в том же порядке, что и запрошенные FID
-      // Нормализуем FID к числам для сравнения
-      return normalizedFids.map(fid => usersMap.get(Number(fid)) || null);
+      const response = await axios.get(url, {
+        params: params,
+        headers: { 'api_key': NEYNAR_API_KEY }
+      });
+      
+      console.log('[getUsersByFids] Ответ от Neynar API:', {
+        status: response.status,
+        hasData: !!response.data,
+        hasUsers: !!response.data?.users,
+        usersCount: response.data?.users?.length || 0,
+        responseKeys: response.data ? Object.keys(response.data) : []
+      });
+      
+      if (response.data?.users && Array.isArray(response.data.users)) {
+        if (typeof window !== 'undefined' && window.addDebugLog) {
+          window.addDebugLog(`✅ [getUsersByFids] Получено ${response.data.users.length} пользователей из ${realFids.length} запрошенных`, {
+            requestedFids: realFids,
+            receivedFids: response.data.users.map(u => u.fid)
+          });
+        }
+        
+        // Создаем Map для быстрого поиска по FID
+        response.data.users.forEach(user => {
+          realUsersMap.set(Number(user.fid), {
+            schemaVersion: "1.0.0",
+            user: user
+          });
+        });
+      }
+    } else {
+      // Если только виртуальные FID, просто возвращаем их данные
+      if (typeof window !== 'undefined' && window.addDebugLog) {
+        window.addDebugLog(`🔷 [getUsersByFids] Только виртуальные FID, пропускаем запрос к API`, {
+          virtualFids: virtualFids
+        });
+      }
     }
+    
+    // Объединяем карты реальных и виртуальных пользователей
+    const allUsersMap = new Map([...realUsersMap, ...virtualUsersMap]);
+    
+    // Возвращаем данные в том же порядке, что и запрошенные FID
+    return normalizedFids.map(fid => allUsersMap.get(Number(fid)) || null);
     
     if (typeof window !== 'undefined' && window.addDebugLog) {
       window.addDebugLog(`⚠️ [getUsersByFids] API не вернул массив users`, {

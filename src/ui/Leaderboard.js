@@ -215,16 +215,19 @@ export async function loadLeaderboard() {
     const allUserData = await getUsersByFids(fids);
     
     // Создаем Map для быстрого поиска данных по FID
+    // ВАЖНО: Нормализуем FID к числам для корректного сравнения
     const userDataMap = new Map();
     fids.forEach((fid, index) => {
       if (allUserData[index]) {
-        userDataMap.set(fid, allUserData[index]);
+        const normalizedFid = Number(fid);
+        userDataMap.set(normalizedFid, allUserData[index]);
       }
     });
     
     // Обрабатываем каждую запись лидерборда
     const leaderboardWithUsers = leaderboard.map((entry) => {
-      const userData = userDataMap.get(entry.fid);
+      const normalizedEntryFid = Number(entry.fid);
+      const userData = userDataMap.get(normalizedEntryFid);
       
       // Проверяем, что данные получены
       if (!userData || !userData.user) {
@@ -405,16 +408,19 @@ async function loadLeaderboardFallback() {
     const allUserData = await getUsersByFids(fids);
     
     // Создаем Map для быстрого поиска данных по FID
+    // ВАЖНО: Нормализуем FID к числам для корректного сравнения
     const userDataMap = new Map();
     fids.forEach((fid, index) => {
       if (allUserData[index]) {
-        userDataMap.set(fid, allUserData[index]);
+        const normalizedFid = Number(fid);
+        userDataMap.set(normalizedFid, allUserData[index]);
       }
     });
     
     // Обрабатываем каждую запись лидерборда
     return leaderboard.map((entry) => {
-      const userData = userDataMap.get(entry.fid);
+      const normalizedEntryFid = Number(entry.fid);
+      const userData = userDataMap.get(normalizedEntryFid);
       
       // Проверяем, что данные получены
       if (!userData || !userData.user) {
