@@ -216,7 +216,7 @@ window.updateDebugModal = function() {
     const timeB = b.timestamp ? new Date(b.timestamp) : new Date(0);
     return timeA - timeB;
   });
-
+  
   logsCount.textContent = uniqueLogs.length;
   
   // Показываем информацию о статусе debug режима
@@ -1649,7 +1649,7 @@ boardEl.addEventListener("click", async (e) => {
             : (lang === "ru" ? "😔 Вы проиграли" : "😔 You lost"),
           isWinner ? "success" : "error"
         );
-          }
+      }
         }
         
         // Автоматически переключаемся на другой активный матч, если он есть
@@ -1680,7 +1680,7 @@ boardEl.addEventListener("click", async (e) => {
                       mode = "pvp-farcaster";
                       if (settingsMode) settingsMode.value = "pvp-farcaster";
                       updateUIForMode();
-                      updateMatchUI();
+      updateMatchUI();
                       const nextLang = getLanguage();
                       showToast(
                         nextLang === "ru" ? "Переключено на другой активный матч" : "Switched to another active match",
@@ -1797,13 +1797,13 @@ function refreshUserLabel() {
 
     if (isFarcasterUser) {
       // Пользователь из Farcaster: показываем username / display_name / FID
-      if (s.farcaster?.username) {
+    if (s.farcaster?.username) {
         displayText = `@${s.farcaster.username}`;
-      } else if (s.farcaster?.display_name) {
+    } else if (s.farcaster?.display_name) {
         displayText = s.farcaster.display_name;
-      } else if (s.farcaster?.fid) {
+    } else if (s.farcaster?.fid) {
         displayText = `FID: ${s.farcaster.fid}`;
-      } else {
+    } else {
         displayText = t.signedIn;
       }
     } else {
@@ -1849,14 +1849,14 @@ function refreshUserLabel() {
         }
 
         if (rawPfpUrl && typeof rawPfpUrl === 'string' && rawPfpUrl.trim().length > 0) {
-          // Нормализация URL
+        // Нормализация URL
           let normalizedUrl = rawPfpUrl.trim();
           // Если это относительный путь (начинается с /), используем текущий origin
           if (normalizedUrl.startsWith('/')) {
             normalizedUrl = window.location.origin + normalizedUrl;
           } else if (!/^https?:\/\//i.test(normalizedUrl)) {
             // Если это не относительный путь и не абсолютный URL, добавляем https://
-            normalizedUrl = 'https://' + normalizedUrl;
+          normalizedUrl = 'https://' + normalizedUrl;
           }
 
           // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
@@ -2384,7 +2384,7 @@ function updateUIForMode() {
   } else {
     stopSessionStatsLoop();
   }
-
+  
   // Dev кнопка видна только для авторизованных разработчиков
   if (devToggleBtn) {
     devToggleBtn.style.display = isAuthorizedDev ? "inline-block" : "none";
@@ -3272,7 +3272,7 @@ function updateMatchUI() {
     }
   } else {
     // Состояние синхронизировано - используем состояние с сервера
-    state = match.gameState;
+  state = match.gameState;
   }
   
   render();
@@ -3612,7 +3612,7 @@ authBtn?.addEventListener("click", async () => {
         isMiniAppEnv: isMiniAppEnv,
         isMobile: isMobileDevice,
         hasEthereum: !!window.ethereum
-      });
+    });
     }
     
     if (shouldUseMiniApp) {
@@ -3622,6 +3622,22 @@ authBtn?.addEventListener("click", async () => {
       if (farcasterSDK.isFallbackMode && farcasterSDK.isFallbackMode()) {
         // SDK в fallback mode - это не Mini App окружение, используем кошелек
         throw new Error('SDK_NOT_LOADED');
+      }
+      
+      // Если нет реальных индикаторов Mini App, но проверка определила Mini App,
+      // это может быть ложное срабатывание - проверяем SDK.context перед попыткой авторизации
+      if (!hasRealMiniAppIndicators) {
+        // Пробуем проверить, доступен ли SDK.context
+        try {
+          const context = await farcasterSDK.getContext();
+          if (!context || !context.user) {
+            // SDK.context недоступен - это не Mini App окружение, используем кошелек
+            throw new Error('SDK_NOT_LOADED');
+          }
+        } catch (contextError) {
+          // SDK.context недоступен - это не Mini App окружение, используем кошелек
+          throw new Error('SDK_NOT_LOADED');
+        }
       }
       
       // Сначала пытаемся получить пользователя через Quick Auth напрямую
@@ -3646,6 +3662,17 @@ authBtn?.addEventListener("click", async () => {
         try {
           fullUserData = await farcasterSDK.getUserWithQuickAuth(backendOrigin);
         } catch (quickAuthError) {
+          // Если и Quick Auth не работает, и нет реальных индикаторов Mini App,
+          // используем кошелек как fallback
+          if (!hasRealMiniAppIndicators) {
+            throw new Error('SDK_NOT_LOADED');
+          }
+          // Если ошибка связана с недоступностью SDK.context, и нет реальных индикаторов,
+          // используем кошелек как fallback
+          if (getUserError.message?.includes('SDK.context вернул null/undefined') || 
+              getUserError.message?.includes('SDK.context.user недоступен')) {
+            throw new Error('SDK_NOT_LOADED');
+          }
           throw new Error(`Не удалось получить данные пользователя через Mini App SDK. Ошибка: ${getUserError.message}`);
         }
       }
@@ -3755,30 +3782,30 @@ authBtn?.addEventListener("click", async () => {
         }
         // Продолжаем выполнение - переходим к авторизации через кошелек
       } else {
-        // Показываем пользователю детальную ошибку с инструкциями
-        const lang = getLanguage();
-        let errorMsg;
-        
-        if (error.message?.includes('SDK недоступен') || error.message?.includes('fallback')) {
-          errorMsg = lang === "ru"
-            ? `❌ Farcaster SDK недоступен\n\nЭто означает, что вы не находитесь в Mini App окружении.\n\nДля авторизации:\n1. Откройте приложение через Warpcast\n2. Или используйте кошелек на компьютере`
-            : `❌ Farcaster SDK unavailable\n\nThis means you're not in a Mini App environment.\n\nTo sign in:\n1. Open the app through Warpcast\n2. Or use wallet on desktop`;
-        } else if (error.message?.includes('Quick Auth')) {
-          errorMsg = lang === "ru"
-            ? `❌ Ошибка Quick Auth\n\n${error.message}\n\nПроверьте, что API сервер запущен и доступен.`
-            : `❌ Quick Auth error\n\n${error.message}\n\nMake sure API server is running and accessible.`;
-        } else {
-          errorMsg = lang === "ru"
-            ? `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПопробуйте обновить страницу или проверить консоль браузера для деталей.`
-            : `Failed to connect to Farcaster:\n\n${error.message}\n\nTry refreshing the page or check browser console for details.`;
-        }
-        
-        alert(errorMsg);
-        
+      // Показываем пользователю детальную ошибку с инструкциями
+      const lang = getLanguage();
+      let errorMsg;
+      
+      if (error.message?.includes('SDK недоступен') || error.message?.includes('fallback')) {
+        errorMsg = lang === "ru"
+          ? `❌ Farcaster SDK недоступен\n\nЭто означает, что вы не находитесь в Mini App окружении.\n\nДля авторизации:\n1. Откройте приложение через Warpcast\n2. Или используйте кошелек на компьютере`
+          : `❌ Farcaster SDK unavailable\n\nThis means you're not in a Mini App environment.\n\nTo sign in:\n1. Open the app through Warpcast\n2. Or use wallet on desktop`;
+      } else if (error.message?.includes('Quick Auth')) {
+        errorMsg = lang === "ru"
+          ? `❌ Ошибка Quick Auth\n\n${error.message}\n\nПроверьте, что API сервер запущен и доступен.`
+          : `❌ Quick Auth error\n\n${error.message}\n\nMake sure API server is running and accessible.`;
+      } else {
+        errorMsg = lang === "ru"
+          ? `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПопробуйте обновить страницу или проверить консоль браузера для деталей.`
+          : `Failed to connect to Farcaster:\n\n${error.message}\n\nTry refreshing the page or check browser console for details.`;
+      }
+      
+      alert(errorMsg);
+      
         // Если это реальная ошибка Mini App (не fallback), не используем кошелек
-        addDebugLog('🚫 Не используем кошелек как fallback в Mini App');
-        refreshUserLabel();
-        return;
+      addDebugLog('🚫 Не используем кошелек как fallback в Mini App');
+      refreshUserLabel();
+      return;
       }
     }
   }
@@ -4054,7 +4081,7 @@ let privateMatchSearchTimeout = null;
 let selectedPrivateMatchUser = null;
 
 function initPrivateMatchSearch(modal, session, onResolve) {
-  const lang = getLanguage();
+    const lang = getLanguage();
   const usernameInput = document.getElementById("private-match-username");
   const suggestionsContainer = document.getElementById("private-match-suggestions");
   const userPreview = document.getElementById("private-match-user-preview");
@@ -4241,7 +4268,7 @@ function initPrivateMatchSearch(modal, session, onResolve) {
             window.showToast(errorMsg, "error");
           } else {
             alert(errorMsg); // Fallback для старых браузеров
-          }
+  }
         }
       } finally {
         // Включаем кнопку обратно
