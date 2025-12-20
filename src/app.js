@@ -2443,7 +2443,7 @@ async function checkPendingMatches() {
   
   // Проверяем наличие pending-матчей, созданных этим игроком
   // Если есть pending-матчи, принудительно обновляем снапшот для обнаружения новых активных матчей
-  const myPendingMatches = matches.filter((match) => {
+  let myPendingMatches = matches.filter((match) => {
     if (match.status !== "pending") return false;
     const creatorFid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
     return creatorFid === normalizedPlayerFid;
@@ -2495,6 +2495,10 @@ async function checkPendingMatches() {
     const creatorFid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
     return creatorFid === normalizedPlayerFid;
   });
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2497',message:'checkPendingMatches - AFTER recalculating myPendingMatches',data:{hasNewActiveMatch,myPendingMatchesCount:myPendingMatches.length,currentMatchId:currentMatch.matchId,currentMatchStatus:currentMatch.matchState?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   
   // Если уже есть активный матч И нет pending-матчей И нет новых активных матчей, не проверяем дальше
   if (currentMatch.matchState && currentMatch.matchState.status === "active" && myPendingMatches.length === 0 && !hasNewActiveMatch) {
