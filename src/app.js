@@ -1879,6 +1879,13 @@ function refreshUserLabel() {
           normalizedUrl = 'https://' + normalizedUrl;
           }
 
+          // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
+          if (normalizedUrl.includes('imagedelivery.net')) {
+            if (normalizedUrl.match(/\/rect(crop|contain)\d+$/)) {
+              normalizedUrl = normalizedUrl + '.jpg';
+            }
+          }
+
           // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
           const testImg = new Image();
           testImg.crossOrigin = 'anonymous';
@@ -2786,6 +2793,7 @@ async function updateOpponentAvatar() {
     const opponentAvatar = document.getElementById("opponent-avatar");
     if (opponentAvatar && opponentAvatarCache.pfp_url) {
       opponentAvatar.style.display = "block";
+      opponentAvatar.crossOrigin = "anonymous"; // Устанавливаем ДО установки src
       opponentAvatar.src = opponentAvatarCache.pfp_url || "";
       opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
     } else if (opponentAvatar) {
@@ -2797,16 +2805,26 @@ async function updateOpponentAvatar() {
   try {
     const userData = await getUserByFid(currentOpponentFid);
     if (userData?.user) {
+      let pfpUrl = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || null;
+      
+      // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
+      if (pfpUrl && pfpUrl.includes('imagedelivery.net')) {
+        if (pfpUrl.match(/\/rect(crop|contain)\d+$/)) {
+          pfpUrl = pfpUrl + '.jpg';
+        }
+      }
+      
       opponentAvatarCache = {
         fid: currentOpponentFid,
         username: userData.user.username,
         display_name: userData.user.display_name,
-        pfp_url: userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || null
+        pfp_url: pfpUrl
       };
       
       const opponentAvatar = document.getElementById("opponent-avatar");
       if (opponentAvatar && opponentAvatarCache.pfp_url) {
         opponentAvatar.style.display = "block";
+        opponentAvatar.crossOrigin = "anonymous"; // Устанавливаем ДО установки src
         opponentAvatar.src = opponentAvatarCache.pfp_url;
         opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
         opponentAvatar.onerror = () => {
@@ -3074,13 +3092,21 @@ async function updateMatchSwitcherTooltip(match) {
         const opponentName = userData.user.username 
           ? `@${userData.user.username}` 
           : userData.user.display_name || `FID: ${opponentFid}`;
-        const opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
+        let opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
+        
+        // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
+        if (opponentAvatar && opponentAvatar.includes('imagedelivery.net')) {
+          if (opponentAvatar.match(/\/rect(crop|contain)\d+$/)) {
+            opponentAvatar = opponentAvatar + '.jpg';
+          }
+        }
         
         const avatarEl = tooltipEl.querySelector("#match-switcher-opponent-avatar");
         const nameEl = tooltipEl.querySelector("#match-switcher-opponent-name");
         const infoEl = tooltipEl.querySelector("#match-switcher-match-info");
         
         if (avatarEl) {
+          avatarEl.crossOrigin = "anonymous"; // Устанавливаем ДО установки src
           avatarEl.src = opponentAvatar;
           avatarEl.alt = opponentName;
         }

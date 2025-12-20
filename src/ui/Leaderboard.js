@@ -600,12 +600,19 @@ export function renderLeaderboard(leaderboard, container) {
       }
     }
     
-    // Проверяем, является ли URL Cloudflare Images и неполный ли он
-    // Cloudflare Images URL должен содержать параметры размера или расширение файла
+    // Исправляем Cloudflare Images URL: добавляем расширение .jpg к неполным URL
     if (avatarUrl && avatarUrl.includes('imagedelivery.net')) {
-      // Если URL заканчивается на /rectcrop3 или подобное без расширения, это может быть проблемой
-      // Но мы не можем исправить это на стороне клиента, так как не знаем правильный формат
-      // Оставляем как есть - fallback сработает при ошибке
+      // Если URL заканчивается на /rectcrop3, /rectcontain2 и т.д. без расширения, добавляем .jpg
+      if (avatarUrl.match(/\/rect(crop|contain)\d+$/)) {
+        const originalUrl = avatarUrl;
+        avatarUrl = avatarUrl + '.jpg';
+        if (typeof window !== 'undefined' && window.addDebugLog) {
+          window.addDebugLog(`🔧 Исправлен Cloudflare Images URL для ${playerName}`, { 
+            original: originalUrl,
+            fixed: avatarUrl
+          });
+        }
+      }
     }
     
     // Логируем информацию об аватаре для отладки
@@ -642,18 +649,14 @@ export function renderLeaderboard(leaderboard, container) {
       const isExternalUrl = avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://');
       const isSameOrigin = isExternalUrl && avatarUrl.startsWith(window.location.origin);
       
-      // Устанавливаем crossOrigin для внешних доменов (может помочь с CORS)
-      // Для Cloudflare Images и других CDN это может быть необходимо
+      // ВАЖНО: Устанавливаем crossOrigin ДО добавления в DOM и ДО установки src
+      // Это критично для правильной загрузки изображений с CORS
       if (isSameOrigin) {
-        // Для нашего origin используем crossOrigin для безопасности
         avatarImg.crossOrigin = "anonymous";
       } else if (isExternalUrl) {
-        // Для внешних доменов пробуем установить crossOrigin
-        // Если CDN не поддерживает CORS, браузер просто не загрузит изображение
-        // и сработает onerror, который загрузит fallback
+        // Для Cloudflare Images и других CDN устанавливаем crossOrigin
         avatarImg.crossOrigin = "anonymous";
       } else {
-        // Для относительных путей не устанавливаем crossOrigin
         avatarImg.removeAttribute('crossorigin');
       }
       
