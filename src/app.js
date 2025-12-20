@@ -2477,6 +2477,11 @@ async function checkPendingMatches() {
     const isPlayerInMatch = matchPlayer1Fid === normalizedPlayerFid || matchPlayer2Fid === normalizedPlayerFid;
     // Проверяем, не загружен ли уже этот матч
     const isNotLoaded = !currentMatch.matchState || currentMatch.matchId !== match.matchId;
+    // #region agent log
+    if (match.status === "active" && !match.gameState?.finished) {
+      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2472',message:'checkPendingMatches - checking active match',data:{matchId:match.matchId,matchStatus:match.status,isPlayerInMatch,isNotLoaded,currentMatchId:currentMatch.matchId,hasCurrentMatch:!!currentMatch.matchState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    }
+    // #endregion
     return isPlayerInMatch && isNotLoaded;
   });
   // #region agent log

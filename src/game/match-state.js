@@ -81,6 +81,10 @@ export async function syncMatch() {
       return null;
     }
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'match-state.js:85',message:'syncMatch - match from server',data:{matchId:match.matchId||match.id||currentMatchId,status:match.status,oldStatus:currentMatchState?.status,finished:match.gameState?.finished,hasMatchId:!!match.matchId,hasId:!!match.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
     const wasFinished = currentMatchState?.gameState?.finished;
     const isNowFinished = match.gameState.finished;
     const wasMyTurn = isMyTurn();
