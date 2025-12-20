@@ -53,6 +53,11 @@ async function waitForHost(timeout = 5000) {
 }
 
 export const farcasterSDK = {
+  // Проверка, находится ли SDK в fallback mode
+  isFallbackMode() {
+    return fallbackOnly;
+  },
+  
   async ready() {
     const sdk = await getSDK();
     

@@ -3617,6 +3617,13 @@ authBtn?.addEventListener("click", async () => {
     
     if (shouldUseMiniApp) {
     try {
+      // Проверяем, действительно ли SDK доступен (не fallback mode)
+      // Если SDK в fallback mode, значит мы не в Mini App окружении
+      if (farcasterSDK.isFallbackMode && farcasterSDK.isFallbackMode()) {
+        // SDK в fallback mode - это не Mini App окружение, используем кошелек
+        throw new Error('SDK_NOT_LOADED');
+      }
+      
       // Сначала пытаемся получить пользователя через Quick Auth напрямую
       // Это более надежный способ для Mini App
       const backendOrigin = window.location.origin;
@@ -3741,30 +3748,38 @@ authBtn?.addEventListener("click", async () => {
         addDebugLog('❌ Ошибка авторизации Mini App', { message: error.message });
       }
       
-      // Показываем пользователю детальную ошибку с инструкциями
-      const lang = getLanguage();
-      let errorMsg;
-      
-      if (error.message?.includes('SDK недоступен') || error.message?.includes('fallback')) {
-        errorMsg = lang === "ru"
-          ? `❌ Farcaster SDK недоступен\n\nЭто означает, что вы не находитесь в Mini App окружении.\n\nДля авторизации:\n1. Откройте приложение через Warpcast\n2. Или используйте кошелек на компьютере`
-          : `❌ Farcaster SDK unavailable\n\nThis means you're not in a Mini App environment.\n\nTo sign in:\n1. Open the app through Warpcast\n2. Or use wallet on desktop`;
-      } else if (error.message?.includes('Quick Auth')) {
-        errorMsg = lang === "ru"
-          ? `❌ Ошибка Quick Auth\n\n${error.message}\n\nПроверьте, что API сервер запущен и доступен.`
-          : `❌ Quick Auth error\n\n${error.message}\n\nMake sure API server is running and accessible.`;
+      // Если SDK не загружен, это не Mini App окружение - используем кошелек как fallback
+      if (error.message === 'SDK_NOT_LOADED' || error.message?.includes('fallback mode')) {
+        if (DEBUG_ENABLED) {
+          addDebugLog('🔄 SDK не загружен, используем кошелек как fallback');
+        }
+        // Продолжаем выполнение - переходим к авторизации через кошелек
       } else {
-        errorMsg = lang === "ru"
-          ? `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПопробуйте обновить страницу или проверить консоль браузера для деталей.`
-          : `Failed to connect to Farcaster:\n\n${error.message}\n\nTry refreshing the page or check browser console for details.`;
+        // Показываем пользователю детальную ошибку с инструкциями
+        const lang = getLanguage();
+        let errorMsg;
+        
+        if (error.message?.includes('SDK недоступен') || error.message?.includes('fallback')) {
+          errorMsg = lang === "ru"
+            ? `❌ Farcaster SDK недоступен\n\nЭто означает, что вы не находитесь в Mini App окружении.\n\nДля авторизации:\n1. Откройте приложение через Warpcast\n2. Или используйте кошелек на компьютере`
+            : `❌ Farcaster SDK unavailable\n\nThis means you're not in a Mini App environment.\n\nTo sign in:\n1. Open the app through Warpcast\n2. Or use wallet on desktop`;
+        } else if (error.message?.includes('Quick Auth')) {
+          errorMsg = lang === "ru"
+            ? `❌ Ошибка Quick Auth\n\n${error.message}\n\nПроверьте, что API сервер запущен и доступен.`
+            : `❌ Quick Auth error\n\n${error.message}\n\nMake sure API server is running and accessible.`;
+        } else {
+          errorMsg = lang === "ru"
+            ? `Не удалось подключиться к Farcaster:\n\n${error.message}\n\nПопробуйте обновить страницу или проверить консоль браузера для деталей.`
+            : `Failed to connect to Farcaster:\n\n${error.message}\n\nTry refreshing the page or check browser console for details.`;
+        }
+        
+        alert(errorMsg);
+        
+        // Если это реальная ошибка Mini App (не fallback), не используем кошелек
+        addDebugLog('🚫 Не используем кошелек как fallback в Mini App');
+        refreshUserLabel();
+        return;
       }
-      
-      alert(errorMsg);
-      
-      // НЕ используем кошелек как fallback в Mini App - это ошибка конфигурации
-      addDebugLog('🚫 Не используем кошелек как fallback в Mini App');
-      refreshUserLabel();
-      return;
     }
   }
   
