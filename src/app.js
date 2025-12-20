@@ -2528,18 +2528,45 @@ async function checkPendingMatches() {
         const isNotLoaded = !currentMatch.matchState || currentMatch.matchId !== match.matchId;
         return isPlayerInMatch && isNotLoaded;
       });
+      
+      // Также проверяем, не изменился ли статус загруженного матча с "pending" на "active"
+      const currentMatchStatus = currentMatch.matchState?.status;
+      const activeMatchThatBecameActive = matches.find(match => {
+        if (match.status !== "active" || match.gameState?.finished) return false;
+        const matchPlayer1Fid = match.player1Fid ? (typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid) : null;
+        const matchPlayer2Fid = match.player2Fid ? (typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid) : null;
+        const isPlayerInMatch = matchPlayer1Fid === normalizedPlayerFid || matchPlayer2Fid === normalizedPlayerFid;
+        const isCurrentMatch = currentMatch.matchId === match.matchId;
+        const statusChangedToActive = currentMatchStatus === "pending" && match.status === "active";
+        return isPlayerInMatch && isCurrentMatch && statusChangedToActive;
+      });
+      
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2526',message:'checkPendingMatches - AFTER find newActiveMatch',data:{hasNewActiveMatch:!!newActiveMatch,matchId:newActiveMatch?.matchId,currentMatchId:currentMatch.matchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2526',message:'checkPendingMatches - AFTER find newActiveMatch',data:{hasNewActiveMatch:!!newActiveMatch,hasActiveMatchThatBecameActive:!!activeMatchThatBecameActive,matchId:newActiveMatch?.matchId,activeMatchId:activeMatchThatBecameActive?.matchId,currentMatchId:currentMatch.matchId,currentMatchStatus},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
       
       if (newActiveMatch) {
         // Автоматически загружаем матч
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2474',message:'checkPendingMatches - BEFORE loadMatch',data:{matchId:newActiveMatch.matchId,status:newActiveMatch.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2538',message:'checkPendingMatches - BEFORE loadMatch',data:{matchId:newActiveMatch.matchId,status:newActiveMatch.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
         // #endregion
         await loadMatch(newActiveMatch.matchId);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2476',message:'checkPendingMatches - AFTER loadMatch, BEFORE updateMatchUI',data:{matchId:newActiveMatch.matchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2542',message:'checkPendingMatches - AFTER loadMatch, BEFORE updateMatchUI',data:{matchId:newActiveMatch.matchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        mode = "pvp-farcaster";
+        if (settingsMode) settingsMode.value = "pvp-farcaster";
+        updateUIForMode();
+        updateMatchUI();
+      } else if (activeMatchThatBecameActive) {
+        // Матч уже загружен, но статус изменился с "pending" на "active"
+        // Обновляем матч и UI
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2555',message:'checkPendingMatches - match status changed to active, BEFORE loadMatch',data:{matchId:activeMatchThatBecameActive.matchId,status:activeMatchThatBecameActive.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        await loadMatch(activeMatchThatBecameActive.matchId);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2559',message:'checkPendingMatches - match status changed to active, AFTER loadMatch, BEFORE updateMatchUI',data:{matchId:activeMatchThatBecameActive.matchId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
         // #endregion
         mode = "pvp-farcaster";
         if (settingsMode) settingsMode.value = "pvp-farcaster";
