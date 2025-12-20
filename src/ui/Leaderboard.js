@@ -600,6 +600,14 @@ export function renderLeaderboard(leaderboard, container) {
       }
     }
     
+    // Проверяем, является ли URL Cloudflare Images и неполный ли он
+    // Cloudflare Images URL должен содержать параметры размера или расширение файла
+    if (avatarUrl && avatarUrl.includes('imagedelivery.net')) {
+      // Если URL заканчивается на /rectcrop3 или подобное без расширения, это может быть проблемой
+      // Но мы не можем исправить это на стороне клиента, так как не знаем правильный формат
+      // Оставляем как есть - fallback сработает при ошибке
+    }
+    
     // Логируем информацию об аватаре для отладки
     if (typeof window !== 'undefined' && window.addDebugLog && avatarUrl) {
       window.addDebugLog(`🖼️ Аватар для ${playerName}`, { 
@@ -634,13 +642,18 @@ export function renderLeaderboard(leaderboard, container) {
       const isExternalUrl = avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://');
       const isSameOrigin = isExternalUrl && avatarUrl.startsWith(window.location.origin);
       
-      // Устанавливаем crossOrigin только для нашего origin
+      // Устанавливаем crossOrigin для внешних доменов (может помочь с CORS)
+      // Для Cloudflare Images и других CDN это может быть необходимо
       if (isSameOrigin) {
         // Для нашего origin используем crossOrigin для безопасности
         avatarImg.crossOrigin = "anonymous";
+      } else if (isExternalUrl) {
+        // Для внешних доменов пробуем установить crossOrigin
+        // Если CDN не поддерживает CORS, браузер просто не загрузит изображение
+        // и сработает onerror, который загрузит fallback
+        avatarImg.crossOrigin = "anonymous";
       } else {
-        // Для внешних доменов явно не устанавливаем crossOrigin (не null, а просто не устанавливаем)
-        // Это важно для некоторых CDN
+        // Для относительных путей не устанавливаем crossOrigin
         avatarImg.removeAttribute('crossorigin');
       }
       
@@ -668,7 +681,6 @@ export function renderLeaderboard(leaderboard, container) {
         // Проверяем, действительно ли произошла ошибка или это ложное срабатывание
         if (avatarImg.complete && avatarImg.naturalWidth === 0) {
           // Изображение помечено как загруженное, но имеет нулевой размер - это ошибка
-          avatarImg.style.display = 'none';
           
           if (typeof window !== 'undefined' && window.addDebugLog) {
             window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
@@ -685,9 +697,20 @@ export function renderLeaderboard(leaderboard, container) {
               note: 'Изображение помечено как загруженное, но имеет нулевой размер'
             });
           }
+          
+          // Пробуем загрузить дефолтную аватарку
+          const fallbackUrl = window.location.origin + "/assets/images/hero.jpg";
+          avatarImg.onerror = null; // Убираем обработчик, чтобы избежать бесконечного цикла
+          avatarImg.crossOrigin = "anonymous"; // Для локального файла можно использовать crossOrigin
+          avatarImg.src = fallbackUrl;
+          
+          if (typeof window !== 'undefined' && window.addDebugLog) {
+            window.addDebugLog(`🔄 Пробуем загрузить fallback аватарку для ${playerName}`, { 
+              fallbackUrl: fallbackUrl
+            });
+          }
         } else {
           // Обычная ошибка загрузки
-          avatarImg.style.display = 'none';
           
           if (typeof window !== 'undefined' && window.addDebugLog) {
             window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
@@ -702,6 +725,18 @@ export function renderLeaderboard(leaderboard, container) {
               naturalHeight: avatarImg.naturalHeight,
               errorType: 'Image load error',
               note: 'Проверьте доступность URL и CORS настройки сервера'
+            });
+          }
+          
+          // Пробуем загрузить дефолтную аватарку
+          const fallbackUrl = window.location.origin + "/assets/images/hero.jpg";
+          avatarImg.onerror = null; // Убираем обработчик, чтобы избежать бесконечного цикла
+          avatarImg.crossOrigin = "anonymous"; // Для локального файла можно использовать crossOrigin
+          avatarImg.src = fallbackUrl;
+          
+          if (typeof window !== 'undefined' && window.addDebugLog) {
+            window.addDebugLog(`🔄 Пробуем загрузить fallback аватарку для ${playerName}`, { 
+              fallbackUrl: fallbackUrl
             });
           }
         }
