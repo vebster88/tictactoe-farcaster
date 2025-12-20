@@ -3598,16 +3598,21 @@ authBtn?.addEventListener("click", async () => {
       document.referrer?.includes('farcaster') ||
       document.referrer?.includes('warpcast')
     );
+    // Улучшенная проверка: используем finalMiniAppCheck, чтобы правильно определять Mini App
+    // даже когда window.ethereum доступен (кошелек может быть доступен и в Mini App)
     const shouldUseMiniApp = hasRealMiniAppIndicators || 
+                             finalMiniAppCheck ||
                              (isMobileDevice && !window.ethereum && !isLocalhost);
     
     if (DEBUG_ENABLED) {
       addDebugLog('🔍 Авторизация', {
         method: shouldUseMiniApp ? 'Mini App' : 'Wallet',
         hasRealIndicators: hasRealMiniAppIndicators,
+        finalMiniAppCheck: finalMiniAppCheck,
+        isMiniAppEnv: isMiniAppEnv,
         isMobile: isMobileDevice,
         hasEthereum: !!window.ethereum
-    });
+      });
     }
     
     if (shouldUseMiniApp) {
