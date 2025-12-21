@@ -629,13 +629,26 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
+      // Для Cloudflare Images добавляем параметры размера для лучшего качества
+      // Запрашиваем изображение в 2x разрешении для retina дисплеев
+      let optimizedAvatarUrl = avatarUrl;
+      if (avatarUrl.includes('imagedelivery.net')) {
+        const displaySizeNum = parseInt(avatarSize);
+        const requestedSize = displaySizeNum * 2; // 2x для retina
+        // Добавляем параметры размера, если их еще нет
+        if (!avatarUrl.includes('?')) {
+          optimizedAvatarUrl = `${avatarUrl}?width=${requestedSize}&height=${requestedSize}&fit=crop&quality=85`;
+        }
+      }
+      
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0;`;
+      // Добавляем image-rendering для лучшего качества при масштабировании
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;`;
       
       // Определяем, является ли URL внешним доменом
-      const isExternalUrl = avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://');
-      const isSameOrigin = isExternalUrl && avatarUrl.startsWith(window.location.origin);
+      const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
+      const isSameOrigin = isExternalUrl && optimizedAvatarUrl.startsWith(window.location.origin);
       
       // Устанавливаем crossOrigin только для нашего origin
       // Для внешних доменов явно не устанавливаем crossOrigin (не null, а просто не устанавливаем)
@@ -666,14 +679,14 @@ export function renderLeaderboard(leaderboard, container) {
         // Дополнительная диагностика качества
         const computedStyle = window.getComputedStyle(avatarImg);
         const imageRendering = computedStyle.imageRendering;
-        const hasUrlParams = avatarUrl.includes('?');
-        const isCloudflareImages = avatarUrl.includes('imagedelivery.net');
-        const urlFormat = avatarUrl.match(/\.(jpg|jpeg|png|webp|gif|svg)/i)?.[0] || 'no extension';
+        const hasUrlParams = optimizedAvatarUrl.includes('?');
+        const isCloudflareImages = optimizedAvatarUrl.includes('imagedelivery.net');
+        const urlFormat = optimizedAvatarUrl.match(/\.(jpg|jpeg|png|webp|gif|svg)/i)?.[0] || 'no extension';
         
         // Проверяем, есть ли параметры качества в Cloudflare Images URL
         let cloudflareParams = null;
         if (isCloudflareImages && hasUrlParams) {
-          const urlObj = new URL(avatarUrl);
+          const urlObj = new URL(optimizedAvatarUrl);
           cloudflareParams = {
             width: urlObj.searchParams.get('width'),
             height: urlObj.searchParams.get('height'),
@@ -684,7 +697,8 @@ export function renderLeaderboard(leaderboard, container) {
         
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
-            url: avatarUrl,
+            originalUrl: avatarUrl,
+            optimizedUrl: optimizedAvatarUrl,
             crossOrigin: avatarImg.crossOrigin || 'not set',
             naturalWidth: avatarImg.naturalWidth,
             naturalHeight: avatarImg.naturalHeight,
@@ -779,11 +793,12 @@ export function renderLeaderboard(leaderboard, container) {
       // Устанавливаем src ПОСЛЕ добавления в DOM и регистрации обработчиков
       // Используем requestAnimationFrame, чтобы гарантировать, что элемент в DOM
       requestAnimationFrame(() => {
-        avatarImg.src = avatarUrl;
+        avatarImg.src = optimizedAvatarUrl;
         
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`🔄 Начало загрузки аватара для ${playerName}`, { 
-            url: avatarUrl,
+            originalUrl: avatarUrl,
+            optimizedUrl: optimizedAvatarUrl,
             crossOrigin: avatarImg.crossOrigin || 'not set'
           });
         }
