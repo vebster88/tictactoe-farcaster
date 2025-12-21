@@ -629,22 +629,26 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images: используем исходные URL с трансформациями (rectcrop3, rectcontain2)
-      // Эти трансформации уже оптимизированы Cloudflare и обеспечивают хорошее качество
-      // Проблема качества, вероятно, в CSS масштабировании, а не в размере исходного изображения
-      // Исходные изображения уже достаточно большие (1284x722, 482x482, 1080x722)
+      // Для Cloudflare Images: попробуем запросить изображение меньшего размера
+      // Идея: если запросить изображение близко к отображаемому размеру, браузеру не нужно будет
+      // сильно масштабировать, что уменьшит артефакты при масштабировании
+      // Для retina дисплеев используем 2x (64px для 32px отображения)
       let optimizedAvatarUrl = avatarUrl;
+      if (avatarUrl.includes('imagedelivery.net') && !avatarUrl.includes('?')) {
+        const displaySizeNum = parseInt(avatarSize);
+        // Запрашиваем изображение в 2x размере для retina дисплеев
+        // Это уменьшит необходимость масштабирования и артефакты
+        const requestedSize = displaySizeNum * 2;
+        // Пробуем добавить параметры размера - возможно, они сработают с трансформациями
+        optimizedAvatarUrl = `${avatarUrl}?width=${requestedSize}&height=${requestedSize}&fit=crop`;
+      }
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
-      // Добавляем стили для лучшего качества при масштабировании
-      // Проблема: браузер размывает изображения при масштабировании вниз
-      // Решение: используем комбинацию CSS свойств для максимального качества
-      // - image-rendering: -webkit-optimize-contrast (WebKit оптимизация)
-      // - image-rendering: auto (fallback для других браузеров)
-      // - transform: translateZ(0) для включения GPU-ускорения
-      // - will-change: contents для оптимизации рендеринга
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: auto; transform: translateZ(0); will-change: contents;`;
+      // Упрощаем CSS для уменьшения артефактов при масштабировании
+      // Идея: чем меньше CSS-трансформаций и сложных свойств, тем меньше артефактов
+      // Используем только необходимые свойства без лишних оптимизаций
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0;`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
