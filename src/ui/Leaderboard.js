@@ -1,5 +1,6 @@
 import { getUserByFid, getUsersByFids } from "../farcaster/client.js";
 import { normalizeFidToNumber } from "../utils/normalize.js";
+import { getAnonIdFromFid } from "../utils/fid-helpers.js";
 
 // Функция для добавления логов в debug панель (если доступна)
 function addDebugLog(message, data = null) {
@@ -68,13 +69,7 @@ function isMockData(userData, fid) {
   return isMock;
 }
 
-// Функция для генерации стабильного anonId на основе FID (для не-Farcaster пользователей)
-// Возвращает число от 1 до 99, которое будет одинаковым для одного и того же FID
-function getAnonIdFromFid(fid) {
-  // Используем простой хеш для генерации стабильного числа от 1 до 99
-  const hash = Math.abs(fid) % 99;
-  return hash + 1; // От 1 до 99
-}
+// Функция getAnonIdFromFid импортируется из utils/fid-helpers.js
 
 // Rate limiting для Neynar API (6 запросов в 60 секунд для FREE плана)
 let requestTimestamps = [];

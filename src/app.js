@@ -15,6 +15,7 @@ import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 import { APP_VERSION } from "./version.js";
 import { normalizeFidToString, normalizeMatchId } from "./utils/normalize.js";
+import { getAnonIdFromFid } from "./utils/fid-helpers.js";
 
 // Debug logging - can be controlled via environment variable
 const DEBUG_ENABLED = import.meta.env.VITE_DEBUG === "true" || 
@@ -1853,24 +1854,34 @@ function refreshUserLabel() {
         displayText = t.signedIn;
       }
     } else {
-      // Пользователь НЕ из Farcaster: генерируем стабильный anonId и имя вида @user67
-      let anonId = s?.anonId;
-      if (!anonId) {
-        // Простой диапазон 1–99, можно расширить при необходимости
-        anonId = Math.floor(Math.random() * 99) + 1;
-        const updatedSession = {
-          ...(s || {}),
-          anonId
-        };
-        try {
-          localStorage.setItem("fc_session", JSON.stringify(updatedSession));
-        } catch (e) {
-          if (DEBUG_ENABLED) {
-            addDebugLog('⚠️ Не удалось сохранить anonId в сессию', { error: e?.message || String(e) });
+      // Пользователь НЕ из Farcaster: используем ту же логику, что и в лидерборде
+      // Получаем FID из сессии (виртуальный FID для пользователей без Farcaster)
+      // В signInWithWallet сохраняется как s.fid (может быть строкой "V22575" или числом)
+      const fid = s?.fid;
+      if (fid) {
+        // Вычисляем стабильный anonId на основе FID (такая же логика, как в лидерборде)
+        const anonId = getAnonIdFromFid(fid);
+        displayText = `@user${anonId}`;
+      } else {
+        // Fallback: если FID нет, используем старый способ с сохранением в сессии
+        let anonId = s?.anonId;
+        if (!anonId) {
+          // Простой диапазон 1–99, можно расширить при необходимости
+          anonId = Math.floor(Math.random() * 99) + 1;
+          const updatedSession = {
+            ...(s || {}),
+            anonId
+          };
+          try {
+            localStorage.setItem("fc_session", JSON.stringify(updatedSession));
+          } catch (e) {
+            if (DEBUG_ENABLED) {
+              addDebugLog('⚠️ Не удалось сохранить anonId в сессию', { error: e?.message || String(e) });
+            }
           }
         }
+        displayText = `@user${anonId}`;
       }
-      displayText = `@user${anonId}`;
     }
     
     // Устанавливаем текст и принудительно показываем элемент
