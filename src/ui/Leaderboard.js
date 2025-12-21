@@ -1,4 +1,5 @@
 import { getUserByFid, getUsersByFids } from "../farcaster/client.js";
+import { normalizeFidToNumber } from "../utils/normalize.js";
 
 // Функция для добавления логов в debug панель (если доступна)
 function addDebugLog(message, data = null) {
@@ -215,19 +216,30 @@ export async function loadLeaderboard() {
     const allUserData = await getUsersByFids(fids);
     
     // Создаем Map для быстрого поиска данных по FID
-    // ВАЖНО: Нормализуем FID к числам для корректного сравнения
+    // ВАЖНО: Нормализуем FID к числам для корректного сравнения (работает с виртуальными FID)
     const userDataMap = new Map();
     fids.forEach((fid, index) => {
       if (allUserData[index]) {
-        const normalizedFid = Number(fid);
-        userDataMap.set(normalizedFid, allUserData[index]);
+        // Используем normalizeFidToNumber для работы с виртуальными FID (V prefix)
+        const normalizedFid = normalizeFidToNumber(fid);
+        if (normalizedFid !== null) {
+          userDataMap.set(normalizedFid, allUserData[index]);
+          // Также добавляем оригинальный FID для совместимости
+          userDataMap.set(fid, allUserData[index]);
+          userDataMap.set(String(fid), allUserData[index]);
+        }
       }
     });
     
     // Обрабатываем каждую запись лидерборда
     const leaderboardWithUsers = leaderboard.map((entry) => {
-      const normalizedEntryFid = Number(entry.fid);
-      const userData = userDataMap.get(normalizedEntryFid);
+      // Используем normalizeFidToNumber для работы с виртуальными FID
+      const normalizedEntryFid = normalizeFidToNumber(entry.fid);
+      let userData = normalizedEntryFid !== null ? userDataMap.get(normalizedEntryFid) : null;
+      // Если не нашли по нормализованному, пробуем по оригинальному
+      if (!userData) {
+        userData = userDataMap.get(entry.fid) || userDataMap.get(String(entry.fid));
+      }
       
       // Проверяем, что данные получены
       if (!userData || !userData.user) {
@@ -408,19 +420,30 @@ async function loadLeaderboardFallback() {
     const allUserData = await getUsersByFids(fids);
     
     // Создаем Map для быстрого поиска данных по FID
-    // ВАЖНО: Нормализуем FID к числам для корректного сравнения
+    // ВАЖНО: Нормализуем FID к числам для корректного сравнения (работает с виртуальными FID)
     const userDataMap = new Map();
     fids.forEach((fid, index) => {
       if (allUserData[index]) {
-        const normalizedFid = Number(fid);
-        userDataMap.set(normalizedFid, allUserData[index]);
+        // Используем normalizeFidToNumber для работы с виртуальными FID (V prefix)
+        const normalizedFid = normalizeFidToNumber(fid);
+        if (normalizedFid !== null) {
+          userDataMap.set(normalizedFid, allUserData[index]);
+          // Также добавляем оригинальный FID для совместимости
+          userDataMap.set(fid, allUserData[index]);
+          userDataMap.set(String(fid), allUserData[index]);
+        }
       }
     });
     
     // Обрабатываем каждую запись лидерборда
     return leaderboard.map((entry) => {
-      const normalizedEntryFid = Number(entry.fid);
-      const userData = userDataMap.get(normalizedEntryFid);
+      // Используем normalizeFidToNumber для работы с виртуальными FID
+      const normalizedEntryFid = normalizeFidToNumber(entry.fid);
+      let userData = normalizedEntryFid !== null ? userDataMap.get(normalizedEntryFid) : null;
+      // Если не нашли по нормализованному, пробуем по оригинальному
+      if (!userData) {
+        userData = userDataMap.get(entry.fid) || userDataMap.get(String(entry.fid));
+      }
       
       // Проверяем, что данные получены
       if (!userData || !userData.user) {

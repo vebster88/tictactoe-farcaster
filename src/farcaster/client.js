@@ -307,26 +307,30 @@ export async function getUsersByFids(fids) {
     
     // Возвращаем данные в том же порядке, что и запрошенные FID
     return fids.map(fid => {
-      // Пробуем найти по оригинальному FID
-      let result = allUsersMap.get(fid);
-      if (result) return result;
-      
-      // Пробуем найти по числовому ключу
-      const numFid = Number(fid);
-      if (!isNaN(numFid)) {
-        result = allUsersMap.get(numFid);
-        if (result) return result;
-        result = allUsersMap.get(String(numFid));
-        if (result) return result;
-      }
-      
-      // Пробуем найти по извлеченному числовому ключу (для виртуальных)
+      // Сначала пробуем найти виртуальных пользователей по оригинальному FID
       if (isVirtualFid(fid)) {
+        let result = allUsersMap.get(fid);
+        if (result) return result;
+        
+        // Пробуем найти по извлеченному числовому ключу
         const numericKey = extractNumericFidFromVirtual(fid);
         if (numericKey !== null) {
           result = allUsersMap.get(numericKey);
           if (result) return result;
           result = allUsersMap.get(String(numericKey));
+          if (result) return result;
+        }
+      } else {
+        // Для реальных FID пробуем найти по оригинальному FID
+        let result = allUsersMap.get(fid);
+        if (result) return result;
+        
+        // Пробуем найти по числовому ключу
+        const numFid = Number(fid);
+        if (!isNaN(numFid) && numFid > 0) {
+          result = allUsersMap.get(numFid);
+          if (result) return result;
+          result = allUsersMap.get(String(numFid));
           if (result) return result;
         }
       }
