@@ -1918,16 +1918,15 @@ function refreshUserLabel() {
           normalizedUrl = 'https://' + normalizedUrl;
           }
 
-          // Оптимизируем Cloudflare Images URL: заменяем /rectcrop3/rectcontain2 на /public
-          // и добавляем параметры для оптимизации на CDN
+          // Используем оригинальный URL (Cloudflare Images с /public не работает)
+          // Качество улучшается через CSS (image-rendering: high-quality)
           const displaySize = 34; // Размер user-avatar из CSS
-          const optimizedUrl = optimizeCloudflareImagesUrl(normalizedUrl, displaySize);
 
           // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
           const testImg = new Image();
           // Устанавливаем crossOrigin только для нашего origin
-          const isExternalUrl = optimizedUrl.startsWith('http://') || optimizedUrl.startsWith('https://');
-          const isSameOrigin = isExternalUrl && optimizedUrl.startsWith(window.location.origin);
+          const isExternalUrl = normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://');
+          const isSameOrigin = isExternalUrl && normalizedUrl.startsWith(window.location.origin);
           if (isSameOrigin) {
             testImg.crossOrigin = 'anonymous';
           } else {
@@ -1935,7 +1934,7 @@ function refreshUserLabel() {
           }
 
           testImg.onload = () => {
-            userAvatar.src = optimizedUrl;
+            userAvatar.src = normalizedUrl;
             userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
             userAvatar.style.display = "block";
             // Устанавливаем crossOrigin только для нашего origin
@@ -1970,8 +1969,7 @@ function refreshUserLabel() {
 
             if (DEBUG_ENABLED) {
               addDebugLog('✅ Аватар предзагружен и установлен', { 
-                originalUrl: normalizedUrl,
-                optimizedUrl: optimizedUrl
+                url: normalizedUrl
               });
             }
           };
@@ -1980,20 +1978,18 @@ function refreshUserLabel() {
             userAvatar.style.display = "none";
             if (DEBUG_ENABLED) {
               addDebugLog('❌ Не удалось загрузить аватар', { 
-                originalUrl: normalizedUrl,
-                optimizedUrl: optimizedUrl
+                url: normalizedUrl
               });
             }
           };
 
           if (DEBUG_ENABLED) {
             addDebugLog('🔄 Пытаемся загрузить аватар', { 
-              originalUrl: normalizedUrl,
-              optimizedUrl: optimizedUrl
+              url: normalizedUrl
             });
           }
 
-          testImg.src = optimizedUrl;
+          testImg.src = normalizedUrl;
         } else {
           if (DEBUG_ENABLED) {
             addDebugLog('⚠️ Аватар не найден в сессии (нет pfpUrl)', { 
@@ -2895,16 +2891,13 @@ async function updateOpponentAvatar() {
     if (userData?.user) {
       let pfpUrl = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || null;
       
-      // Оптимизируем Cloudflare Images URL: заменяем /rectcrop3/rectcontain2 на /public
-      // и добавляем параметры для оптимизации на CDN
-      const displaySize = 30; // Размер opponent-avatar из HTML
-      const optimizedPfpUrl = pfpUrl ? optimizeCloudflareImagesUrl(pfpUrl, displaySize) : null;
-      
+      // Используем оригинальный URL (Cloudflare Images с /public не работает)
+      // Качество улучшается через CSS (image-rendering: high-quality)
       opponentAvatarCache = {
         fid: currentOpponentFid,
         username: userData.user.username,
         display_name: userData.user.display_name,
-        pfp_url: optimizedPfpUrl || pfpUrl
+        pfp_url: pfpUrl
       };
       
       const opponentAvatar = document.getElementById("opponent-avatar");
@@ -2931,8 +2924,7 @@ async function updateOpponentAvatar() {
           
           if (DEBUG_ENABLED) {
             addDebugLog('✅ Аватар оппонента загружен', { 
-              originalUrl: pfpUrl,
-              optimizedUrl: opponentAvatarCache.pfp_url,
+              url: opponentAvatarCache.pfp_url,
               naturalWidth: opponentAvatar.naturalWidth,
               naturalHeight: opponentAvatar.naturalHeight,
               displaySize: displaySize,
@@ -3211,25 +3203,22 @@ async function updateMatchSwitcherTooltip(match) {
           : userData.user.display_name || `FID: ${opponentFid}`;
         let opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
         
-        // Оптимизируем Cloudflare Images URL: заменяем /rectcrop3/rectcontain2 на /public
-        // и добавляем параметры для оптимизации на CDN
-        const displaySize = 24; // Примерный размер аватара в tooltip
-        const optimizedOpponentAvatar = optimizeCloudflareImagesUrl(opponentAvatar, displaySize);
-        
+        // Используем оригинальный URL (Cloudflare Images с /public не работает)
+        // Качество улучшается через CSS (image-rendering: high-quality)
         const avatarEl = tooltipEl.querySelector("#match-switcher-opponent-avatar");
         const nameEl = tooltipEl.querySelector("#match-switcher-opponent-name");
         const infoEl = tooltipEl.querySelector("#match-switcher-match-info");
         
         if (avatarEl) {
           // Устанавливаем crossOrigin только для нашего origin
-          const isExternalUrl = optimizedOpponentAvatar.startsWith('http://') || optimizedOpponentAvatar.startsWith('https://');
-          const isSameOrigin = isExternalUrl && optimizedOpponentAvatar.startsWith(window.location.origin);
+          const isExternalUrl = opponentAvatar.startsWith('http://') || opponentAvatar.startsWith('https://');
+          const isSameOrigin = isExternalUrl && opponentAvatar.startsWith(window.location.origin);
           if (isSameOrigin) {
             avatarEl.crossOrigin = "anonymous";
           } else {
             avatarEl.removeAttribute('crossorigin');
           }
-          avatarEl.src = optimizedOpponentAvatar;
+          avatarEl.src = opponentAvatar;
           avatarEl.alt = opponentName;
         }
         if (nameEl) {

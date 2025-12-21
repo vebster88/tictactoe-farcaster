@@ -600,60 +600,60 @@ export function renderLeaderboard(leaderboard, container) {
       }
     }
     
-    // Функция для оптимизации Cloudflare Images URL
-    // Главная проблема: /rectcrop3 или /rectcontain2 игнорируют query параметры!
-    // Решение: заменяем variant на /public, чтобы query параметры работали
-    function optimizeCloudflareImagesUrl(url, displaySize) {
-      if (!url || !url.includes('imagedelivery.net')) {
-        return url;
+    // Функция для создания Canvas аватара с Retina поддержкой
+    // Используется для улучшения качества изображений, особенно Cloudflare Images
+    function createCanvasAvatar(img, displaySize, playerName) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const size = displaySize;
+      
+      // Увеличиваем размер canvas для Retina (x2 для супер-качества)
+      canvas.width = size * dpr * 2;
+      canvas.height = size * dpr * 2;
+      canvas.style.cssText = `
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        flex-shrink: 0;
+        display: block;
+      `;
+      
+      // Настройки сглаживания для высокого качества
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Рисуем круг + изображение
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size * dpr, size * dpr, size * dpr, 0, Math.PI * 2);
+      ctx.clip();
+      
+      // Масштабируем изображение правильно (квадрат)
+      const drawSize = Math.min(img.naturalWidth, img.naturalHeight);
+      const sourceX = (img.naturalWidth - drawSize) / 2;
+      const sourceY = (img.naturalHeight - drawSize) / 2;
+      
+      ctx.drawImage(
+        img,
+        sourceX, sourceY, drawSize, drawSize,
+        0, 0, size * dpr * 2, size * dpr * 2
+      );
+      ctx.restore();
+      
+      // Логируем для отладки
+      if (typeof window !== 'undefined' && window.addDebugLog) {
+        window.addDebugLog('✅ Canvas аватар создан', {
+          canvasPhysicalSize: `${canvas.width}x${canvas.height}`,
+          displaySize: size,
+          effectiveDPR: (canvas.width / size).toFixed(1),
+          sourceScaleDown: (img.naturalWidth / size).toFixed(1),
+          playerName: playerName
+        });
       }
       
-      try {
-        const urlObj = new URL(url);
-        const originalPathname = urlObj.pathname;
-        
-        // Заменяем /rectcrop3 или /rectcontain2 на /public
-        // Это позволяет query параметрам работать корректно
-        // Формат: /{accountHash}/{imageId}/{variant}
-        // Пример: /BXluQx4ige9GuW0Ia56BHw/b26208f2-e555-440b-9f7a-2495d3ad5c00/rectcrop3
-        const pathParts = originalPathname.split('/').filter(p => p);
-        
-        if (pathParts.length >= 3) {
-          const lastPart = pathParts[pathParts.length - 1];
-          // Если последний элемент - это variant (rectcrop3, rectcontain2, и т.д.)
-          if (lastPart && !lastPart.match(/^[a-f0-9-]{36}$/i)) {
-            // Заменяем variant на 'public'
-            pathParts[pathParts.length - 1] = 'public';
-            urlObj.pathname = '/' + pathParts.join('/');
-          }
-        }
-        
-        // Добавляем параметры оптимизации
-        const targetSize = Math.min(128, displaySize * 4); // 128px макс, но с запасом под Retina
-        urlObj.searchParams.set('width', targetSize.toString());
-        urlObj.searchParams.set('height', targetSize.toString());
-        urlObj.searchParams.set('fit', 'crop'); // crop для квадратных аватаров
-        urlObj.searchParams.set('quality', '85'); // баланс качество/размер
-        
-        const optimizedUrl = urlObj.toString();
-        
-        // Логируем для отладки
-        if (typeof window !== 'undefined' && window.addDebugLog) {
-          window.addDebugLog('🔧 Cloudflare Images URL оптимизация', {
-            originalUrl: url,
-            originalPathname: originalPathname,
-            optimizedPathname: urlObj.pathname,
-            optimizedUrl: optimizedUrl,
-            pathParts: pathParts,
-            targetSize: targetSize
-          });
-        }
-        
-        return optimizedUrl;
-      } catch (e) {
-        console.warn('[Leaderboard] Failed to optimize Cloudflare Images URL:', url, e);
-        return url;
-      }
+      return canvas;
     }
     
     // Логируем информацию об аватаре для отладки
@@ -682,11 +682,10 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images: заменяем /rectcrop3/rectcontain2 на /public и добавляем параметры
-      // Проблема: браузер размывает изображения при масштабировании вниз (scaleDownRatio 10-27x)
-      // Решение: запросить оптимизированное изображение с CDN (128px макс) вместо исходного большого
+      // Используем оригинальный URL (Cloudflare Images с /public не работает)
+      // Применяем Canvas fallback для улучшения качества
       const displaySize = parseInt(avatarSize);
-      const optimizedAvatarUrl = optimizeCloudflareImagesUrl(avatarUrl, displaySize);
+      const isCloudflareImages = avatarUrl.includes('imagedelivery.net');
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
@@ -696,8 +695,8 @@ export function renderLeaderboard(leaderboard, container) {
       avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: auto; image-rendering: -webkit-optimize-contrast; image-rendering: high-quality;`;
       
       // Определяем, является ли URL внешним доменом
-      const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
-      const isSameOrigin = isExternalUrl && optimizedAvatarUrl.startsWith(window.location.origin);
+      const isExternalUrl = avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://');
+      const isSameOrigin = isExternalUrl && avatarUrl.startsWith(window.location.origin);
       
       // Устанавливаем crossOrigin только для нашего origin
       // Для внешних доменов явно не устанавливаем crossOrigin (не null, а просто не устанавливаем)
@@ -727,36 +726,37 @@ export function renderLeaderboard(leaderboard, container) {
         // Дополнительная диагностика качества
         const computedStyle = window.getComputedStyle(avatarImg);
         const imageRendering = computedStyle.imageRendering;
-        const hasUrlParams = optimizedAvatarUrl.includes('?');
-        const isCloudflareImages = optimizedAvatarUrl.includes('imagedelivery.net');
-        const urlFormat = optimizedAvatarUrl.match(/\.(jpg|jpeg|png|webp|gif|svg)/i)?.[0] || 'no extension';
-        
-        // Проверяем, есть ли параметры качества в Cloudflare Images URL
-        let cloudflareParams = null;
-        if (isCloudflareImages && hasUrlParams) {
-          const urlObj = new URL(optimizedAvatarUrl);
-          cloudflareParams = {
-            width: urlObj.searchParams.get('width'),
-            height: urlObj.searchParams.get('height'),
-            fit: urlObj.searchParams.get('fit'),
-            quality: urlObj.searchParams.get('quality')
-          };
-        }
-        
-        // Проверяем, применились ли параметры Cloudflare Images
-        const expectedWidth = cloudflareParams?.width ? parseInt(cloudflareParams.width) : null;
-        const actualWidth = avatarImg.naturalWidth;
-        // Для Cloudflare Images с query параметрами допускаем отклонение до 20px
-        // так как изображение может быть обрезано или масштабировано с учетом aspect ratio
-        const paramsApplied = expectedWidth && Math.abs(actualWidth - expectedWidth) < 20; // Допуск 20px
-        const urlChanged = optimizedAvatarUrl !== avatarUrl;
         const pixelRatio = window.devicePixelRatio || 1;
-        const scaleDownRatio = actualWidth / displaySize; // Во сколько раз браузер уменьшает изображение
+        const scaleDownRatio = avatarImg.naturalWidth / displaySize; // Во сколько раз браузер уменьшает изображение
+        
+        // Для Cloudflare Images используем Canvas для улучшения качества
+        if (isCloudflareImages && scaleDownRatio > 3) {
+          try {
+            const canvas = createCanvasAvatar(avatarImg, displaySize, playerName);
+            // Заменяем img на canvas
+            avatarImg.replaceWith(canvas);
+            
+            if (typeof window !== 'undefined' && window.addDebugLog) {
+              window.addDebugLog(`✅ Canvas аватар применен для ${playerName}`, {
+                originalUrl: avatarUrl,
+                naturalWidth: avatarImg.naturalWidth,
+                naturalHeight: avatarImg.naturalHeight,
+                displaySize: displaySize,
+                scaleDownRatio: scaleDownRatio.toFixed(2),
+                canvasSize: `${canvas.width}x${canvas.height}`,
+                note: '✅ Canvas улучшает качество при сильном масштабировании'
+              });
+            }
+            return; // Выходим, так как canvas уже заменен
+          } catch (e) {
+            console.warn('[Leaderboard] Failed to create canvas avatar:', e);
+            // Продолжаем с обычным img, если canvas не удался
+          }
+        }
         
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
             originalUrl: avatarUrl,
-            optimizedUrl: optimizedAvatarUrl,
             crossOrigin: avatarImg.crossOrigin || 'not set',
             naturalWidth: avatarImg.naturalWidth,
             naturalHeight: avatarImg.naturalHeight,
@@ -765,17 +765,9 @@ export function renderLeaderboard(leaderboard, container) {
             isLowQuality: isLowQuality,
             imageRendering: imageRendering,
             isCloudflareImages: isCloudflareImages,
-            hasUrlParams: hasUrlParams,
-            urlFormat: urlFormat,
-            cloudflareParams: cloudflareParams,
-            expectedWidth: expectedWidth,
-            paramsApplied: paramsApplied,
-            urlChanged: urlChanged,
             pixelRatio: pixelRatio,
             scaleDownRatio: scaleDownRatio.toFixed(2),
-            newScaleDownRatio: scaleDownRatio.toFixed(1), // для диагностики после Cloudflare параметров
-            cloudflareParamsApplied: isCloudflareImages && hasUrlParams ? new URL(optimizedAvatarUrl).searchParams.toString() : null,
-            note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз (должно быть ~3-4x после Cloudflare параметров)' : (paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'))
+            note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество')
           });
         }
       };
@@ -864,15 +856,15 @@ export function renderLeaderboard(leaderboard, container) {
       
       // Устанавливаем src СРАЗУ после добавления в DOM
       // Не используем requestAnimationFrame, так как элемент уже в DOM и готов к загрузке
-      avatarImg.src = optimizedAvatarUrl;
+      avatarImg.src = avatarUrl;
       
       if (typeof window !== 'undefined' && window.addDebugLog) {
         window.addDebugLog(`🔄 Начало загрузки аватара для ${playerName}`, { 
           originalUrl: avatarUrl,
-          optimizedUrl: optimizedAvatarUrl,
           crossOrigin: avatarImg.crossOrigin || 'not set',
           inDOM: avatarImg.isConnected,
-          handlersReady: !!avatarImg.onload && !!avatarImg.onerror
+          handlersReady: !!avatarImg.onload && !!avatarImg.onerror,
+          isCloudflareImages: isCloudflareImages
         });
       }
     }
