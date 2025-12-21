@@ -1,7 +1,7 @@
 // Application version
 // Format: major.minor.patch (e.g., 1.001, 1.010, 1.081)
 // Increment patch for each update/deployment
-// Current version: 1.139
+// Current version: 1.140
 // Changes: Add custom showAlert function that works in iframe - replaces alert() for match limit errors
-export const APP_VERSION = '1.139';
+export const APP_VERSION = '1.140';
 

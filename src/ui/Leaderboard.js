@@ -629,34 +629,22 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images: трансформации в пути (rectcrop3, rectcontain2) конфликтуют с query параметрами
-      // Попробуем заменить трансформации на параметры в query string для лучшего контроля качества
+      // Для Cloudflare Images: используем исходные URL с трансформациями (rectcrop3, rectcontain2)
+      // Эти трансформации уже оптимизированы Cloudflare и обеспечивают хорошее качество
+      // Проблема качества, вероятно, в CSS масштабировании, а не в размере исходного изображения
+      // Исходные изображения уже достаточно большие (1284x722, 482x482, 1080x722)
       let optimizedAvatarUrl = avatarUrl;
-      if (avatarUrl.includes('imagedelivery.net')) {
-        const displaySizeNum = parseInt(avatarSize);
-        const requestedSize = displaySizeNum * 4; // 4x для максимального качества
-        
-        // Пытаемся извлечь базовый URL без трансформаций
-        // Формат: https://imagedelivery.net/{account_hash}/{image_id}/{variant}
-        // Варианты: rectcrop3, rectcontain2, public и т.д.
-        const urlMatch = avatarUrl.match(/^https:\/\/imagedelivery\.net\/([^\/]+)\/([^\/]+)\/([^\/\?]+)/);
-        if (urlMatch && !avatarUrl.includes('?')) {
-          const [, accountHash, imageId, variant] = urlMatch;
-          // Заменяем трансформацию на 'public' и используем query параметры
-          // Это должно позволить Cloudflare Images применить параметры размера и качества
-          optimizedAvatarUrl = `https://imagedelivery.net/${accountHash}/${imageId}/public?width=${requestedSize}&height=${requestedSize}&fit=crop&quality=95`;
-        }
-      }
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
-      // Добавляем image-rendering для лучшего качества при масштабировании
-      // Используем комбинацию свойств для максимального качества:
+      // Добавляем стили для лучшего качества при масштабировании
+      // Проблема: браузер размывает изображения при масштабировании вниз
+      // Решение: используем комбинацию CSS свойств для максимального качества
       // - image-rendering: -webkit-optimize-contrast (WebKit оптимизация)
-      // - image-rendering: crisp-edges (четкие края для пиксельной графики)
-      // - image-rendering: pixelated (альтернатива для четкости)
-      // Также добавляем will-change для оптимизации рендеринга
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; will-change: transform;`;
+      // - image-rendering: auto (fallback для других браузеров)
+      // - transform: translateZ(0) для включения GPU-ускорения
+      // - will-change: contents для оптимизации рендеринга
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: auto; transform: translateZ(0); will-change: contents;`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
