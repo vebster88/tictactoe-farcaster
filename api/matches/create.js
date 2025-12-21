@@ -1,5 +1,6 @@
 import { saveMatch, getMatch, getPlayerMatches, invalidateAllPlayerActiveMatchesCache } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS } from "../../lib/matches/schema.js";
+import { normalizeFidToNumber } from "../../src/utils/normalize.js";
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -27,11 +28,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "player1Fid is required" });
     }
 
-    // Normalize FID to number for consistency
-    const normalizedPlayer1Fid = typeof player1Fid === 'string' ? parseInt(player1Fid, 10) : player1Fid;
+    // Normalize FID to number for consistency (handles virtual FIDs with "V" prefix)
+    const normalizedPlayer1Fid = normalizeFidToNumber(player1Fid);
     
-    if (isNaN(normalizedPlayer1Fid)) {
-      return res.status(400).json({ error: "player1Fid must be a valid number" });
+    if (normalizedPlayer1Fid === null) {
+      return res.status(400).json({ error: "player1Fid must be a valid FID" });
     }
 
     // Check if match already exists

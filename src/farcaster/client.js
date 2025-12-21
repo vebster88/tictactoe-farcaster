@@ -11,10 +11,42 @@ const VIRTUAL_FID_RANGE = VIRTUAL_FID_MAX - VIRTUAL_FID_MIN + 1; // 90000
 
 // Проверка, является ли FID виртуальным (псевдо-FID)
 export function isVirtualFid(fid) {
+  if (fid === null || fid === undefined) return false;
+  
+  // Если это строка с префиксом "V" или "v" - это виртуальный FID
+  if (typeof fid === 'string') {
+    const trimmed = fid.trim();
+    if (trimmed.length > 1 && (trimmed[0] === 'V' || trimmed[0] === 'v')) {
+      return true;
+    }
+  }
+  
+  // Отрицательные FID - это старые виртуальные FID (для обратной совместимости)
   const numFid = Number(fid);
-  if (isNaN(numFid)) return false;
-  // Виртуальные FID в диапазоне 10000-99999
-  return numFid >= VIRTUAL_FID_MIN && numFid <= VIRTUAL_FID_MAX;
+  if (!isNaN(numFid) && numFid < 0) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Извлечение числового FID из строкового виртуального FID
+export function extractNumericFidFromVirtual(fid) {
+  if (fid === null || fid === undefined) return null;
+  
+  // Если это строка с префиксом "V" или "v", извлекаем число
+  if (typeof fid === 'string') {
+    const trimmed = fid.trim();
+    if (trimmed.length > 1 && (trimmed[0] === 'V' || trimmed[0] === 'v')) {
+      const numericPart = trimmed.substring(1);
+      const num = parseInt(numericPart, 10);
+      return isNaN(num) ? null : num;
+    }
+  }
+  
+  // Если это число (включая отрицательные для обратной совместимости), возвращаем как есть
+  const numFid = Number(fid);
+  return isNaN(numFid) ? null : numFid;
 }
 
 // Генерация виртуального FID на основе адреса кошелька
@@ -26,11 +58,11 @@ export function getVirtualFidFromAddress(address) {
     return ((hash << 5) - hash) + char.charCodeAt(0);
   }, 0);
   
-  // Генерируем FID на основе адреса (от 10000 до 99999)
-  // Это соответствует старой логике и дает положительные FID
-  const fid = VIRTUAL_FID_MIN + Math.abs(addressHash % VIRTUAL_FID_RANGE);
+  // Генерируем числовой FID на основе адреса (от 10000 до 99999)
+  const numericFid = VIRTUAL_FID_MIN + Math.abs(addressHash % VIRTUAL_FID_RANGE);
   
-  return fid;
+  // Возвращаем строковый FID с префиксом "V"
+  return `V${numericFid}`;
 }
 
 // Mock режим для операций ЧТЕНИЯ (лидерборд, поиск пользователей и т.п.)
@@ -80,11 +112,12 @@ function isMock() {
 export async function getUserByAddress(address) {
   // Для чтения профиля по адресу достаточно API-ключа, signer не обязателен
   if (isMockForRead()) {
-    // Используем единую функцию для генерации виртуального FID
+    // Используем единую функцию для генерации виртуального FID (возвращает строку с префиксом "V")
     const fid = getVirtualFidFromAddress(address);
     
-    // Генерируем уникальное имя пользователя на основе FID
-    const usernameSuffix = fid % 10000;
+    // Извлекаем числовую часть для генерации username
+    const numericFid = extractNumericFidFromVirtual(fid) || 0;
+    const usernameSuffix = numericFid % 10000;
     const username = `user${usernameSuffix}`;
     
     // Генерируем display name
@@ -96,7 +129,7 @@ export async function getUserByAddress(address) {
     return {
       schemaVersion: "1.0.0",
       user: {
-        fid: fid,
+        fid: fid, // Сохраняем строковый FID с префиксом "V"
         username: username,
         display_name: displayName,
         pfp_url: pfpUrl,
@@ -156,19 +189,32 @@ export async function getUsersByFids(fids) {
 
   try {
     // Разделяем FID на реальные и виртуальные (используем isVirtualFid для проверки)
-    const normalizedFids = fids.map(fid => Number(fid)).filter(fid => !isNaN(fid));
-    const realFids = normalizedFids.filter(fid => !isVirtualFid(fid));
-    const virtualFids = normalizedFids.filter(fid => isVirtualFid(fid));
+    // НЕ конвертируем в числа перед проверкой, чтобы сохранить строковые виртуальные FID
+    const realFids = [];
+    const virtualFids = [];
+    
+    fids.forEach(fid => {
+      if (isVirtualFid(fid)) {
+        virtualFids.push(fid);
+      } else {
+        // Для реальных FID конвертируем в число
+        const numFid = Number(fid);
+        if (!isNaN(numFid) && numFid > 0) {
+          realFids.push(numFid);
+        }
+      }
+    });
     
     // Создаем Map для виртуальных FID (генерируем моковые данные)
     const virtualUsersMap = new Map();
     virtualFids.forEach(fid => {
-      // Для виртуальных FID используем последние 4 цифры для username
-      const fidHash = fid % 10000;
+      // Извлекаем числовую часть для username
+      const numericFid = extractNumericFidFromVirtual(fid) || 0;
+      const fidHash = numericFid % 10000;
       virtualUsersMap.set(fid, {
         schemaVersion: "1.0.0",
         user: {
-          fid: fid,
+          fid: fid, // Сохраняем оригинальный строковый FID
           username: `user${fidHash}`,
           display_name: `User ${fidHash}`,
           pfp_url: "/assets/images/hero.jpg"
@@ -238,10 +284,55 @@ export async function getUsersByFids(fids) {
     }
     
     // Объединяем карты реальных и виртуальных пользователей
-    const allUsersMap = new Map([...realUsersMap, ...virtualUsersMap]);
+    // Для виртуальных FID используем оригинальный ключ (может быть строкой)
+    // Для реальных FID используем числовой ключ
+    const allUsersMap = new Map();
+    
+    // Добавляем реальных пользователей (ключ - число)
+    realUsersMap.forEach((value, key) => {
+      allUsersMap.set(key, value);
+      allUsersMap.set(String(key), value); // Также добавляем строковый ключ для совместимости
+    });
+    
+    // Добавляем виртуальных пользователей (ключ - оригинальный FID, может быть строкой)
+    virtualUsersMap.forEach((value, key) => {
+      allUsersMap.set(key, value);
+      // Также добавляем числовой ключ для совместимости
+      const numericKey = extractNumericFidFromVirtual(key);
+      if (numericKey !== null) {
+        allUsersMap.set(numericKey, value);
+        allUsersMap.set(String(numericKey), value);
+      }
+    });
     
     // Возвращаем данные в том же порядке, что и запрошенные FID
-    return normalizedFids.map(fid => allUsersMap.get(Number(fid)) || null);
+    return fids.map(fid => {
+      // Пробуем найти по оригинальному FID
+      let result = allUsersMap.get(fid);
+      if (result) return result;
+      
+      // Пробуем найти по числовому ключу
+      const numFid = Number(fid);
+      if (!isNaN(numFid)) {
+        result = allUsersMap.get(numFid);
+        if (result) return result;
+        result = allUsersMap.get(String(numFid));
+        if (result) return result;
+      }
+      
+      // Пробуем найти по извлеченному числовому ключу (для виртуальных)
+      if (isVirtualFid(fid)) {
+        const numericKey = extractNumericFidFromVirtual(fid);
+        if (numericKey !== null) {
+          result = allUsersMap.get(numericKey);
+          if (result) return result;
+          result = allUsersMap.get(String(numericKey));
+          if (result) return result;
+        }
+      }
+      
+      return null;
+    });
     
     if (typeof window !== 'undefined' && window.addDebugLog) {
       window.addDebugLog(`⚠️ [getUsersByFids] API не вернул массив users`, {
@@ -299,29 +390,31 @@ export async function getUsersByFids(fids) {
 
 // Получить профиль пользователя по FID (для отображения информации о противнике)
 export async function getUserByFid(fid) {
-  // Нормализуем FID к числу
-  const normalizedFid = Number(fid);
-  
   // Проверяем виртуальные FID ПЕРВЫМ, чтобы не отправлять их в API
-  if (isVirtualFid(normalizedFid)) {
+  if (isVirtualFid(fid)) {
     // Генерируем моковые данные для виртуального FID
-    const fidHash = normalizedFid % 10000;
+    const numericFid = extractNumericFidFromVirtual(fid) || 0;
+    const fidHash = numericFid % 10000;
     if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`🔷 [getUserByFid] Виртуальный FID ${normalizedFid}, генерируем моковые данные`, {
-        fid: normalizedFid,
+      window.addDebugLog(`🔷 [getUserByFid] Виртуальный FID ${fid}, генерируем моковые данные`, {
+        fid: fid,
+        numericFid: numericFid,
         fidHash: fidHash
       });
     }
     return {
       schemaVersion: "1.0.0",
       user: {
-        fid: normalizedFid,
+        fid: fid, // Сохраняем оригинальный FID (может быть строкой)
         username: `user${fidHash}`,
         display_name: `User ${fidHash}`,
         pfp_url: "/assets/images/hero.jpg"
       }
     };
   }
+  
+  // Нормализуем FID к числу для реальных FID
+  const normalizedFid = Number(fid);
   
   // Проверяем на невалидные FID
   if (isNaN(normalizedFid) || normalizedFid <= 0) {

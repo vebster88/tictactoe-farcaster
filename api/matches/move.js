@@ -1,5 +1,6 @@
 import { getMatch, saveMatch, recordLeaderboardOutcomeForMatch } from "../../lib/matches/kv-helper.js";
 import { MATCH_STATUS, TURN_TIMEOUT_MS } from "../../lib/matches/schema.js";
+import { normalizeFidToNumber } from "../../src/utils/normalize.js";
 
 // Game logic (copied from src/game for serverless functions)
 function cloneState(state) {
@@ -76,10 +77,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "playerFid is required" });
     }
 
-    const normalizedPlayerFid = typeof playerFid === "string" ? parseInt(playerFid, 10) : playerFid;
+    // Normalize FID to number for consistency (handles virtual FIDs with "V" prefix)
+    const normalizedPlayerFid = normalizeFidToNumber(playerFid);
 
-    if (Number.isNaN(normalizedPlayerFid)) {
-      return res.status(400).json({ error: "playerFid must be a valid number" });
+    if (normalizedPlayerFid === null) {
+      return res.status(400).json({ error: "playerFid must be a valid FID" });
     }
 
     if (cellIndex === undefined || cellIndex === null || cellIndex < 0 || cellIndex > 8) {
@@ -101,8 +103,8 @@ export default async function handler(req, res) {
     }
 
     // Determine which player is making the move
-    const normalizedPlayer1Fid = typeof match.player1Fid === "string" ? parseInt(match.player1Fid, 10) : match.player1Fid;
-    const normalizedPlayer2Fid = typeof match.player2Fid === "string" ? parseInt(match.player2Fid, 10) : match.player2Fid;
+    const normalizedPlayer1Fid = normalizeFidToNumber(match.player1Fid);
+    const normalizedPlayer2Fid = normalizeFidToNumber(match.player2Fid);
     const isPlayer1 = normalizedPlayer1Fid === normalizedPlayerFid;
     const isPlayer2 = normalizedPlayer2Fid === normalizedPlayerFid;
 

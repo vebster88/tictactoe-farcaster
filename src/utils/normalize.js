@@ -2,6 +2,9 @@
  * Utility functions for normalizing values across the application
  */
 
+// Импортируем функции для работы с виртуальными FID
+import { isVirtualFid, extractNumericFidFromVirtual } from "../farcaster/client.js";
+
 /**
  * Normalize FID to a number (for database operations)
  * @param {string|number|null|undefined} fid - FID value to normalize
@@ -11,6 +14,12 @@ export function normalizeFidToNumber(fid) {
   if (fid === null || fid === undefined) {
     return null;
   }
+  
+  // Если это виртуальный FID (строка с префиксом), извлекаем число
+  if (isVirtualFid(fid)) {
+    return extractNumericFidFromVirtual(fid);
+  }
+  
   const normalized = typeof fid === "string" ? parseInt(fid, 10) : fid;
   return Number.isNaN(normalized) ? null : normalized;
 }
