@@ -629,30 +629,35 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images: запрашиваем изображение точно в нужном размере
-      // Проблема: браузер размывает изображения при масштабировании вниз
-      // Решение: запросить изображение точно в размере отображения (или 2x для retina)
-      // чтобы браузеру не нужно было масштабировать
+      // Для Cloudflare Images: параметры не работают с трансформациями в пути (rectcrop3, rectcontain2)
+      // Проблема: браузер размывает изображения при масштабировании вниз (scaleDownRatio 15-40x)
+      // Решение: используем исходные URL и улучшаем CSS для лучшего качества масштабирования
+      // Исходные изображения качественные (видно при приближении), проблема только в CSS масштабировании
       let optimizedAvatarUrl = avatarUrl;
+      
+      // Попробуем использовать srcset для разных размеров (если браузер поддерживает)
+      // Это позволит браузеру выбрать оптимальный размер изображения
+      const displaySizeNum = parseInt(avatarSize);
+      const pixelRatio = window.devicePixelRatio || 1;
+      const srcsetSizes = [];
       if (avatarUrl.includes('imagedelivery.net') && !avatarUrl.includes('?')) {
-        const displaySizeNum = parseInt(avatarSize);
-        // Определяем pixel ratio для retina дисплеев
-        const pixelRatio = window.devicePixelRatio || 1;
-        // Запрашиваем изображение точно в размере отображения с учетом pixel ratio
-        // Это минимизирует необходимость масштабирования браузером
-        const requestedSize = Math.ceil(displaySizeNum * pixelRatio);
-        // Пробуем добавить параметры размера - возможно, они сработают с трансформациями
-        optimizedAvatarUrl = `${avatarUrl}?width=${requestedSize}&height=${requestedSize}&fit=crop`;
+        // Генерируем srcset для разных размеров (1x, 1.5x, 2x, 3x)
+        for (let ratio = 1; ratio <= 3; ratio += 0.5) {
+          const size = Math.ceil(displaySizeNum * ratio);
+          srcsetSizes.push(`${avatarUrl}?width=${size}&height=${size}&fit=crop ${ratio}x`);
+        }
       }
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
-      // Используем CSS для контроля качества масштабирования
-      // Проблема: браузер размывает изображения при масштабировании вниз
-      // Решение: использовать image-rendering для контроля алгоритма интерполяции
-      // crisp-edges или pixelated дают более четкие края, но могут быть слишком резкими
-      // -webkit-optimize-contrast - хороший баланс между четкостью и плавностью
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;`;
+      // Используем CSS для улучшения качества масштабирования
+      // Проблема: браузер размывает изображения при масштабировании вниз (scaleDownRatio 15-40x)
+      // Решение: комбинация CSS свойств для максимальной четкости
+      // - image-rendering: crisp-edges - четкие края (лучше для фотографий при сильном масштабировании)
+      // - transform: translateZ(0) - GPU ускорение для лучшего рендеринга
+      // - will-change: transform - подсказка браузеру для оптимизации
+      // - filter: contrast(1.1) - небольшое увеличение контраста для компенсации размытия
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; transform: translateZ(0); will-change: transform; filter: contrast(1.1) saturate(1.05);`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
@@ -818,6 +823,12 @@ export function renderLeaderboard(leaderboard, container) {
       // 3. Добавляем в DOM
       // 4. Устанавливаем src (это запускает загрузку)
       playerDiv.appendChild(avatarImg);
+      
+      // Устанавливаем srcset для разных размеров (если доступен)
+      if (srcsetSizes.length > 0) {
+        avatarImg.srcset = srcsetSizes.join(', ');
+        avatarImg.sizes = `${avatarSize}`;
+      }
       
       // Устанавливаем src СРАЗУ после добавления в DOM
       // Не используем requestAnimationFrame, так как элемент уже в DOM и готов к загрузке
