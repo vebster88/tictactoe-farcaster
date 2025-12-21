@@ -2,8 +2,47 @@
  * Utility functions for normalizing values across the application
  */
 
-// Импортируем функции для работы с виртуальными FID
-import { isVirtualFid, extractNumericFidFromVirtual } from "../farcaster/client.js";
+// ВАЖНО: Дублируем логику проверки виртуальных FID здесь, чтобы избежать циклических зависимостей
+// (client.js может импортировать normalize.js через другие модули)
+// Эта логика должна совпадать с client.js
+
+function isVirtualFidLocal(fid) {
+  if (fid === null || fid === undefined) return false;
+  
+  // Если это строка с префиксом "V" или "v" - это виртуальный FID
+  if (typeof fid === 'string') {
+    const trimmed = fid.trim();
+    if (trimmed.length > 1 && (trimmed[0] === 'V' || trimmed[0] === 'v')) {
+      return true;
+    }
+  }
+  
+  // Отрицательные FID - это старые виртуальные FID (для обратной совместимости)
+  const numFid = Number(fid);
+  if (!isNaN(numFid) && numFid < 0) {
+    return true;
+  }
+  
+  return false;
+}
+
+function extractNumericFidFromVirtualLocal(fid) {
+  if (fid === null || fid === undefined) return null;
+  
+  // Если это строка с префиксом "V" или "v", извлекаем число
+  if (typeof fid === 'string') {
+    const trimmed = fid.trim();
+    if (trimmed.length > 1 && (trimmed[0] === 'V' || trimmed[0] === 'v')) {
+      const numericPart = trimmed.substring(1);
+      const num = parseInt(numericPart, 10);
+      return isNaN(num) ? null : num;
+    }
+  }
+  
+  // Если это число (включая отрицательные для обратной совместимости), возвращаем как есть
+  const numFid = Number(fid);
+  return isNaN(numFid) ? null : numFid;
+}
 
 /**
  * Normalize FID to a number (for database operations)
@@ -12,7 +51,8 @@ import { isVirtualFid, extractNumericFidFromVirtual } from "../farcaster/client.
  */
 export function normalizeFidToNumber(fid) {
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'normalize.js:14',message:'normalizeFidToNumber: entry',data:{fid:fid,fidType:typeof fid,isVirtualFidAvailable:typeof isVirtualFid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
+  console.error("[DEBUG] normalizeFidToNumber entry:", {fid, fidType: typeof fid});
+  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'normalize.js:14',message:'normalizeFidToNumber: entry',data:{fid:fid,fidType:typeof fid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
   // #endregion
   
   if (fid === null || fid === undefined) {
@@ -20,9 +60,10 @@ export function normalizeFidToNumber(fid) {
   }
   
   // Если это виртуальный FID (строка с префиксом), извлекаем число
-  if (isVirtualFid(fid)) {
-    const result = extractNumericFidFromVirtual(fid);
+  if (isVirtualFidLocal(fid)) {
+    const result = extractNumericFidFromVirtualLocal(fid);
     // #region agent log
+    console.error("[DEBUG] normalizeFidToNumber virtual:", {fid, result});
     fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'normalize.js:22',message:'normalizeFidToNumber: virtual fid',data:{fid:fid,result:result},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     return result;
@@ -32,6 +73,7 @@ export function normalizeFidToNumber(fid) {
   const result = Number.isNaN(normalized) ? null : normalized;
   
   // #region agent log
+  console.error("[DEBUG] normalizeFidToNumber result:", {fid, normalized, result});
   fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'normalize.js:28',message:'normalizeFidToNumber: result',data:{fid:fid,normalized:normalized,result:result},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
   
