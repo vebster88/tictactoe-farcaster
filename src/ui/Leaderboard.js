@@ -630,21 +630,28 @@ export function renderLeaderboard(leaderboard, container) {
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
       // Для Cloudflare Images добавляем параметры размера для лучшего качества
-      // Запрашиваем изображение в 2x разрешении для retina дисплеев
+      // Запрашиваем изображение в 4x разрешении для максимального качества
       let optimizedAvatarUrl = avatarUrl;
       if (avatarUrl.includes('imagedelivery.net')) {
         const displaySizeNum = parseInt(avatarSize);
-        const requestedSize = displaySizeNum * 2; // 2x для retina
+        const requestedSize = displaySizeNum * 4; // 4x для максимального качества
         // Добавляем параметры размера, если их еще нет
+        // ВАЖНО: Cloudflare Images может игнорировать параметры при наличии трансформаций в пути
+        // Попробуем добавить параметры после трансформации
         if (!avatarUrl.includes('?')) {
-          optimizedAvatarUrl = `${avatarUrl}?width=${requestedSize}&height=${requestedSize}&fit=crop&quality=85`;
+          // Для Cloudflare Images с трансформациями (rectcrop3, rectcontain2) параметры добавляются после трансформации
+          optimizedAvatarUrl = `${avatarUrl}?width=${requestedSize}&height=${requestedSize}&fit=crop&quality=95`;
         }
       }
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
       // Добавляем image-rendering для лучшего качества при масштабировании
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;`;
+      // Используем -webkit-optimize-contrast для лучшего баланса между четкостью и плавностью
+      // auto - браузер выбирает алгоритм (может размывать)
+      // crisp-edges - четкие края (может быть слишком резким)
+      // -webkit-optimize-contrast - оптимизация контраста (лучший баланс)
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: auto;`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
@@ -662,12 +669,11 @@ export function renderLeaderboard(leaderboard, container) {
         avatarImg.removeAttribute('crossorigin');
       }
       
-      // ВАЖНО: Сначала добавляем элемент в DOM, потом устанавливаем обработчики и src
-      // Это гарантирует, что браузер правильно обработает загрузку
-      playerDiv.appendChild(avatarImg);
-      
-      // Устанавливаем loading после добавления в DOM
+      // Устанавливаем loading до добавления в DOM
       avatarImg.loading = "lazy";
+      
+      // ВАЖНО: Устанавливаем обработчики ДО добавления в DOM и ДО установки src
+      // Это гарантирует, что все обработчики будут готовы к моменту начала загрузки
       
       // Обработка успешной загрузки
       avatarImg.onload = () => {
@@ -695,6 +701,11 @@ export function renderLeaderboard(leaderboard, container) {
           };
         }
         
+        // Проверяем, применились ли параметры Cloudflare Images
+        const expectedWidth = cloudflareParams?.width ? parseInt(cloudflareParams.width) : null;
+        const actualWidth = avatarImg.naturalWidth;
+        const paramsApplied = expectedWidth && Math.abs(actualWidth - expectedWidth) < 10; // Допуск 10px
+        
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
             originalUrl: avatarUrl,
@@ -710,7 +721,9 @@ export function renderLeaderboard(leaderboard, container) {
             hasUrlParams: hasUrlParams,
             urlFormat: urlFormat,
             cloudflareParams: cloudflareParams,
-            note: isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'
+            expectedWidth: expectedWidth,
+            paramsApplied: paramsApplied,
+            note: paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились - возможно, трансформации в пути игнорируют query параметры' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество')
           });
         }
       };
@@ -790,19 +803,26 @@ export function renderLeaderboard(leaderboard, container) {
         });
       };
       
-      // Устанавливаем src ПОСЛЕ добавления в DOM и регистрации обработчиков
-      // Используем requestAnimationFrame, чтобы гарантировать, что элемент в DOM
-      requestAnimationFrame(() => {
-        avatarImg.src = optimizedAvatarUrl;
-        
-        if (typeof window !== 'undefined' && window.addDebugLog) {
-          window.addDebugLog(`🔄 Начало загрузки аватара для ${playerName}`, { 
-            originalUrl: avatarUrl,
-            optimizedUrl: optimizedAvatarUrl,
-            crossOrigin: avatarImg.crossOrigin || 'not set'
-          });
-        }
-      });
+      // ВАЖНО: Правильный порядок операций для оптимальной загрузки изображения:
+      // 1. Все атрибуты установлены (style, crossOrigin, loading)
+      // 2. Все обработчики установлены (onload, onerror)
+      // 3. Добавляем в DOM
+      // 4. Устанавливаем src (это запускает загрузку)
+      playerDiv.appendChild(avatarImg);
+      
+      // Устанавливаем src СРАЗУ после добавления в DOM
+      // Не используем requestAnimationFrame, так как элемент уже в DOM и готов к загрузке
+      avatarImg.src = optimizedAvatarUrl;
+      
+      if (typeof window !== 'undefined' && window.addDebugLog) {
+        window.addDebugLog(`🔄 Начало загрузки аватара для ${playerName}`, { 
+          originalUrl: avatarUrl,
+          optimizedUrl: optimizedAvatarUrl,
+          crossOrigin: avatarImg.crossOrigin || 'not set',
+          inDOM: avatarImg.isConnected,
+          handlersReady: !!avatarImg.onload && !!avatarImg.onerror
+        });
+      }
     }
     
     const usernameSpan = document.createElement("span");
