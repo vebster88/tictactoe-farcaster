@@ -629,22 +629,35 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images: параметры не работают с трансформациями в пути (rectcrop3, rectcontain2)
+      // Для Cloudflare Images: добавляем параметры через URL API для оптимизации на CDN
       // Проблема: браузер размывает изображения при масштабировании вниз (scaleDownRatio 10-27x)
-      // Решение: используем исходные URL и максимально агрессивный CSS для лучшего качества масштабирования
-      // Исходные изображения качественные (видно при приближении), проблема только в CSS масштабировании
+      // Решение: запросить оптимизированное изображение с CDN (128px макс) вместо исходного большого
       let optimizedAvatarUrl = avatarUrl;
+      if (avatarUrl.includes('imagedelivery.net')) {
+        try {
+          const displaySize = parseInt(avatarSize);
+          const targetSize = Math.min(128, displaySize * 4); // 128px макс, но с запасом под Retina
+          
+          // Используем URL API для правильного добавления параметров
+          const url = new URL(avatarUrl);
+          // Добавляем параметры: width, height, fit, quality
+          url.searchParams.set('width', targetSize.toString());
+          url.searchParams.set('height', targetSize.toString());
+          url.searchParams.set('fit', 'crop'); // квадрат без искажений
+          url.searchParams.set('quality', '85'); // баланс качество/размер
+          optimizedAvatarUrl = url.toString();
+        } catch (e) {
+          // Если URL парсинг не удался, используем исходный URL
+          console.warn('[Leaderboard] Failed to parse Cloudflare Images URL:', avatarUrl, e);
+        }
+      }
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
-      // Используем максимально агрессивный CSS для улучшения качества масштабирования
-      // Проблема: браузер размывает изображения при масштабировании вниз (scaleDownRatio 10-27x)
-      // Решение: комбинация CSS свойств для максимальной четкости
-      // - image-rendering: crisp-edges - четкие края (лучше для фотографий при сильном масштабировании)
-      // - transform: translateZ(0) - GPU ускорение для лучшего рендеринга
-      // - will-change: transform - подсказка браузеру для оптимизации
-      // - filter: contrast(1.2) saturate(1.15) - увеличение контраста и насыщенности для компенсации размытия
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; transform: translateZ(0); will-change: transform; filter: contrast(1.2) saturate(1.15);`;
+      // CSS для фото: убираем crisp-edges (портит фото при даунскейле)
+      // crisp-edges хорош для пиксель-арта, но создает артефакты на фото при сильном масштабировании
+      // Используем сглаживание для лучшего качества фото
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: auto; image-rendering: -webkit-optimize-contrast; image-rendering: high-quality;`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
@@ -724,7 +737,9 @@ export function renderLeaderboard(leaderboard, container) {
             urlChanged: urlChanged,
             pixelRatio: pixelRatio,
             scaleDownRatio: scaleDownRatio.toFixed(2),
-            note: scaleDownRatio > 3 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'))
+            newScaleDownRatio: scaleDownRatio.toFixed(1), // для диагностики после Cloudflare параметров
+            cloudflareParamsApplied: isCloudflareImages && hasUrlParams ? new URL(optimizedAvatarUrl).searchParams.toString() : null,
+            note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз (должно быть ~3-4x после Cloudflare параметров)' : (paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'))
           });
         }
       };
