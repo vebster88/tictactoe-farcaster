@@ -229,15 +229,6 @@ export async function getUsersByFids(fids) {
       const fidsString = realFids.join(',');
       const params = { fids: fidsString };
       
-      if (typeof window !== 'undefined' && window.addDebugLog) {
-        window.addDebugLog(`🔍 [getUsersByFids] Batch запрос для ${realFids.length} реальных FID`, {
-          realFids: realFids,
-          virtualFids: virtualFids,
-          fidsString: fidsString,
-          hasApiKey: !!NEYNAR_API_KEY
-        });
-      }
-      
       console.log('[getUsersByFids] Запрос к Neynar API:', {
         url,
         params,
@@ -259,13 +250,6 @@ export async function getUsersByFids(fids) {
       });
       
       if (response.data?.users && Array.isArray(response.data.users)) {
-        if (typeof window !== 'undefined' && window.addDebugLog) {
-          window.addDebugLog(`✅ [getUsersByFids] Получено ${response.data.users.length} пользователей из ${realFids.length} запрошенных`, {
-            requestedFids: realFids,
-            receivedFids: response.data.users.map(u => u.fid)
-          });
-        }
-        
         // Создаем Map для быстрого поиска по FID
         response.data.users.forEach(user => {
           realUsersMap.set(Number(user.fid), {
@@ -276,11 +260,6 @@ export async function getUsersByFids(fids) {
       }
     } else {
       // Если только виртуальные FID, просто возвращаем их данные
-      if (typeof window !== 'undefined' && window.addDebugLog) {
-        window.addDebugLog(`🔷 [getUsersByFids] Только виртуальные FID, пропускаем запрос к API`, {
-          virtualFids: virtualFids
-        });
-      }
     }
     
     // Объединяем карты реальных и виртуальных пользователей
@@ -338,12 +317,6 @@ export async function getUsersByFids(fids) {
       return null;
     });
     
-    if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`⚠️ [getUsersByFids] API не вернул массив users`, {
-        responseData: response.data
-      });
-    }
-    
     return fids.map(() => null);
   } catch (error) {
     console.error('[getUsersByFids] Ошибка при batch-запросе к Neynar API:', error);
@@ -361,13 +334,6 @@ export async function getUsersByFids(fids) {
       // Обработка ошибки 429 (Rate Limit)
       if (error.response.status === 429) {
         const retryAfter = error.response.headers['retry-after'] || 60;
-        if (typeof window !== 'undefined' && window.addDebugLog) {
-          window.addDebugLog(`⚠️ [getUsersByFids] Rate limit exceeded, retry after ${retryAfter}s`, {
-            fids: fids,
-            retryAfter: retryAfter,
-            ...errorDetails
-          });
-        }
       }
     } else if (error.request) {
       errorDetails = {
@@ -381,12 +347,6 @@ export async function getUsersByFids(fids) {
       };
     }
     
-    if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`❌ [getUsersByFids] Ошибка для ${fids.length} FID`, {
-        error: error.message,
-        ...errorDetails
-      });
-    }
     
     return fids.map(() => null);
   }
@@ -399,13 +359,6 @@ export async function getUserByFid(fid) {
     // Генерируем моковые данные для виртуального FID
     const numericFid = extractNumericFidFromVirtual(fid) || 0;
     const fidHash = numericFid % 10000;
-    if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`🔷 [getUserByFid] Виртуальный FID ${fid}, генерируем моковые данные`, {
-        fid: fid,
-        numericFid: numericFid,
-        fidHash: fidHash
-      });
-    }
     return {
       schemaVersion: "1.0.0",
       user: {
@@ -427,14 +380,6 @@ export async function getUserByFid(fid) {
   
   // Логируем начало запроса
   const mockForRead = isMockForRead();
-  if (typeof window !== 'undefined' && window.addDebugLog) {
-    window.addDebugLog(`🔍 [getUserByFid] Начало запроса для FID ${normalizedFid}`, {
-      isMockForRead: mockForRead,
-      hasApiKey: !!NEYNAR_API_KEY,
-      apiKeyPreview: NEYNAR_API_KEY ? "***" + NEYNAR_API_KEY.slice(-4) : "undefined"
-    });
-  }
-  
   // Для чтения профиля по FID достаточно API-ключа, signer не обязателен
   if (mockForRead) {
     // В mock режиме генерируем данные на основе FID
@@ -456,12 +401,6 @@ export async function getUserByFid(fid) {
   // Проверяем наличие API ключа
   if (!NEYNAR_API_KEY || NEYNAR_API_KEY === "your_neynar_api_key_here") {
     console.warn('[getUserByFid] NEYNAR_API_KEY не установлен или имеет значение по умолчанию');
-    if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`⚠️ [getUserByFid] API ключ не установлен для FID ${normalizedFid}`, {
-        hasApiKey: !!NEYNAR_API_KEY,
-        apiKeyValue: NEYNAR_API_KEY || "undefined"
-      });
-    }
     return null;
   }
 
@@ -542,14 +481,6 @@ export async function getUserByFid(fid) {
         message: error.message
       };
       console.error('[getUserByFid] Ошибка при настройке запроса:', errorDetails);
-    }
-    
-    // Логируем в debug панель, если доступна
-    if (typeof window !== 'undefined' && window.addDebugLog) {
-      window.addDebugLog(`❌ [getUserByFid] Ошибка для FID ${normalizedFid}`, {
-        error: error.message,
-        ...errorDetails
-      });
     }
     
     return null;

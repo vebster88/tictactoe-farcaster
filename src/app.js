@@ -1822,17 +1822,6 @@ function refreshUserLabel() {
   const userLabel = document.getElementById("user-label");
   const userAvatar = document.getElementById("user-avatar");
 
-  if (DEBUG_ENABLED) {
-    addDebugLog('👤 refreshUserLabel state', {
-      isAuthorized,
-      isFarcasterUser,
-      hasSession: !!s,
-      hasFarcaster: !!s?.farcaster,
-      farcasterKeys: s?.farcaster ? Object.keys(s.farcaster) : [],
-      hasUserAvatarElement: !!userAvatar
-    });
-  }
-  
   // Проверяем, что userLabel существует
   if (!userLabel) {
     console.warn("user-label элемент не найден в DOM");
@@ -1898,13 +1887,6 @@ function refreshUserLabel() {
         // В сессии сохраняется как pfp_url (snake_case), но SDK возвращает pfpUrl (camelCase)
         const rawPfpUrl = s.farcaster?.pfp_url || s.farcaster?.pfpUrl || s.farcaster?.pfp || null;
 
-        if (DEBUG_ENABLED) {
-          addDebugLog('🧩 Данные для аватара из сессии (Farcaster)', {
-            rawPfpUrl,
-            farcaster: s.farcaster || null
-          });
-        }
-
         if (rawPfpUrl && typeof rawPfpUrl === 'string' && rawPfpUrl.trim().length > 0) {
         // Нормализация URL
           let normalizedUrl = rawPfpUrl.trim();
@@ -1943,58 +1925,14 @@ function refreshUserLabel() {
             }
             userAvatar.loading = "lazy";
 
-            // Диагностика качества аватара
-            userAvatar.onload = () => {
-              const displaySize = 34; // Размер user-avatar из CSS
-              const scaleFactor = userAvatar.naturalWidth / displaySize;
-              const isLowQuality = scaleFactor < 1.5;
-              const scaleDownRatio = userAvatar.naturalWidth / displaySize;
-              
-              if (DEBUG_ENABLED) {
-                addDebugLog('✅ Аватар пользователя загружен', { 
-                  originalUrl: normalizedUrl,
-                  optimizedUrl: optimizedUrl,
-                  naturalWidth: userAvatar.naturalWidth,
-                  naturalHeight: userAvatar.naturalHeight,
-                  displaySize: displaySize,
-                  scaleFactor: scaleFactor.toFixed(2),
-                  scaleDownRatio: scaleDownRatio.toFixed(2),
-                  isLowQuality: isLowQuality,
-                  note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество')
-                });
-              }
-            };
-
-            if (DEBUG_ENABLED) {
-              addDebugLog('✅ Аватар предзагружен и установлен', { 
-                url: normalizedUrl
-              });
-            }
           };
 
           testImg.onerror = () => {
             userAvatar.style.display = "none";
-            if (DEBUG_ENABLED) {
-              addDebugLog('❌ Не удалось загрузить аватар', { 
-                url: normalizedUrl
-              });
-            }
           };
-
-          if (DEBUG_ENABLED) {
-            addDebugLog('🔄 Пытаемся загрузить аватар', { 
-              url: normalizedUrl
-            });
-          }
 
           testImg.src = normalizedUrl;
         } else {
-          if (DEBUG_ENABLED) {
-            addDebugLog('⚠️ Аватар не найден в сессии (нет pfpUrl)', { 
-              hasFarcaster: !!s.farcaster,
-              farcasterKeys: s.farcaster ? Object.keys(s.farcaster) : []
-            });
-          }
           userAvatar.style.display = "none";
         }
       } else {
@@ -2006,9 +1944,6 @@ function refreshUserLabel() {
         userAvatar.crossOrigin = "anonymous";
         userAvatar.loading = "lazy";
 
-        if (DEBUG_ENABLED) {
-          addDebugLog('🖼️ Установлен дефолтный аватар для не-Farcaster пользователя', { url: defaultAvatar });
-        }
       }
     }
     
@@ -2913,25 +2848,8 @@ async function updateOpponentAvatar() {
         opponentAvatar.src = opponentAvatarCache.pfp_url;
         opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
         
-        // Диагностика качества аватара оппонента
         opponentAvatar.onload = () => {
-          const displaySize = 30; // Размер opponent-avatar из HTML
-          const scaleFactor = opponentAvatar.naturalWidth / displaySize;
-          const isLowQuality = scaleFactor < 1.5;
-          const scaleDownRatio = opponentAvatar.naturalWidth / displaySize;
-          
-          if (DEBUG_ENABLED) {
-            addDebugLog('✅ Аватар оппонента загружен', { 
-              url: opponentAvatarCache.pfp_url,
-              naturalWidth: opponentAvatar.naturalWidth,
-              naturalHeight: opponentAvatar.naturalHeight,
-              displaySize: displaySize,
-              scaleFactor: scaleFactor.toFixed(2),
-              scaleDownRatio: scaleDownRatio.toFixed(2),
-              isLowQuality: isLowQuality,
-              note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество')
-            });
-          }
+          // Аватар оппонента загружен
         };
         
         opponentAvatar.onerror = () => {
@@ -3829,11 +3747,6 @@ authBtn?.addEventListener("click", async () => {
       // Quick Auth может вернуть pfp_url (snake_case) или pfpUrl (camelCase)
       const pfpUrl = fullUserData.pfpUrl || fullUserData.pfp_url || fullUserData.pfp || fullUserData.profile_picture || null;
       
-      if (DEBUG_ENABLED && pfpUrl) {
-        addDebugLog('🖼️ Аватар найден', { pfpUrl, source: 'Quick Auth' });
-      } else if (DEBUG_ENABLED) {
-        addDebugLog('⚠️ Аватар не найден', { fullUserDataKeys: Object.keys(fullUserData) });
-      }
       
       const farcasterProfile = {
         fid: fullUserData.fid,

@@ -207,7 +207,6 @@ export async function loadLeaderboard() {
     await waitForRateLimit();
     
     // Делаем один batch-запрос для всех FID
-    addDebugLog(`🔍 Batch запрос для ${fids.length} FID: ${fids.join(', ')}`);
     const allUserData = await getUsersByFids(fids);
     
     // Создаем Map для быстрого поиска данных по FID
@@ -238,7 +237,6 @@ export async function loadLeaderboard() {
       
       // Проверяем, что данные получены
       if (!userData || !userData.user) {
-        addDebugLog(`⚠️ Данные пользователя не получены для FID ${entry.fid}`, { userData });
         // Если данных нет, считаем не-Farcaster пользователем
         const anonId = getAnonIdFromFid(entry.fid);
         return {
@@ -249,40 +247,13 @@ export async function loadLeaderboard() {
         };
       }
       
-      addDebugLog(`✅ Получены данные для FID ${entry.fid}`, {
-        hasUserData: !!userData,
-        hasUser: !!userData?.user,
-        userKeys: userData?.user ? Object.keys(userData.user) : [],
-        username: userData?.user?.username,
-        usernameType: typeof userData?.user?.username,
-        usernameValue: userData?.user?.username,
-        display_name: userData?.user?.display_name,
-        displayName: userData?.user?.displayName,
-        pfp_url: userData?.user?.pfp_url,
-        pfpUrl: userData?.user?.pfpUrl,
-        pfp: userData?.user?.pfp
-      });
-      
       // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
       const isMock = isMockData(userData, entry.fid);
-      
-      addDebugLog(`🔍 Проверка моковых данных для FID ${entry.fid}`, {
-        isMock,
-        pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
-        username: userData.user.username || null,
-        fid: entry.fid
-      });
       
       if (isMock) {
         // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
         const anonId = getAnonIdFromFid(entry.fid);
         const finalUsername = `user${anonId}`;
-        
-        addDebugLog(`🔷 Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
-          anonId,
-          fid: entry.fid,
-          reason: 'Моковые данные определены'
-        });
         
         return {
           ...entry,
@@ -304,15 +275,6 @@ export async function loadLeaderboard() {
       // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
       const finalUsername = username || `user${entry.fid}`;
       
-      if (!username) {
-        addDebugLog(`⚠️ Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
-          rawUsername: userData.user.username,
-          usernameType: typeof userData.user.username
-        });
-      } else {
-        addDebugLog(`✅ Username найден для Farcaster FID ${entry.fid}: ${username}`);
-      }
-      
       // Извлекаем pfp_url - проверяем все возможные варианты
       // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
       const pfp_url = userData?.user?.pfpUrl || 
@@ -326,12 +288,6 @@ export async function loadLeaderboard() {
       const display_name = userData?.user?.displayName || 
                           userData?.user?.display_name || 
                           null;
-      
-      addDebugLog(`📋 Итоговые данные для Farcaster FID ${entry.fid}`, {
-        finalUsername,
-        pfp_url,
-        display_name
-      });
       
       return {
         ...entry,
@@ -411,7 +367,6 @@ async function loadLeaderboardFallback() {
     await waitForRateLimit();
     
     // Делаем один batch-запрос для всех FID
-    addDebugLog(`🔍 Fallback: Batch запрос для ${fids.length} FID: ${fids.join(', ')}`);
     const allUserData = await getUsersByFids(fids);
     
     // Создаем Map для быстрого поиска данных по FID
@@ -442,7 +397,6 @@ async function loadLeaderboardFallback() {
       
       // Проверяем, что данные получены
       if (!userData || !userData.user) {
-        addDebugLog(`⚠️ Fallback: Данные пользователя не получены для FID ${entry.fid}`, { userData });
         // Если данных нет, считаем не-Farcaster пользователем
         const anonId = getAnonIdFromFid(entry.fid);
         return {
@@ -456,23 +410,10 @@ async function loadLeaderboardFallback() {
       // Определяем, являются ли данные моковыми (не-Farcaster пользователь)
       const isMock = isMockData(userData, entry.fid);
       
-      addDebugLog(`🔍 Fallback: Проверка моковых данных для FID ${entry.fid}`, {
-        isMock,
-        pfp_url: userData.user.pfpUrl || userData.user.pfp_url || userData.user.pfp || null,
-        username: userData.user.username || null,
-        fid: entry.fid
-      });
-      
       if (isMock) {
         // Не-Farcaster пользователь: используем @userXX где XX - стабильный anonId
         const anonId = getAnonIdFromFid(entry.fid);
         const finalUsername = `user${anonId}`;
-        
-        addDebugLog(`🔷 Fallback: Не-Farcaster пользователь FID ${entry.fid} - используем ${finalUsername}`, {
-          anonId,
-          fid: entry.fid,
-          reason: 'Моковые данные определены'
-        });
         
         return {
           ...entry,
@@ -493,14 +434,6 @@ async function loadLeaderboardFallback() {
       // Если username отсутствует, создаем его на основе FID (fallback для Farcaster)
       const finalUsername = username || `user${entry.fid}`;
       
-      if (!username) {
-        addDebugLog(`⚠️ Fallback: Username не найден для Farcaster FID ${entry.fid} - будет использован ${finalUsername}`, {
-          rawUsername: userData.user.username,
-          usernameType: typeof userData.user.username
-        });
-      } else {
-        addDebugLog(`✅ Fallback: Username найден для Farcaster FID ${entry.fid}: ${username}`);
-      }
       
       // Извлекаем pfp_url - проверяем все возможные варианты
       // ВАЖНО: Neynar API возвращает pfpUrl (camelCase), поэтому проверяем его ПЕРВЫМ
@@ -610,12 +543,6 @@ export function renderLeaderboard(leaderboard, container) {
     let avatarUrl = entry.pfp_url || null;
     if (avatarUrl && avatarUrl.startsWith('/')) {
       avatarUrl = window.location.origin + avatarUrl;
-      if (typeof window !== 'undefined' && window.addDebugLog) {
-        window.addDebugLog(`🔄 Нормализован URL аватара для ${playerName}`, { 
-          original: entry.pfp_url,
-          normalized: avatarUrl
-        });
-      }
     }
     
     // Функция для создания Canvas аватара с Retina поддержкой
@@ -660,27 +587,7 @@ export function renderLeaderboard(leaderboard, container) {
       );
       ctx.restore();
       
-      // Логируем для отладки
-      if (typeof window !== 'undefined' && window.addDebugLog) {
-        window.addDebugLog('✅ Canvas аватар создан', {
-          canvasPhysicalSize: `${canvas.width}x${canvas.height}`,
-          displaySize: size,
-          effectiveDPR: (canvas.width / size).toFixed(1),
-          sourceScaleDown: (img.naturalWidth / size).toFixed(1),
-          playerName: playerName
-        });
-      }
-      
       return canvas;
-    }
-    
-    // Логируем информацию об аватаре для отладки
-    if (typeof window !== 'undefined' && window.addDebugLog && avatarUrl) {
-      window.addDebugLog(`🖼️ Аватар для ${playerName}`, { 
-        url: avatarUrl,
-        fid: entry.fid,
-        username: entry.username
-      });
     }
     
     const rank = index + 1; // Номер в списке (начинается с 1)
@@ -754,17 +661,6 @@ export function renderLeaderboard(leaderboard, container) {
             // Заменяем img на canvas
             avatarImg.replaceWith(canvas);
             
-            if (typeof window !== 'undefined' && window.addDebugLog) {
-              window.addDebugLog(`✅ Canvas аватар применен для ${playerName}`, {
-                originalUrl: avatarUrl,
-                naturalWidth: avatarImg.naturalWidth,
-                naturalHeight: avatarImg.naturalHeight,
-                displaySize: displaySize,
-                scaleDownRatio: scaleDownRatio.toFixed(2),
-                canvasSize: `${canvas.width}x${canvas.height}`,
-                note: '✅ Canvas улучшает качество при сильном масштабировании'
-              });
-            }
             return; // Выходим, так как canvas уже заменен
           } catch (e) {
             console.warn('[Leaderboard] Failed to create canvas avatar:', e);
@@ -772,22 +668,6 @@ export function renderLeaderboard(leaderboard, container) {
           }
         }
         
-        if (typeof window !== 'undefined' && window.addDebugLog) {
-          window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
-            originalUrl: avatarUrl,
-            crossOrigin: avatarImg.crossOrigin || 'not set',
-            naturalWidth: avatarImg.naturalWidth,
-            naturalHeight: avatarImg.naturalHeight,
-            displaySize: displaySize,
-            scaleFactor: scaleFactor.toFixed(2),
-            isLowQuality: isLowQuality,
-            imageRendering: imageRendering,
-            isCloudflareImages: isCloudflareImages,
-            pixelRatio: pixelRatio,
-            scaleDownRatio: scaleDownRatio.toFixed(2),
-            note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество')
-          });
-        }
       };
       
       // Обработка ошибки загрузки с детальным логированием
@@ -796,63 +676,19 @@ export function renderLeaderboard(leaderboard, container) {
         if (avatarImg.complete && avatarImg.naturalWidth === 0) {
           // Изображение помечено как загруженное, но имеет нулевой размер - это ошибка
           
-          if (typeof window !== 'undefined' && window.addDebugLog) {
-            window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
-              url: avatarUrl,
-              fid: entry.fid || 'unknown',
-              username: entry.username,
-              crossOrigin: avatarImg.crossOrigin || 'not set',
-              isExternal: isExternalUrl,
-              isSameOrigin: isSameOrigin,
-              complete: avatarImg.complete,
-              naturalWidth: avatarImg.naturalWidth,
-              naturalHeight: avatarImg.naturalHeight,
-              errorType: 'Image load error - zero size',
-              note: 'Изображение помечено как загруженное, но имеет нулевой размер'
-            });
-          }
-          
           // Пробуем загрузить дефолтную аватарку
           const fallbackUrl = window.location.origin + "/assets/images/hero.jpg";
           avatarImg.onerror = null; // Убираем обработчик, чтобы избежать бесконечного цикла
           avatarImg.crossOrigin = "anonymous"; // Для локального файла можно использовать crossOrigin
           avatarImg.src = fallbackUrl;
-          
-          if (typeof window !== 'undefined' && window.addDebugLog) {
-            window.addDebugLog(`🔄 Пробуем загрузить fallback аватарку для ${playerName}`, { 
-              fallbackUrl: fallbackUrl
-            });
-          }
         } else {
           // Обычная ошибка загрузки
           
-          if (typeof window !== 'undefined' && window.addDebugLog) {
-            window.addDebugLog(`❌ Ошибка загрузки аватара для ${playerName}`, { 
-              url: avatarUrl,
-              fid: entry.fid || 'unknown',
-              username: entry.username,
-              crossOrigin: avatarImg.crossOrigin || 'not set',
-              isExternal: isExternalUrl,
-              isSameOrigin: isSameOrigin,
-              complete: avatarImg.complete,
-              naturalWidth: avatarImg.naturalWidth,
-              naturalHeight: avatarImg.naturalHeight,
-              errorType: 'Image load error',
-              note: 'Проверьте доступность URL и CORS настройки сервера'
-            });
-          }
-          
           // Пробуем загрузить дефолтную аватарку
           const fallbackUrl = window.location.origin + "/assets/images/hero.jpg";
           avatarImg.onerror = null; // Убираем обработчик, чтобы избежать бесконечного цикла
           avatarImg.crossOrigin = "anonymous"; // Для локального файла можно использовать crossOrigin
           avatarImg.src = fallbackUrl;
-          
-          if (typeof window !== 'undefined' && window.addDebugLog) {
-            window.addDebugLog(`🔄 Пробуем загрузить fallback аватарку для ${playerName}`, { 
-              fallbackUrl: fallbackUrl
-            });
-          }
         }
         
         console.warn(`[Leaderboard] Failed to load avatar for ${playerName}:`, avatarUrl, {
@@ -876,15 +712,6 @@ export function renderLeaderboard(leaderboard, container) {
       // Не используем requestAnimationFrame, так как элемент уже в DOM и готов к загрузке
       avatarImg.src = avatarUrl;
       
-      if (typeof window !== 'undefined' && window.addDebugLog) {
-        window.addDebugLog(`🔄 Начало загрузки аватара для ${playerName}`, { 
-          originalUrl: avatarUrl,
-          crossOrigin: avatarImg.crossOrigin || 'not set',
-          inDOM: avatarImg.isConnected,
-          handlersReady: !!avatarImg.onload && !!avatarImg.onerror,
-          isCloudflareImages: isCloudflareImages
-        });
-      }
     }
     
     const usernameSpan = document.createElement("span");
