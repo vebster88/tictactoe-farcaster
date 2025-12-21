@@ -1905,6 +1905,25 @@ function refreshUserLabel() {
             }
             userAvatar.loading = "lazy";
 
+            // Диагностика качества аватара
+            userAvatar.onload = () => {
+              const displaySize = 34; // Размер user-avatar из CSS
+              const scaleFactor = userAvatar.naturalWidth / displaySize;
+              const isLowQuality = scaleFactor < 1.5;
+              
+              if (DEBUG_ENABLED) {
+                addDebugLog('✅ Аватар пользователя загружен', { 
+                  url: normalizedUrl,
+                  naturalWidth: userAvatar.naturalWidth,
+                  naturalHeight: userAvatar.naturalHeight,
+                  displaySize: displaySize,
+                  scaleFactor: scaleFactor.toFixed(2),
+                  isLowQuality: isLowQuality,
+                  note: isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество'
+                });
+              }
+            };
+
             if (DEBUG_ENABLED) {
               addDebugLog('✅ Аватар предзагружен и установлен', { url: normalizedUrl });
             }
@@ -2847,6 +2866,26 @@ async function updateOpponentAvatar() {
         }
         opponentAvatar.src = opponentAvatarCache.pfp_url;
         opponentAvatar.alt = opponentAvatarCache.username || opponentAvatarCache.display_name || "Opponent";
+        
+        // Диагностика качества аватара оппонента
+        opponentAvatar.onload = () => {
+          const displaySize = 30; // Размер opponent-avatar из HTML
+          const scaleFactor = opponentAvatar.naturalWidth / displaySize;
+          const isLowQuality = scaleFactor < 1.5;
+          
+          if (DEBUG_ENABLED) {
+            addDebugLog('✅ Аватар оппонента загружен', { 
+              url: opponentAvatarCache.pfp_url,
+              naturalWidth: opponentAvatar.naturalWidth,
+              naturalHeight: opponentAvatar.naturalHeight,
+              displaySize: displaySize,
+              scaleFactor: scaleFactor.toFixed(2),
+              isLowQuality: isLowQuality,
+              note: isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество'
+            });
+          }
+        };
+        
         opponentAvatar.onerror = () => {
           if (opponentAvatar) opponentAvatar.style.display = "none";
         };

@@ -658,12 +658,21 @@ export function renderLeaderboard(leaderboard, container) {
       
       // Обработка успешной загрузки
       avatarImg.onload = () => {
+        // Вычисляем коэффициент масштабирования для диагностики качества
+        const displaySize = parseInt(avatarSize);
+        const scaleFactor = avatarImg.naturalWidth / displaySize;
+        const isLowQuality = scaleFactor < 1.5; // Если исходное изображение меньше чем 1.5x от отображаемого размера
+        
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
             url: avatarUrl,
             crossOrigin: avatarImg.crossOrigin || 'not set',
             naturalWidth: avatarImg.naturalWidth,
-            naturalHeight: avatarImg.naturalHeight
+            naturalHeight: avatarImg.naturalHeight,
+            displaySize: displaySize,
+            scaleFactor: scaleFactor.toFixed(2),
+            isLowQuality: isLowQuality,
+            note: isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'
           });
         }
       };
