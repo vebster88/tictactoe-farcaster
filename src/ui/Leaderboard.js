@@ -610,26 +610,46 @@ export function renderLeaderboard(leaderboard, container) {
       
       try {
         const urlObj = new URL(url);
+        const originalPathname = urlObj.pathname;
         
         // Заменяем /rectcrop3 или /rectcontain2 на /public
         // Это позволяет query параметрам работать корректно
-        const pathname = urlObj.pathname;
-        const variantMatch = pathname.match(/\/([a-z0-9-]+)(\/rectcrop3|\/rectcontain2)?$/);
+        // Формат: /{accountHash}/{imageId}/{variant}
+        // Пример: /BXluQx4ige9GuW0Ia56BHw/b26208f2-e555-440b-9f7a-2495d3ad5c00/rectcrop3
+        const pathParts = originalPathname.split('/').filter(p => p);
         
-        if (variantMatch) {
-          const variantId = variantMatch[1];
-          // Меняем на /public чтобы query параметры работали
-          urlObj.pathname = pathname.replace(/\/rectcrop3|\/rectcontain2$/, '/public');
+        if (pathParts.length >= 3) {
+          const lastPart = pathParts[pathParts.length - 1];
+          // Если последний элемент - это variant (rectcrop3, rectcontain2, и т.д.)
+          if (lastPart && !lastPart.match(/^[a-f0-9-]{36}$/i)) {
+            // Заменяем variant на 'public'
+            pathParts[pathParts.length - 1] = 'public';
+            urlObj.pathname = '/' + pathParts.join('/');
+          }
         }
         
         // Добавляем параметры оптимизации
         const targetSize = Math.min(128, displaySize * 4); // 128px макс, но с запасом под Retina
         urlObj.searchParams.set('width', targetSize.toString());
         urlObj.searchParams.set('height', targetSize.toString());
-        urlObj.searchParams.set('fit', 'inside'); // inside вместо crop для аватаров
+        urlObj.searchParams.set('fit', 'crop'); // crop для квадратных аватаров
         urlObj.searchParams.set('quality', '85'); // баланс качество/размер
         
-        return urlObj.toString();
+        const optimizedUrl = urlObj.toString();
+        
+        // Логируем для отладки
+        if (typeof window !== 'undefined' && window.addDebugLog) {
+          window.addDebugLog('🔧 Cloudflare Images URL оптимизация', {
+            originalUrl: url,
+            originalPathname: originalPathname,
+            optimizedPathname: urlObj.pathname,
+            optimizedUrl: optimizedUrl,
+            pathParts: pathParts,
+            targetSize: targetSize
+          });
+        }
+        
+        return optimizedUrl;
       } catch (e) {
         console.warn('[Leaderboard] Failed to optimize Cloudflare Images URL:', url, e);
         return url;
