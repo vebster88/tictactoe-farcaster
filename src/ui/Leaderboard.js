@@ -629,29 +629,34 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images добавляем параметры размера для лучшего качества
-      // Запрашиваем изображение в 4x разрешении для максимального качества
+      // Для Cloudflare Images: трансформации в пути (rectcrop3, rectcontain2) конфликтуют с query параметрами
+      // Попробуем заменить трансформации на параметры в query string для лучшего контроля качества
       let optimizedAvatarUrl = avatarUrl;
       if (avatarUrl.includes('imagedelivery.net')) {
         const displaySizeNum = parseInt(avatarSize);
         const requestedSize = displaySizeNum * 4; // 4x для максимального качества
-        // Добавляем параметры размера, если их еще нет
-        // ВАЖНО: Cloudflare Images может игнорировать параметры при наличии трансформаций в пути
-        // Попробуем добавить параметры после трансформации
-        if (!avatarUrl.includes('?')) {
-          // Для Cloudflare Images с трансформациями (rectcrop3, rectcontain2) параметры добавляются после трансформации
-          optimizedAvatarUrl = `${avatarUrl}?width=${requestedSize}&height=${requestedSize}&fit=crop&quality=95`;
+        
+        // Пытаемся извлечь базовый URL без трансформаций
+        // Формат: https://imagedelivery.net/{account_hash}/{image_id}/{variant}
+        // Варианты: rectcrop3, rectcontain2, public и т.д.
+        const urlMatch = avatarUrl.match(/^https:\/\/imagedelivery\.net\/([^\/]+)\/([^\/]+)\/([^\/\?]+)/);
+        if (urlMatch && !avatarUrl.includes('?')) {
+          const [, accountHash, imageId, variant] = urlMatch;
+          // Заменяем трансформацию на 'public' и используем query параметры
+          // Это должно позволить Cloudflare Images применить параметры размера и качества
+          optimizedAvatarUrl = `https://imagedelivery.net/${accountHash}/${imageId}/public?width=${requestedSize}&height=${requestedSize}&fit=crop&quality=95`;
         }
       }
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
       // Добавляем image-rendering для лучшего качества при масштабировании
-      // Используем -webkit-optimize-contrast для лучшего баланса между четкостью и плавностью
-      // auto - браузер выбирает алгоритм (может размывать)
-      // crisp-edges - четкие края (может быть слишком резким)
-      // -webkit-optimize-contrast - оптимизация контраста (лучший баланс)
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: auto;`;
+      // Используем комбинацию свойств для максимального качества:
+      // - image-rendering: -webkit-optimize-contrast (WebKit оптимизация)
+      // - image-rendering: crisp-edges (четкие края для пиксельной графики)
+      // - image-rendering: pixelated (альтернатива для четкости)
+      // Также добавляем will-change для оптимизации рендеринга
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; will-change: transform;`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
@@ -704,7 +709,10 @@ export function renderLeaderboard(leaderboard, container) {
         // Проверяем, применились ли параметры Cloudflare Images
         const expectedWidth = cloudflareParams?.width ? parseInt(cloudflareParams.width) : null;
         const actualWidth = avatarImg.naturalWidth;
-        const paramsApplied = expectedWidth && Math.abs(actualWidth - expectedWidth) < 10; // Допуск 10px
+        // Для Cloudflare Images с query параметрами допускаем отклонение до 20px
+        // так как изображение может быть обрезано или масштабировано с учетом aspect ratio
+        const paramsApplied = expectedWidth && Math.abs(actualWidth - expectedWidth) < 20; // Допуск 20px
+        const urlChanged = optimizedAvatarUrl !== avatarUrl;
         
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
@@ -723,7 +731,8 @@ export function renderLeaderboard(leaderboard, container) {
             cloudflareParams: cloudflareParams,
             expectedWidth: expectedWidth,
             paramsApplied: paramsApplied,
-            note: paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились - возможно, трансформации в пути игнорируют query параметры' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество')
+            urlChanged: urlChanged,
+            note: urlChanged && paramsApplied ? '✅ URL изменен, параметры применились' : (paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'))
           });
         }
       };
