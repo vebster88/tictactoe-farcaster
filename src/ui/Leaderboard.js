@@ -629,26 +629,30 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images: попробуем запросить изображение меньшего размера
-      // Идея: если запросить изображение близко к отображаемому размеру, браузеру не нужно будет
-      // сильно масштабировать, что уменьшит артефакты при масштабировании
-      // Для retina дисплеев используем 2x (64px для 32px отображения)
+      // Для Cloudflare Images: запрашиваем изображение точно в нужном размере
+      // Проблема: браузер размывает изображения при масштабировании вниз
+      // Решение: запросить изображение точно в размере отображения (или 2x для retina)
+      // чтобы браузеру не нужно было масштабировать
       let optimizedAvatarUrl = avatarUrl;
       if (avatarUrl.includes('imagedelivery.net') && !avatarUrl.includes('?')) {
         const displaySizeNum = parseInt(avatarSize);
-        // Запрашиваем изображение в 2x размере для retina дисплеев
-        // Это уменьшит необходимость масштабирования и артефакты
-        const requestedSize = displaySizeNum * 2;
+        // Определяем pixel ratio для retina дисплеев
+        const pixelRatio = window.devicePixelRatio || 1;
+        // Запрашиваем изображение точно в размере отображения с учетом pixel ratio
+        // Это минимизирует необходимость масштабирования браузером
+        const requestedSize = Math.ceil(displaySizeNum * pixelRatio);
         // Пробуем добавить параметры размера - возможно, они сработают с трансформациями
         optimizedAvatarUrl = `${avatarUrl}?width=${requestedSize}&height=${requestedSize}&fit=crop`;
       }
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
-      // Упрощаем CSS для уменьшения артефактов при масштабировании
-      // Идея: чем меньше CSS-трансформаций и сложных свойств, тем меньше артефактов
-      // Используем только необходимые свойства без лишних оптимизаций
-      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0;`;
+      // Используем CSS для контроля качества масштабирования
+      // Проблема: браузер размывает изображения при масштабировании вниз
+      // Решение: использовать image-rendering для контроля алгоритма интерполяции
+      // crisp-edges или pixelated дают более четкие края, но могут быть слишком резкими
+      // -webkit-optimize-contrast - хороший баланс между четкостью и плавностью
+      avatarImg.style.cssText = `width: ${avatarSize}; height: ${avatarSize}; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;`;
       
       // Определяем, является ли URL внешним доменом
       const isExternalUrl = optimizedAvatarUrl.startsWith('http://') || optimizedAvatarUrl.startsWith('https://');
@@ -705,6 +709,8 @@ export function renderLeaderboard(leaderboard, container) {
         // так как изображение может быть обрезано или масштабировано с учетом aspect ratio
         const paramsApplied = expectedWidth && Math.abs(actualWidth - expectedWidth) < 20; // Допуск 20px
         const urlChanged = optimizedAvatarUrl !== avatarUrl;
+        const pixelRatio = window.devicePixelRatio || 1;
+        const scaleDownRatio = actualWidth / displaySize; // Во сколько раз браузер уменьшает изображение
         
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
@@ -724,7 +730,9 @@ export function renderLeaderboard(leaderboard, container) {
             expectedWidth: expectedWidth,
             paramsApplied: paramsApplied,
             urlChanged: urlChanged,
-            note: urlChanged && paramsApplied ? '✅ URL изменен, параметры применились' : (paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'))
+            pixelRatio: pixelRatio,
+            scaleDownRatio: scaleDownRatio.toFixed(2),
+            note: scaleDownRatio > 3 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (paramsApplied === false && expectedWidth ? '⚠️ Параметры Cloudflare Images не применились' : (isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'))
           });
         }
       };
