@@ -663,6 +663,25 @@ export function renderLeaderboard(leaderboard, container) {
         const scaleFactor = avatarImg.naturalWidth / displaySize;
         const isLowQuality = scaleFactor < 1.5; // Если исходное изображение меньше чем 1.5x от отображаемого размера
         
+        // Дополнительная диагностика качества
+        const computedStyle = window.getComputedStyle(avatarImg);
+        const imageRendering = computedStyle.imageRendering;
+        const hasUrlParams = avatarUrl.includes('?');
+        const isCloudflareImages = avatarUrl.includes('imagedelivery.net');
+        const urlFormat = avatarUrl.match(/\.(jpg|jpeg|png|webp|gif|svg)/i)?.[0] || 'no extension';
+        
+        // Проверяем, есть ли параметры качества в Cloudflare Images URL
+        let cloudflareParams = null;
+        if (isCloudflareImages && hasUrlParams) {
+          const urlObj = new URL(avatarUrl);
+          cloudflareParams = {
+            width: urlObj.searchParams.get('width'),
+            height: urlObj.searchParams.get('height'),
+            fit: urlObj.searchParams.get('fit'),
+            quality: urlObj.searchParams.get('quality')
+          };
+        }
+        
         if (typeof window !== 'undefined' && window.addDebugLog) {
           window.addDebugLog(`✅ Аватар загружен для ${playerName}`, { 
             url: avatarUrl,
@@ -672,6 +691,11 @@ export function renderLeaderboard(leaderboard, container) {
             displaySize: displaySize,
             scaleFactor: scaleFactor.toFixed(2),
             isLowQuality: isLowQuality,
+            imageRendering: imageRendering,
+            isCloudflareImages: isCloudflareImages,
+            hasUrlParams: hasUrlParams,
+            urlFormat: urlFormat,
+            cloudflareParams: cloudflareParams,
             note: isLowQuality ? '⚠️ Низкое качество: исходное изображение меньше 1.5x от отображаемого размера' : '✅ Хорошее качество'
           });
         }
