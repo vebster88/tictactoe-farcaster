@@ -50,34 +50,17 @@ function extractNumericFidFromVirtualLocal(fid) {
  * @returns {number|null} - Normalized FID as number or null if invalid
  */
 export function normalizeFidToNumber(fid) {
-  // #region agent log
-  console.error("[DEBUG] normalizeFidToNumber entry:", {fid, fidType: typeof fid});
-  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'normalize.js:14',message:'normalizeFidToNumber: entry',data:{fid:fid,fidType:typeof fid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B'})}).catch(()=>{});
-  // #endregion
-  
   if (fid === null || fid === undefined) {
     return null;
   }
   
   // Если это виртуальный FID (строка с префиксом), извлекаем число
   if (isVirtualFidLocal(fid)) {
-    const result = extractNumericFidFromVirtualLocal(fid);
-    // #region agent log
-    console.error("[DEBUG] normalizeFidToNumber virtual:", {fid, result});
-    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'normalize.js:22',message:'normalizeFidToNumber: virtual fid',data:{fid:fid,result:result},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    return result;
+    return extractNumericFidFromVirtualLocal(fid);
   }
   
   const normalized = typeof fid === "string" ? parseInt(fid, 10) : fid;
-  const result = Number.isNaN(normalized) ? null : normalized;
-  
-  // #region agent log
-  console.error("[DEBUG] normalizeFidToNumber result:", {fid, normalized, result});
-  fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'normalize.js:28',message:'normalizeFidToNumber: result',data:{fid:fid,normalized:normalized,result:result},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
-  
-  return result;
+  return Number.isNaN(normalized) ? null : normalized;
 }
 
 /**
