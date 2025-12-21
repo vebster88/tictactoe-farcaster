@@ -14,7 +14,7 @@ import { createSignedKey } from "./farcaster/signer.js";
 import { farcasterSDK } from "./farcaster/sdk.js";
 import { AUTHORIZED_DEVELOPERS, DEV_SECRET_CODE, DEV_CONFIG, isAuthorizedDeveloper, getDeveloperInfo } from "./config/developers.js";
 import { APP_VERSION } from "./version.js";
-import { normalizeFidToString, normalizeMatchId } from "./utils/normalize.js";
+import { normalizeFidToString, normalizeMatchId, normalizeFidToNumber } from "./utils/normalize.js";
 import { getAnonIdFromFid } from "./utils/fid-helpers.js";
 
 // Debug logging - can be controlled via environment variable
@@ -495,8 +495,9 @@ function getNumericPlayerFid() {
   if (rawFid === null || rawFid === undefined) {
     return null;
   }
-  const parsed = typeof rawFid === "string" ? parseInt(rawFid, 10) : rawFid;
-  return Number.isFinite(parsed) ? parsed : null;
+  
+  // Используем normalizeFidToNumber для правильной обработки виртуальных FID (например, "V22575")
+  return normalizeFidToNumber(rawFid);
 }
 
 function buildMatchesSignature(matches) {
