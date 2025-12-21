@@ -205,15 +205,40 @@ export async function loadLeaderboard() {
     // Загружаем информацию о пользователях для каждого FID используя batch-запрос
     addDebugLog(`📊 Начинаем загрузку данных пользователей для ${leaderboard.length} записей`);
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:206',message:'loadLeaderboard: entry',data:{leaderboardLength:leaderboard.length,firstEntry:leaderboard[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,C,D,E'})}).catch(()=>{});
+    // #endregion
+    
     // Собираем все FID
     const fids = leaderboard.map(entry => entry.fid);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:210',message:'loadLeaderboard: fids collected',data:{fidsCount:fids.length,fids:fids.slice(0,5),normalizeFidToNumberAvailable:typeof normalizeFidToNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     
     // Используем rate limiting перед batch-запросом
     await waitForRateLimit();
     
     // Делаем один batch-запрос для всех FID
     addDebugLog(`🔍 Batch запрос для ${fids.length} FID: ${fids.join(', ')}`);
-    const allUserData = await getUsersByFids(fids);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:216',message:'loadLeaderboard: before getUsersByFids',data:{fidsCount:fids.length,fidsSample:fids.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
+    let allUserData;
+    try {
+      allUserData = await getUsersByFids(fids);
+    } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:220',message:'loadLeaderboard: getUsersByFids error',data:{error:error.message,stack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      throw error;
+    }
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:225',message:'loadLeaderboard: after getUsersByFids',data:{allUserDataLength:allUserData?.length,firstResult:allUserData?.[0]?.user?.fid,hasNulls:allUserData?.some(x=>!x)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D'})}).catch(()=>{});
+    // #endregion
     
     // Создаем Map для быстрого поиска данных по FID
     // ВАЖНО: Нормализуем FID к числам для корректного сравнения (работает с виртуальными FID)
@@ -240,6 +265,12 @@ export async function loadLeaderboard() {
       if (!userData) {
         userData = userDataMap.get(entry.fid) || userDataMap.get(String(entry.fid));
       }
+      
+      // #region agent log
+      if (!userData) {
+        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:245',message:'loadLeaderboard: userData not found',data:{entryFid:entry.fid,normalizedEntryFid:normalizedEntryFid,mapSize:userDataMap.size,mapKeys:Array.from(userDataMap.keys()).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      }
+      // #endregion
       
       // Проверяем, что данные получены
       if (!userData || !userData.user) {
@@ -417,7 +448,16 @@ async function loadLeaderboardFallback() {
     
     // Делаем один batch-запрос для всех FID
     addDebugLog(`🔍 Fallback: Batch запрос для ${fids.length} FID: ${fids.join(', ')}`);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:420',message:'loadLeaderboardFallback: before getUsersByFids',data:{fidsCount:fids.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
     const allUserData = await getUsersByFids(fids);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Leaderboard.js:425',message:'loadLeaderboardFallback: after getUsersByFids',data:{allUserDataLength:allUserData?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     
     // Создаем Map для быстрого поиска данных по FID
     // ВАЖНО: Нормализуем FID к числам для корректного сравнения (работает с виртуальными FID)

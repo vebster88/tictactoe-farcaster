@@ -188,13 +188,24 @@ export async function getUsersByFids(fids) {
   }
 
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.js:190',message:'getUsersByFids: entry',data:{fidsCount:fids.length,fidsSample:fids.slice(0,3),isVirtualFidAvailable:typeof isVirtualFid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
     // Разделяем FID на реальные и виртуальные (используем isVirtualFid для проверки)
     // НЕ конвертируем в числа перед проверкой, чтобы сохранить строковые виртуальные FID
     const realFids = [];
     const virtualFids = [];
     
     fids.forEach(fid => {
-      if (isVirtualFid(fid)) {
+      const isVirtual = isVirtualFid(fid);
+      // #region agent log
+      if (fids.indexOf(fid) < 3) {
+        fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.js:199',message:'getUsersByFids: checking fid',data:{fid:fid,fidType:typeof fid,isVirtual:isVirtual},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      }
+      // #endregion
+      
+      if (isVirtual) {
         virtualFids.push(fid);
       } else {
         // Для реальных FID конвертируем в число
@@ -204,6 +215,10 @@ export async function getUsersByFids(fids) {
         }
       }
     });
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/aa195bad-e175-4436-bb06-face0b1b4e27',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.js:210',message:'getUsersByFids: after separation',data:{realFidsCount:realFids.length,virtualFidsCount:virtualFids.length,realFidsSample:realFids.slice(0,3),virtualFidsSample:virtualFids.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     
     // Создаем Map для виртуальных FID (генерируем моковые данные)
     const virtualUsersMap = new Map();
