@@ -600,8 +600,41 @@ export function renderLeaderboard(leaderboard, container) {
       }
     }
     
-    // УБИРАЕМ все модификации Cloudflare Images URL - используем как есть
-    // В старой версии (6061d97) эти URL работали без изменений
+    // Функция для оптимизации Cloudflare Images URL
+    // Главная проблема: /rectcrop3 или /rectcontain2 игнорируют query параметры!
+    // Решение: заменяем variant на /public, чтобы query параметры работали
+    function optimizeCloudflareImagesUrl(url, displaySize) {
+      if (!url || !url.includes('imagedelivery.net')) {
+        return url;
+      }
+      
+      try {
+        const urlObj = new URL(url);
+        
+        // Заменяем /rectcrop3 или /rectcontain2 на /public
+        // Это позволяет query параметрам работать корректно
+        const pathname = urlObj.pathname;
+        const variantMatch = pathname.match(/\/([a-z0-9-]+)(\/rectcrop3|\/rectcontain2)?$/);
+        
+        if (variantMatch) {
+          const variantId = variantMatch[1];
+          // Меняем на /public чтобы query параметры работали
+          urlObj.pathname = pathname.replace(/\/rectcrop3|\/rectcontain2$/, '/public');
+        }
+        
+        // Добавляем параметры оптимизации
+        const targetSize = Math.min(128, displaySize * 4); // 128px макс, но с запасом под Retina
+        urlObj.searchParams.set('width', targetSize.toString());
+        urlObj.searchParams.set('height', targetSize.toString());
+        urlObj.searchParams.set('fit', 'inside'); // inside вместо crop для аватаров
+        urlObj.searchParams.set('quality', '85'); // баланс качество/размер
+        
+        return urlObj.toString();
+      } catch (e) {
+        console.warn('[Leaderboard] Failed to optimize Cloudflare Images URL:', url, e);
+        return url;
+      }
+    }
     
     // Логируем информацию об аватаре для отладки
     if (typeof window !== 'undefined' && window.addDebugLog && avatarUrl) {
@@ -629,28 +662,11 @@ export function renderLeaderboard(leaderboard, container) {
     
     // Создаем элемент аватара программно для лучшей обработки ошибок
     if (avatarUrl) {
-      // Для Cloudflare Images: добавляем параметры через URL API для оптимизации на CDN
+      // Для Cloudflare Images: заменяем /rectcrop3/rectcontain2 на /public и добавляем параметры
       // Проблема: браузер размывает изображения при масштабировании вниз (scaleDownRatio 10-27x)
       // Решение: запросить оптимизированное изображение с CDN (128px макс) вместо исходного большого
-      let optimizedAvatarUrl = avatarUrl;
-      if (avatarUrl.includes('imagedelivery.net')) {
-        try {
-          const displaySize = parseInt(avatarSize);
-          const targetSize = Math.min(128, displaySize * 4); // 128px макс, но с запасом под Retina
-          
-          // Используем URL API для правильного добавления параметров
-          const url = new URL(avatarUrl);
-          // Добавляем параметры: width, height, fit, quality
-          url.searchParams.set('width', targetSize.toString());
-          url.searchParams.set('height', targetSize.toString());
-          url.searchParams.set('fit', 'crop'); // квадрат без искажений
-          url.searchParams.set('quality', '85'); // баланс качество/размер
-          optimizedAvatarUrl = url.toString();
-        } catch (e) {
-          // Если URL парсинг не удался, используем исходный URL
-          console.warn('[Leaderboard] Failed to parse Cloudflare Images URL:', avatarUrl, e);
-        }
-      }
+      const displaySize = parseInt(avatarSize);
+      const optimizedAvatarUrl = optimizeCloudflareImagesUrl(avatarUrl, displaySize);
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;

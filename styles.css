@@ -179,6 +179,12 @@ h1 .btn-settings-inline {
   z-index: 2;
   background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
   /* Выравнивание по горизонтали с кнопкой Sign Out через flexbox в auth-wrapper */
+  /* Для фото: сглаживание + Retina */
+  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  backface-visibility: hidden;
+  transform: translateZ(0) scale(1);
 }
 
 .user-label {
@@ -562,6 +568,17 @@ h1 .btn-settings-inline {
   .user-avatar {
     width: 34px;
     height: 34px;
+  }
+  
+  /* Для фото: сглаживание + Retina */
+  #opponent-avatar,
+  #match-switcher-opponent-avatar,
+  #private-match-user-avatar {
+    image-rendering: auto;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: high-quality;
+    backface-visibility: hidden;
+    transform: translateZ(0) scale(1);
   }
   
   .user-label {

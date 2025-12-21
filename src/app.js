@@ -22,6 +22,42 @@ const DEBUG_ENABLED = import.meta.env.VITE_DEBUG === "true" ||
                      localStorage.getItem("debug-enabled") === "true" ||
                      window.location.search.includes("debug=true");
 
+// Функция для оптимизации Cloudflare Images URL
+// Главная проблема: /rectcrop3 или /rectcontain2 игнорируют query параметры!
+// Решение: заменяем variant на /public, чтобы query параметры работали
+function optimizeCloudflareImagesUrl(url, displaySize) {
+  if (!url || !url.includes('imagedelivery.net')) {
+    return url;
+  }
+  
+  try {
+    const urlObj = new URL(url);
+    
+    // Заменяем /rectcrop3 или /rectcontain2 на /public
+    // Это позволяет query параметрам работать корректно
+    const pathname = urlObj.pathname;
+    const variantMatch = pathname.match(/\/([a-z0-9-]+)(\/rectcrop3|\/rectcontain2)?$/);
+    
+    if (variantMatch) {
+      const variantId = variantMatch[1];
+      // Меняем на /public чтобы query параметры работали
+      urlObj.pathname = pathname.replace(/\/rectcrop3|\/rectcontain2$/, '/public');
+    }
+    
+    // Добавляем параметры оптимизации
+    const targetSize = Math.min(128, displaySize * 4); // 128px макс, но с запасом под Retina
+    urlObj.searchParams.set('width', targetSize.toString());
+    urlObj.searchParams.set('height', targetSize.toString());
+    urlObj.searchParams.set('fit', 'inside'); // inside вместо crop для аватаров
+    urlObj.searchParams.set('quality', '85'); // баланс качество/размер
+    
+    return urlObj.toString();
+  } catch (e) {
+    console.warn('[app.js] Failed to optimize Cloudflare Images URL:', url, e);
+    return url;
+  }
+}
+
 // Debug logs storage
 let debugLogs = [];
 const MAX_DEBUG_LOGS = 50;
@@ -1879,14 +1915,16 @@ function refreshUserLabel() {
           normalizedUrl = 'https://' + normalizedUrl;
           }
 
-          // УБИРАЕМ модификации Cloudflare Images URL - используем как есть
-          // В старой версии (6061d97) эти URL работали без изменений
+          // Оптимизируем Cloudflare Images URL: заменяем /rectcrop3/rectcontain2 на /public
+          // и добавляем параметры для оптимизации на CDN
+          const displaySize = 34; // Размер user-avatar из CSS
+          const optimizedUrl = optimizeCloudflareImagesUrl(normalizedUrl, displaySize);
 
           // Предзагружаем через Image, чтобы отлавливать успех/ошибку в debug-панели
           const testImg = new Image();
           // Устанавливаем crossOrigin только для нашего origin
-          const isExternalUrl = normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://');
-          const isSameOrigin = isExternalUrl && normalizedUrl.startsWith(window.location.origin);
+          const isExternalUrl = optimizedUrl.startsWith('http://') || optimizedUrl.startsWith('https://');
+          const isSameOrigin = isExternalUrl && optimizedUrl.startsWith(window.location.origin);
           if (isSameOrigin) {
             testImg.crossOrigin = 'anonymous';
           } else {
@@ -1894,7 +1932,7 @@ function refreshUserLabel() {
           }
 
           testImg.onload = () => {
-            userAvatar.src = normalizedUrl;
+            userAvatar.src = optimizedUrl;
             userAvatar.alt = s.farcaster?.display_name || s.farcaster?.username || "User avatar";
             userAvatar.style.display = "block";
             // Устанавливаем crossOrigin только для нашего origin
@@ -1910,37 +1948,49 @@ function refreshUserLabel() {
               const displaySize = 34; // Размер user-avatar из CSS
               const scaleFactor = userAvatar.naturalWidth / displaySize;
               const isLowQuality = scaleFactor < 1.5;
+              const scaleDownRatio = userAvatar.naturalWidth / displaySize;
               
               if (DEBUG_ENABLED) {
                 addDebugLog('✅ Аватар пользователя загружен', { 
-                  url: normalizedUrl,
+                  originalUrl: normalizedUrl,
+                  optimizedUrl: optimizedUrl,
                   naturalWidth: userAvatar.naturalWidth,
                   naturalHeight: userAvatar.naturalHeight,
                   displaySize: displaySize,
                   scaleFactor: scaleFactor.toFixed(2),
+                  scaleDownRatio: scaleDownRatio.toFixed(2),
                   isLowQuality: isLowQuality,
-                  note: isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество'
+                  note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество')
                 });
               }
             };
 
             if (DEBUG_ENABLED) {
-              addDebugLog('✅ Аватар предзагружен и установлен', { url: normalizedUrl });
+              addDebugLog('✅ Аватар предзагружен и установлен', { 
+                originalUrl: normalizedUrl,
+                optimizedUrl: optimizedUrl
+              });
             }
           };
 
           testImg.onerror = () => {
             userAvatar.style.display = "none";
             if (DEBUG_ENABLED) {
-              addDebugLog('❌ Не удалось загрузить аватар', { url: normalizedUrl });
+              addDebugLog('❌ Не удалось загрузить аватар', { 
+                originalUrl: normalizedUrl,
+                optimizedUrl: optimizedUrl
+              });
             }
           };
 
           if (DEBUG_ENABLED) {
-            addDebugLog('🔄 Пытаемся загрузить аватар', { url: normalizedUrl });
+            addDebugLog('🔄 Пытаемся загрузить аватар', { 
+              originalUrl: normalizedUrl,
+              optimizedUrl: optimizedUrl
+            });
           }
 
-          testImg.src = normalizedUrl;
+          testImg.src = optimizedUrl;
         } else {
           if (DEBUG_ENABLED) {
             addDebugLog('⚠️ Аватар не найден в сессии (нет pfpUrl)', { 
@@ -2842,14 +2892,16 @@ async function updateOpponentAvatar() {
     if (userData?.user) {
       let pfpUrl = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || null;
       
-      // УБИРАЕМ модификации Cloudflare Images URL - используем как есть
-      // В старой версии (6061d97) эти URL работали без изменений
+      // Оптимизируем Cloudflare Images URL: заменяем /rectcrop3/rectcontain2 на /public
+      // и добавляем параметры для оптимизации на CDN
+      const displaySize = 30; // Размер opponent-avatar из HTML
+      const optimizedPfpUrl = pfpUrl ? optimizeCloudflareImagesUrl(pfpUrl, displaySize) : null;
       
       opponentAvatarCache = {
         fid: currentOpponentFid,
         username: userData.user.username,
         display_name: userData.user.display_name,
-        pfp_url: pfpUrl
+        pfp_url: optimizedPfpUrl || pfpUrl
       };
       
       const opponentAvatar = document.getElementById("opponent-avatar");
@@ -2872,16 +2924,19 @@ async function updateOpponentAvatar() {
           const displaySize = 30; // Размер opponent-avatar из HTML
           const scaleFactor = opponentAvatar.naturalWidth / displaySize;
           const isLowQuality = scaleFactor < 1.5;
+          const scaleDownRatio = opponentAvatar.naturalWidth / displaySize;
           
           if (DEBUG_ENABLED) {
             addDebugLog('✅ Аватар оппонента загружен', { 
-              url: opponentAvatarCache.pfp_url,
+              originalUrl: pfpUrl,
+              optimizedUrl: opponentAvatarCache.pfp_url,
               naturalWidth: opponentAvatar.naturalWidth,
               naturalHeight: opponentAvatar.naturalHeight,
               displaySize: displaySize,
               scaleFactor: scaleFactor.toFixed(2),
+              scaleDownRatio: scaleDownRatio.toFixed(2),
               isLowQuality: isLowQuality,
-              note: isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество'
+              note: scaleDownRatio > 5 ? '⚠️ Изображение слишком большое - браузер сильно масштабирует вниз' : (isLowQuality ? '⚠️ Низкое качество' : '✅ Хорошее качество')
             });
           }
         };
@@ -3151,10 +3206,12 @@ async function updateMatchSwitcherTooltip(match) {
         const opponentName = userData.user.username 
           ? `@${userData.user.username}` 
           : userData.user.display_name || `FID: ${opponentFid}`;
-        const opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
+        let opponentAvatar = userData.user.pfp_url || userData.user.pfpUrl || userData.user.pfp || "/assets/images/hero.jpg";
         
-        // УБИРАЕМ модификации Cloudflare Images URL - используем как есть
-        // В старой версии (6061d97) эти URL работали без изменений
+        // Оптимизируем Cloudflare Images URL: заменяем /rectcrop3/rectcontain2 на /public
+        // и добавляем параметры для оптимизации на CDN
+        const displaySize = 24; // Примерный размер аватара в tooltip
+        const optimizedOpponentAvatar = optimizeCloudflareImagesUrl(opponentAvatar, displaySize);
         
         const avatarEl = tooltipEl.querySelector("#match-switcher-opponent-avatar");
         const nameEl = tooltipEl.querySelector("#match-switcher-opponent-name");
@@ -3162,14 +3219,14 @@ async function updateMatchSwitcherTooltip(match) {
         
         if (avatarEl) {
           // Устанавливаем crossOrigin только для нашего origin
-          const isExternalUrl = opponentAvatar.startsWith('http://') || opponentAvatar.startsWith('https://');
-          const isSameOrigin = isExternalUrl && opponentAvatar.startsWith(window.location.origin);
+          const isExternalUrl = optimizedOpponentAvatar.startsWith('http://') || optimizedOpponentAvatar.startsWith('https://');
+          const isSameOrigin = isExternalUrl && optimizedOpponentAvatar.startsWith(window.location.origin);
           if (isSameOrigin) {
             avatarEl.crossOrigin = "anonymous";
           } else {
             avatarEl.removeAttribute('crossorigin');
           }
-          avatarEl.src = opponentAvatar;
+          avatarEl.src = optimizedOpponentAvatar;
           avatarEl.alt = opponentName;
         }
         if (nameEl) {
