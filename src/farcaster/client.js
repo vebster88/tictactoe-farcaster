@@ -4,6 +4,35 @@ const NEYNAR_API_KEY = import.meta.env.VITE_NEYNAR_API_KEY;
 const NEYNAR_SIGNER_UUID = import.meta.env.VITE_NEYNAR_SIGNER_UUID;
 const NEYNAR_BASE_URL = "https://api.neynar.com/v2";
 
+// Константы для виртуальных FID (псевдо-FID для пользователей без Farcaster)
+const VIRTUAL_FID_MIN = 10000;
+const VIRTUAL_FID_MAX = 99999;
+const VIRTUAL_FID_RANGE = VIRTUAL_FID_MAX - VIRTUAL_FID_MIN + 1; // 90000
+
+// Проверка, является ли FID виртуальным (псевдо-FID)
+export function isVirtualFid(fid) {
+  const numFid = Number(fid);
+  if (isNaN(numFid)) return false;
+  // Виртуальные FID в диапазоне 10000-99999
+  return numFid >= VIRTUAL_FID_MIN && numFid <= VIRTUAL_FID_MAX;
+}
+
+// Генерация виртуального FID на основе адреса кошелька
+export function getVirtualFidFromAddress(address) {
+  if (!address) return null;
+  
+  // Используем ту же логику, что и в getUserByAddress для консистентности
+  const addressHash = address.toLowerCase().split('').reduce((hash, char) => {
+    return ((hash << 5) - hash) + char.charCodeAt(0);
+  }, 0);
+  
+  // Генерируем FID на основе адреса (от 10000 до 99999)
+  // Это соответствует старой логике и дает положительные FID
+  const fid = VIRTUAL_FID_MIN + Math.abs(addressHash % VIRTUAL_FID_RANGE);
+  
+  return fid;
+}
+
 // Mock режим для операций ЧТЕНИЯ (лидерборд, поиск пользователей и т.п.)
 // Для чтения нам НЕ нужен signer UUID, только рабочий API-ключ
 function isMockForRead() {
@@ -51,17 +80,11 @@ function isMock() {
 export async function getUserByAddress(address) {
   // Для чтения профиля по адресу достаточно API-ключа, signer не обязателен
   if (isMockForRead()) {
-    // Генерируем уникальные данные на основе адреса кошелька
-    // Используем хеш адреса для детерминированной генерации
-    const addressHash = address.toLowerCase().split('').reduce((hash, char) => {
-      return ((hash << 5) - hash) + char.charCodeAt(0);
-    }, 0);
+    // Используем единую функцию для генерации виртуального FID
+    const fid = getVirtualFidFromAddress(address);
     
-    // Генерируем FID на основе адреса (от 10000 до 99999)
-    const fid = 10000 + Math.abs(addressHash % 90000);
-    
-    // Генерируем уникальное имя пользователя
-    const usernameSuffix = Math.abs(addressHash % 10000);
+    // Генерируем уникальное имя пользователя на основе FID
+    const usernameSuffix = fid % 10000;
     const username = `user${usernameSuffix}`;
     
     // Генерируем display name
@@ -132,15 +155,16 @@ export async function getUsersByFids(fids) {
   }
 
   try {
-    // Разделяем FID на реальные (положительные) и виртуальные (отрицательные)
+    // Разделяем FID на реальные и виртуальные (используем isVirtualFid для проверки)
     const normalizedFids = fids.map(fid => Number(fid)).filter(fid => !isNaN(fid));
-    const realFids = normalizedFids.filter(fid => fid > 0);
-    const virtualFids = normalizedFids.filter(fid => fid < 0);
+    const realFids = normalizedFids.filter(fid => !isVirtualFid(fid));
+    const virtualFids = normalizedFids.filter(fid => isVirtualFid(fid));
     
     // Создаем Map для виртуальных FID (генерируем моковые данные)
     const virtualUsersMap = new Map();
     virtualFids.forEach(fid => {
-      const fidHash = Math.abs(fid) % 10000;
+      // Для виртуальных FID используем последние 4 цифры для username
+      const fidHash = fid % 10000;
       virtualUsersMap.set(fid, {
         schemaVersion: "1.0.0",
         user: {
@@ -278,10 +302,10 @@ export async function getUserByFid(fid) {
   // Нормализуем FID к числу
   const normalizedFid = Number(fid);
   
-  // Проверяем, является ли FID виртуальным (отрицательным)
-  // Виртуальные FID не существуют в Farcaster, поэтому генерируем моковые данные
-  if (normalizedFid < 0 || isNaN(normalizedFid)) {
-    const fidHash = Math.abs(normalizedFid) % 10000;
+  // Проверяем виртуальные FID ПЕРВЫМ, чтобы не отправлять их в API
+  if (isVirtualFid(normalizedFid)) {
+    // Генерируем моковые данные для виртуального FID
+    const fidHash = normalizedFid % 10000;
     if (typeof window !== 'undefined' && window.addDebugLog) {
       window.addDebugLog(`🔷 [getUserByFid] Виртуальный FID ${normalizedFid}, генерируем моковые данные`, {
         fid: normalizedFid,
@@ -297,6 +321,11 @@ export async function getUserByFid(fid) {
         pfp_url: "/assets/images/hero.jpg"
       }
     };
+  }
+  
+  // Проверяем на невалидные FID
+  if (isNaN(normalizedFid) || normalizedFid <= 0) {
+    return null;
   }
   
   // Логируем начало запроса

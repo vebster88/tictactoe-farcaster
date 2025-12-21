@@ -1,5 +1,5 @@
 ﻿import { v4 as uuid } from "uuid";
-import { getUserByAddress } from "./client.js";
+import { getUserByAddress, getVirtualFidFromAddress } from "./client.js";
 
 const SESSION_KEY = "fc_session";
 
@@ -51,15 +51,8 @@ export async function signInWithWallet() {
   // Генерируем виртуальный FID на основе адреса кошелька, если нет Farcaster профиля
   let virtualFid = null;
   if (!farcasterProfile && address) {
-    // Простой хеш адреса в число (используем отрицательные числа для виртуальных FID)
-    let hash = 0;
-    for (let i = 0; i < address.length; i++) {
-      const char = address.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    // Используем отрицательные числа для виртуальных FID (реальные FID всегда положительные)
-    virtualFid = -Math.abs(hash);
+    // Используем единую функцию для генерации виртуального FID (диапазон 10000-99999)
+    virtualFid = getVirtualFidFromAddress(address);
   }
   
   const session = {

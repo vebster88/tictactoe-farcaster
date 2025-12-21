@@ -4,7 +4,7 @@ import { pickRandomMove } from "./ai/random.js";
 import { bestMoveMinimax } from "./ai/minimax.js";
 import { getSession, signInWithWallet, signOut } from "./farcaster/auth.js";
 import { sendInvite } from "./farcaster/matchmaking.js";
-import { listThreadReplies, publishMatchResult, getUserByFid } from "./farcaster/client.js";
+import { listThreadReplies, publishMatchResult, getUserByFid, getVirtualFidFromAddress } from "./farcaster/client.js";
 import { getMatch, acceptMatch, sendMove, listPlayerMatches } from "./farcaster/match-api.js";
 import { setCurrentMatch, loadMatch, clearCurrentMatch, handleMove as handleMatchMove, isMyTurn, getMySymbol, getOpponentFid, startSyncing, stopSyncing, getCurrentMatch } from "./game/match-state.js";
 import { TurnTimer } from "./ui/Timer.js";
@@ -481,19 +481,6 @@ const matchDataStore = {
 const normalizeMatchIdValue = normalizeMatchId;
 const normalizeFidValue = normalizeFidToString;
 
-// Генерируем виртуальный FID на основе адреса кошелька для пользователей без Farcaster
-function getVirtualFidFromAddress(address) {
-  if (!address) return null;
-  // Простой хеш адреса в число (используем отрицательные числа для виртуальных FID)
-  let hash = 0;
-  for (let i = 0; i < address.length; i++) {
-    const char = address.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  // Используем отрицательные числа для виртуальных FID (реальные FID всегда положительные)
-  return -Math.abs(hash);
-}
 
 function getNumericPlayerFid() {
   const session = getSession();

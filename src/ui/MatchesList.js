@@ -1,7 +1,7 @@
 // Matches list component
 import { listPlayerMatches, acceptMatch } from "../farcaster/match-api.js";
 import { loadMatch } from "../game/match-state.js";
-import { getUserByFid } from "../farcaster/client.js";
+import { getUserByFid, getVirtualFidFromAddress } from "../farcaster/client.js";
 
 export async function loadMatchesList(container, playerFid, options = {}) {
   if (!container || !playerFid) {
@@ -312,20 +312,6 @@ async function renderMatchesList(container, matches, playerFid, options = {}) {
   // Render cards
   contentHost.innerHTML = "";
   matchCards.forEach(card => contentHost.appendChild(card));
-
-  // Генерируем виртуальный FID на основе адреса кошелька для пользователей без Farcaster
-  function getVirtualFidFromAddress(address) {
-    if (!address) return null;
-    // Простой хеш адреса в число (используем отрицательные числа для виртуальных FID)
-    let hash = 0;
-    for (let i = 0; i < address.length; i++) {
-      const char = address.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    // Используем отрицательные числа для виртуальных FID (реальные FID всегда положительные)
-    return -Math.abs(hash);
-  }
 
   // Attach event handlers
   contentHost.querySelectorAll(".accept-match-btn").forEach(btn => {

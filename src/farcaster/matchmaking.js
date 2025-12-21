@@ -1,5 +1,5 @@
 ﻿import { v4 as uuid } from "uuid";
-import { publishInvite } from "./client.js";
+import { publishInvite, getVirtualFidFromAddress } from "./client.js";
 import { createMatch } from "./match-api.js";
 
 export function buildInvitePayload(session, opts = {}) {
@@ -19,19 +19,6 @@ export function buildInvitePayload(session, opts = {}) {
   };
 }
 
-// Генерируем виртуальный FID на основе адреса кошелька для пользователей без Farcaster
-function getVirtualFidFromAddress(address) {
-  if (!address) return null;
-  // Простой хеш адреса в число (используем отрицательные числа для виртуальных FID)
-  let hash = 0;
-  for (let i = 0; i < address.length; i++) {
-    const char = address.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  // Используем отрицательные числа для виртуальных FID (реальные FID всегда положительные)
-  return -Math.abs(hash);
-}
 
 export async function sendInvite(session, opts = {}) {
   const payload = buildInvitePayload(session, opts);
