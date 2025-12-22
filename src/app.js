@@ -640,7 +640,14 @@ async function fetchMatchesSnapshot(reason = "unknown", { force = false } = {}) 
       matchDataStore.lastChangeAt = matchDataStore.lastFetchedAt;
     }
 
-    await syncSessionStatsWithMatches(matches, { source: reason, fromList: true });
+    // Пропускаем обогащение матчей через getMatch() при простом просмотре списка
+    // Обогащение нужно только для определения статистики завершенных матчей
+    const shouldSkipDetails = reason === "matches_modal_open" || reason === "matches_modal_manual_refresh";
+    await syncSessionStatsWithMatches(matches, { 
+      source: reason, 
+      fromList: true,
+      skipDetails: shouldSkipDetails
+    });
     notifyMatchSubscribers(matches, { reason, changed });
 
     const interval = computeNextMatchPollInterval(matches, changed);
@@ -1341,7 +1348,7 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
     }
   }
 
-  if (isFromList) {
+  if (isFromList && options?.skipDetails !== true) {
     const missingMatchIds = Array.from(activeMatchIdsCache).filter(id => !currentListMatchIds.has(id));
     if (missingMatchIds.length > 0) {
       missingMatchIds.forEach(id => matchesToEnrich.push(id));
