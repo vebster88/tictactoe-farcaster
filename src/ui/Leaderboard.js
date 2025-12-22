@@ -7,8 +7,22 @@ function isIOSDevice() {
   if (typeof window === 'undefined' || !window.navigator) {
     return false;
   }
+
   const ua = window.navigator.userAgent || '';
-  return /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const platform = window.navigator.platform || '';
+
+  // Классическое определение iPhone/iPad/iPod
+  const isClassicIOS = /iPad|iPhone|iPod/.test(ua) || /iPad|iPhone|iPod/.test(platform);
+
+  // iPadOS 13+ маскируется под macOS (Macintosh), но имеет touch‑события
+  let isIPadOS = false;
+  try {
+    isIPadOS = /Macintosh/.test(ua) && typeof document !== 'undefined' && 'ontouchend' in document;
+  } catch (e) {
+    isIPadOS = false;
+  }
+
+  return (isClassicIOS || isIPadOS) && !window.MSStream;
 }
 
 // Функция для определения, работает ли приложение в Mini-app (Farcaster/Warpcast)
@@ -687,12 +701,12 @@ export function renderLeaderboard(leaderboard, container) {
         const pixelRatio = window.devicePixelRatio || 1;
         const scaleDownRatio = avatarImg.naturalWidth / displaySize; // Во сколько раз браузер уменьшает изображение
         
-        // Детальное логирование для iOS устройств
+        // Детальное логирование для Mini-app окружения (включая iOS)
         const isIOS = isIOSDevice();
         const isMiniAppEnv = isMiniApp();
-        if (isIOS) {
+        if (isMiniAppEnv) {
           const logData = {
-            platform: 'iOS',
+            platform: isIOS ? 'iOS' : 'other',
             isMiniApp: isMiniAppEnv,
             userAgent: window.navigator?.userAgent || 'unknown',
             playerName: playerName,
@@ -711,7 +725,7 @@ export function renderLeaderboard(leaderboard, container) {
             imageRendering: imageRendering,
             timestamp: new Date().toISOString()
           };
-          addDebugLog(`📱 [iOS Avatar Load] Успешная загрузка для @${playerName}`, logData);
+          addDebugLog(`📱 [Mini-app Avatar Load] Успешная загрузка для @${playerName}`, logData);
         }
         
         // Для Cloudflare Images используем Canvas для улучшения качества
@@ -735,8 +749,8 @@ export function renderLeaderboard(leaderboard, container) {
         const isIOS = isIOSDevice();
         const isMiniAppEnv = isMiniApp();
         
-        // Детальное логирование для iOS устройств
-        if (isIOS) {
+        // Детальное логирование для Mini-app окружения (включая iOS)
+        if (isMiniAppEnv) {
           // Безопасное получение parent origin (может быть заблокировано политикой безопасности)
           let parentOrigin = 'same-origin';
           try {
@@ -748,7 +762,7 @@ export function renderLeaderboard(leaderboard, container) {
           }
 
           const errorData = {
-            platform: 'iOS',
+            platform: isIOS ? 'iOS' : 'other',
             isMiniApp: isMiniAppEnv,
             userAgent: window.navigator?.userAgent || 'unknown',
             playerName: playerName,
@@ -771,7 +785,7 @@ export function renderLeaderboard(leaderboard, container) {
             isInFrame: window.self !== window.top,
             parentOrigin: parentOrigin
           };
-          addDebugLog(`❌ [iOS Avatar Error] Ошибка загрузки для @${playerName}`, errorData);
+          addDebugLog(`❌ [Mini-app Avatar Error] Ошибка загрузки для @${playerName}`, errorData);
         }
         
         // Проверяем, действительно ли произошла ошибка или это ложное срабатывание
@@ -811,12 +825,12 @@ export function renderLeaderboard(leaderboard, container) {
       // 4. Устанавливаем src (это запускает загрузку)
       playerDiv.appendChild(avatarImg);
       
-      // Логирование начала загрузки для iOS
+      // Логирование начала загрузки для Mini-app окружения (включая iOS)
       const isIOS = isIOSDevice();
       const isMiniAppEnv = isMiniApp();
-      if (isIOS) {
+      if (isMiniAppEnv) {
         const startLogData = {
-          platform: 'iOS',
+          platform: isIOS ? 'iOS' : 'other',
           isMiniApp: isMiniAppEnv,
           userAgent: window.navigator?.userAgent || 'unknown',
           playerName: playerName,
@@ -829,7 +843,7 @@ export function renderLeaderboard(leaderboard, container) {
           loading: avatarImg.loading || 'not set',
           timestamp: new Date().toISOString()
         };
-        addDebugLog(`🔄 [iOS Avatar Start] Начало загрузки для @${playerName}`, startLogData);
+        addDebugLog(`🔄 [Mini-app Avatar Start] Начало загрузки для @${playerName}`, startLogData);
       }
       
       // Устанавливаем src СРАЗУ после добавления в DOM
