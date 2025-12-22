@@ -1355,7 +1355,8 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
     }
   }
 
-  if (matchesToEnrich.length > 0) {
+  // Выполняем обогащение только если не пропущено через skipDetails
+  if (matchesToEnrich.length > 0 && options?.skipDetails !== true) {
     const uniqueIds = Array.from(new Set(matchesToEnrich));
     const fetchResults = await Promise.allSettled(
       uniqueIds.map(id => getMatch(id).catch(error => {
