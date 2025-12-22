@@ -16,14 +16,23 @@ function isMiniApp() {
   if (typeof window === 'undefined') {
     return false;
   }
-  // Проверяем различные признаки Mini-app окружения
+
   const ua = window.navigator.userAgent || '';
+
+  // Признак Warpcast/Farcaster клиента по User-Agent
   const isWarpcast = /Warpcast/i.test(ua);
-  const isInFrame = window.self !== window.top;
-  const hasFarcasterContext = typeof window.farcaster !== 'undefined' || 
-                               typeof window.parent?.farcaster !== 'undefined';
-  
-  return isWarpcast || isInFrame || hasFarcasterContext;
+
+  // Безопасная проверка, что мы в iframe (может быть cross-origin)
+  let isInFrame = false;
+  try {
+    isInFrame = window.self !== window.top;
+  } catch (e) {
+    // Если доступ к window.top заблокирован, почти наверняка мы в iframe
+    isInFrame = true;
+  }
+
+  // Этого достаточно для наших логов, без доступа к window.parent.*
+  return isWarpcast || isInFrame;
 }
 
 // Функция для добавления логов в debug панель (если доступна)
@@ -728,6 +737,16 @@ export function renderLeaderboard(leaderboard, container) {
         
         // Детальное логирование для iOS устройств
         if (isIOS) {
+          // Безопасное получение parent origin (может быть заблокировано политикой безопасности)
+          let parentOrigin = 'same-origin';
+          try {
+            if (window.parent && window.parent !== window.self) {
+              parentOrigin = window.parent.location.origin;
+            }
+          } catch (securityError) {
+            parentOrigin = 'cross-origin (blocked)';
+          }
+
           const errorData = {
             platform: 'iOS',
             isMiniApp: isMiniAppEnv,
@@ -750,7 +769,7 @@ export function renderLeaderboard(leaderboard, container) {
             windowLocation: window.location?.href || 'unknown',
             windowOrigin: window.location?.origin || 'unknown',
             isInFrame: window.self !== window.top,
-            parentOrigin: window.parent?.location?.origin || 'same-origin'
+            parentOrigin: parentOrigin
           };
           addDebugLog(`❌ [iOS Avatar Error] Ошибка загрузки для @${playerName}`, errorData);
         }
