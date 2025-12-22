@@ -692,24 +692,6 @@ export function renderLeaderboard(leaderboard, container) {
       // чтобы повторить поведение "как раньше", когда все работало в мини‑аппах.
       if (isMiniAppEnv) {
         playerDiv.appendChild(avatarImg);
-
-        const startLogData = {
-          platform: isIOS ? 'iOS' : 'other',
-          isMiniApp: isMiniAppEnv,
-          userAgent: window.navigator?.userAgent || 'unknown',
-          playerName: playerName,
-          avatarUrl: avatarUrl,
-          displaySize: displaySize,
-          crossOrigin: avatarImg.crossOrigin || 'not set',
-          isExternal: isExternalUrl,
-          isSameOrigin: isSameOrigin,
-          isCloudflareImages: isCloudflareImages,
-          loading: avatarImg.loading || 'not set',
-          mode: 'simple-img-mini-app',
-          timestamp: new Date().toISOString()
-        };
-        addDebugLog(`🔄 [Mini-app Avatar Simple] Используем простой <img> для @${playerName}`, startLogData);
-
         avatarImg.src = avatarUrl;
         // В упрощенном режиме не полагаемся на onload/onerror и canvas —
         // WebView сам отрисует то, что сможет (как это было до наших изменений).
@@ -723,38 +705,7 @@ export function renderLeaderboard(leaderboard, container) {
       avatarImg.onload = () => {
         // Вычисляем коэффициент масштабирования для диагностики качества
         const displaySize = parseInt(avatarSize);
-        const scaleFactor = avatarImg.naturalWidth / displaySize;
-        const isLowQuality = scaleFactor < 1.5; // Если исходное изображение меньше чем 1.5x от отображаемого размера
-        
-        // Дополнительная диагностика качества
-        const computedStyle = window.getComputedStyle(avatarImg);
-        const imageRendering = computedStyle.imageRendering;
-        const pixelRatio = window.devicePixelRatio || 1;
         const scaleDownRatio = avatarImg.naturalWidth / displaySize; // Во сколько раз браузер уменьшает изображение
-        
-        if (isMiniAppEnv) {
-          const logData = {
-            platform: isIOS ? 'iOS' : 'other',
-            isMiniApp: isMiniAppEnv,
-            userAgent: window.navigator?.userAgent || 'unknown',
-            playerName: playerName,
-            avatarUrl: avatarUrl,
-            displaySize: displaySize,
-            naturalWidth: avatarImg.naturalWidth,
-            naturalHeight: avatarImg.naturalHeight,
-            scaleFactor: scaleFactor,
-            scaleDownRatio: scaleDownRatio,
-            pixelRatio: pixelRatio,
-            crossOrigin: avatarImg.crossOrigin || 'not set',
-            isExternal: isExternalUrl,
-            isSameOrigin: isSameOrigin,
-            isCloudflareImages: isCloudflareImages,
-            complete: avatarImg.complete,
-            imageRendering: imageRendering,
-            timestamp: new Date().toISOString()
-          };
-          addDebugLog(`📱 [Mini-app Avatar Load] Успешная загрузка для @${playerName}`, logData);
-        }
         
         // Для Cloudflare Images используем Canvas для улучшения качества
         if (isCloudflareImages && scaleDownRatio > 3) {
@@ -769,50 +720,10 @@ export function renderLeaderboard(leaderboard, container) {
             // Продолжаем с обычным img, если canvas не удался
           }
         }
-        
       };
       
-      // Обработка ошибки загрузки с детальным логированием
+      // Обработка ошибки загрузки
       avatarImg.onerror = (e) => {
-        // Детальное логирование для Mini-app окружения (включая iOS)
-        if (isMiniAppEnv) {
-          // Безопасное получение parent origin (может быть заблокировано политикой безопасности)
-          let parentOrigin = 'same-origin';
-          try {
-            if (window.parent && window.parent !== window.self) {
-              parentOrigin = window.parent.location.origin;
-            }
-          } catch (securityError) {
-            parentOrigin = 'cross-origin (blocked)';
-          }
-
-          const errorData = {
-            platform: isIOS ? 'iOS' : 'other',
-            isMiniApp: isMiniAppEnv,
-            userAgent: window.navigator?.userAgent || 'unknown',
-            playerName: playerName,
-            avatarUrl: avatarUrl,
-            error: e?.type || 'unknown',
-            crossOrigin: avatarImg.crossOrigin || 'not set',
-            isExternal: isExternalUrl,
-            isSameOrigin: isSameOrigin,
-            complete: avatarImg.complete,
-            naturalWidth: avatarImg.naturalWidth,
-            naturalHeight: avatarImg.naturalHeight,
-            isCloudflareImages: isCloudflareImages,
-            errorType: avatarImg.complete && avatarImg.naturalWidth === 0 
-              ? 'Image load error - zero size' 
-              : 'Image load error - network/failed',
-            timestamp: new Date().toISOString(),
-            // Дополнительная диагностика для iOS
-            windowLocation: window.location?.href || 'unknown',
-            windowOrigin: window.location?.origin || 'unknown',
-            isInFrame: window.self !== window.top,
-            parentOrigin: parentOrigin
-          };
-          addDebugLog(`❌ [Mini-app Avatar Error] Ошибка загрузки для @${playerName}`, errorData);
-        }
-        
         // Проверяем, действительно ли произошла ошибка или это ложное срабатывание
         if (avatarImg.complete && avatarImg.naturalWidth === 0) {
           // Изображение помечено как загруженное, но имеет нулевой размер - это ошибка
