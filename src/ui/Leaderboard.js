@@ -713,7 +713,7 @@ export function renderLeaderboard(leaderboard, container) {
         avatarImg.src = avatarUrl;
         // В упрощенном режиме не полагаемся на onload/onerror и canvas —
         // WebView сам отрисует то, что сможет (как это было до наших изменений).
-        return;
+        // НЕ делаем return — продолжаем создавать остальные ячейки таблицы ниже.
       }
       
       // ВАЖНО: Устанавливаем обработчики ДО добавления в DOM и ДО установки src
