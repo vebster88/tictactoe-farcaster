@@ -1317,6 +1317,17 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
     return;
   }
 
+  // Логирование для отладки
+  if (DEBUG_ENABLED) {
+    addDebugLog("🔍 [syncSessionStatsWithMatches] Вызов функции", {
+      source: options?.source || "unknown",
+      skipDetails: options?.skipDetails || false,
+      fromList: options?.fromList || false,
+      matchesCount: matches.length,
+      stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n') || 'no stack'
+    });
+  }
+
   const isFromList = options?.fromList === true;
 
   const matchesById = new Map();
@@ -1356,8 +1367,30 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
   }
 
   // Выполняем обогащение только если не пропущено через skipDetails
+  if (matchesToEnrich.length > 0) {
+    if (DEBUG_ENABLED) {
+      addDebugLog("ℹ️ [syncSessionStatsWithMatches] Матчи для обогащения найдены", {
+        source: options?.source || "unknown",
+        skipDetails: options?.skipDetails || false,
+        matchesToEnrichCount: matchesToEnrich.length,
+        willEnrich: options?.skipDetails !== true
+      });
+    }
+  }
+  
   if (matchesToEnrich.length > 0 && options?.skipDetails !== true) {
     const uniqueIds = Array.from(new Set(matchesToEnrich));
+    
+    if (DEBUG_ENABLED) {
+      addDebugLog("📡 [syncSessionStatsWithMatches] Запрос getMatch() для обогащения матчей", {
+        source: options?.source || "unknown",
+        skipDetails: options?.skipDetails || false,
+        matchesToEnrichCount: matchesToEnrich.length,
+        uniqueIdsCount: uniqueIds.length,
+        matchIds: uniqueIds
+      });
+    }
+    
     const fetchResults = await Promise.allSettled(
       uniqueIds.map(id => getMatch(id).catch(error => {
         if (DEBUG_ENABLED) {
@@ -1370,6 +1403,17 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
         throw error;
       }))
     );
+    
+    if (DEBUG_ENABLED) {
+      const successCount = fetchResults.filter(r => r.status === 'fulfilled').length;
+      const failCount = fetchResults.filter(r => r.status === 'rejected').length;
+      addDebugLog("✅ [syncSessionStatsWithMatches] Запросы getMatch() завершены", {
+        source: options?.source || "unknown",
+        total: uniqueIds.length,
+        success: successCount,
+        failed: failCount
+      });
+    }
 
     fetchResults.forEach((result, index) => {
       if (result.status === "fulfilled" && result.value) {
