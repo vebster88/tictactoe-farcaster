@@ -648,7 +648,7 @@ async function fetchMatchesSnapshot(reason = "unknown", { force = false } = {}) 
       fromList: true,
       skipDetails: shouldSkipDetails
     });
-    notifyMatchSubscribers(matches, { reason, changed });
+    notifyMatchSubscribers(matches, { reason, changed, skipDetails: shouldSkipDetails });
 
     const interval = computeNextMatchPollInterval(matches, changed);
     matchDataStore.nextIntervalMs = interval;
@@ -2361,8 +2361,19 @@ window.addEventListener("player-matches-updated", (event) => {
     return;
   }
   const matches = event?.detail?.matches;
+  const meta = event?.detail?.meta || {};
+  // Пропускаем обогащение, если это событие от просмотра списка матчей
+  // Если метаданных нет (событие от MatchesList.js), тоже пропускаем обогащение
+  const shouldSkipDetails = meta.skipDetails === true || 
+                            meta.reason === "matches_modal_open" || 
+                            meta.reason === "matches_modal_manual_refresh" ||
+                            !meta.reason; // Если нет reason, значит событие от MatchesList.js при просмотре
   if (Array.isArray(matches) && matches.length > 0) {
-    void syncSessionStatsWithMatches(matches, { source: "matches_list_event", fromList: true }).catch(() => {});
+    void syncSessionStatsWithMatches(matches, { 
+      source: "matches_list_event", 
+      fromList: true,
+      skipDetails: shouldSkipDetails
+    }).catch(() => {});
   }
 });
 
