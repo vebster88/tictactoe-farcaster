@@ -432,6 +432,9 @@ let state = createInitialState();
 let sessionStats = { wins: 0, losses: 0, draws: 0 };
 const standaloneSessionStats = { wins: 0, losses: 0, draws: 0 };
 const matchOutcomeMap = new Map();
+// Кэш обогащенных матчей: matchId -> timestamp последнего обогащения
+const enrichedMatchesCache = new Map();
+const ENRICHED_CACHE_TTL = 30000; // 30 секунд
 let mode = settingsMode?.value || "pve-easy";
 let botThinking = false;
 const MAX_PENDING_INVITES = 2;
@@ -1348,8 +1351,14 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
       currentListMatchIds.add(matchId);
     }
 
+    // Проверяем кэш обогащенных матчей
+    const now = Date.now();
+    const lastEnriched = enrichedMatchesCache.get(matchId);
+    const isRecentlyEnriched = lastEnriched && (now - lastEnriched) < ENRICHED_CACHE_TTL;
+
     if ((!hasGameState || (!matchFinished && !hasRecordedOutcome)) &&
-        options?.skipDetails !== true) {
+        options?.skipDetails !== true &&
+        !isRecentlyEnriched) {
       matchesToEnrich.push(matchId);
     }
 
@@ -1421,8 +1430,18 @@ async function syncSessionStatsWithMatches(matches, options = {}) {
         const matchId = normalizeMatchIdValue(match);
         if (!matchId) return;
         matchesById.set(matchId, match);
+        // Обновляем кэш обогащенных матчей
+        enrichedMatchesCache.set(matchId, Date.now());
       }
     });
+    
+    // Очищаем устаревшие записи из кэша
+    const cacheCleanupTime = Date.now();
+    for (const [cachedMatchId, timestamp] of enrichedMatchesCache.entries()) {
+      if (cacheCleanupTime - timestamp > ENRICHED_CACHE_TTL) {
+        enrichedMatchesCache.delete(cachedMatchId);
+      }
+    }
   }
 
   let statsChanged = false;
