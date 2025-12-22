@@ -658,6 +658,8 @@ export function renderLeaderboard(leaderboard, container) {
       // Применяем Canvas fallback для улучшения качества
       const displaySize = parseInt(avatarSize);
       const isCloudflareImages = avatarUrl.includes('imagedelivery.net');
+      const isMiniAppEnv = isMiniApp();
+      const isIOS = isIOSDevice();
       
       const avatarImg = document.createElement("img");
       avatarImg.alt = playerName;
@@ -685,6 +687,35 @@ export function renderLeaderboard(leaderboard, container) {
       // Устанавливаем loading до добавления в DOM
       avatarImg.loading = "lazy";
       
+      // Специальный упрощенный режим для Mini-app (Warpcast/Farcaster) —
+      // используем максимально простой <img>, без canvas и сложных обработчиков,
+      // чтобы повторить поведение "как раньше", когда все работало в мини‑аппах.
+      if (isMiniAppEnv) {
+        playerDiv.appendChild(avatarImg);
+
+        const startLogData = {
+          platform: isIOS ? 'iOS' : 'other',
+          isMiniApp: isMiniAppEnv,
+          userAgent: window.navigator?.userAgent || 'unknown',
+          playerName: playerName,
+          avatarUrl: avatarUrl,
+          displaySize: displaySize,
+          crossOrigin: avatarImg.crossOrigin || 'not set',
+          isExternal: isExternalUrl,
+          isSameOrigin: isSameOrigin,
+          isCloudflareImages: isCloudflareImages,
+          loading: avatarImg.loading || 'not set',
+          mode: 'simple-img-mini-app',
+          timestamp: new Date().toISOString()
+        };
+        addDebugLog(`🔄 [Mini-app Avatar Simple] Используем простой <img> для @${playerName}`, startLogData);
+
+        avatarImg.src = avatarUrl;
+        // В упрощенном режиме не полагаемся на onload/onerror и canvas —
+        // WebView сам отрисует то, что сможет (как это было до наших изменений).
+        return;
+      }
+      
       // ВАЖНО: Устанавливаем обработчики ДО добавления в DOM и ДО установки src
       // Это гарантирует, что все обработчики будут готовы к моменту начала загрузки
       
@@ -701,9 +732,6 @@ export function renderLeaderboard(leaderboard, container) {
         const pixelRatio = window.devicePixelRatio || 1;
         const scaleDownRatio = avatarImg.naturalWidth / displaySize; // Во сколько раз браузер уменьшает изображение
         
-        // Детальное логирование для Mini-app окружения (включая iOS)
-        const isIOS = isIOSDevice();
-        const isMiniAppEnv = isMiniApp();
         if (isMiniAppEnv) {
           const logData = {
             platform: isIOS ? 'iOS' : 'other',
@@ -746,9 +774,6 @@ export function renderLeaderboard(leaderboard, container) {
       
       // Обработка ошибки загрузки с детальным логированием
       avatarImg.onerror = (e) => {
-        const isIOS = isIOSDevice();
-        const isMiniAppEnv = isMiniApp();
-        
         // Детальное логирование для Mini-app окружения (включая iOS)
         if (isMiniAppEnv) {
           // Безопасное получение parent origin (может быть заблокировано политикой безопасности)
@@ -824,27 +849,6 @@ export function renderLeaderboard(leaderboard, container) {
       // 3. Добавляем в DOM
       // 4. Устанавливаем src (это запускает загрузку)
       playerDiv.appendChild(avatarImg);
-      
-      // Логирование начала загрузки для Mini-app окружения (включая iOS)
-      const isIOS = isIOSDevice();
-      const isMiniAppEnv = isMiniApp();
-      if (isMiniAppEnv) {
-        const startLogData = {
-          platform: isIOS ? 'iOS' : 'other',
-          isMiniApp: isMiniAppEnv,
-          userAgent: window.navigator?.userAgent || 'unknown',
-          playerName: playerName,
-          avatarUrl: avatarUrl,
-          displaySize: parseInt(avatarSize),
-          crossOrigin: avatarImg.crossOrigin || 'not set',
-          isExternal: isExternalUrl,
-          isSameOrigin: isSameOrigin,
-          isCloudflareImages: isCloudflareImages,
-          loading: avatarImg.loading || 'not set',
-          timestamp: new Date().toISOString()
-        };
-        addDebugLog(`🔄 [Mini-app Avatar Start] Начало загрузки для @${playerName}`, startLogData);
-      }
       
       // Устанавливаем src СРАЗУ после добавления в DOM
       // Не используем requestAnimationFrame, так как элемент уже в DOM и готов к загрузке
