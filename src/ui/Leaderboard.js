@@ -2,6 +2,30 @@ import { getUserByFid, getUsersByFids } from "../farcaster/client.js";
 import { normalizeFidToNumber } from "../utils/normalize.js";
 import { getAnonIdFromFid } from "../utils/fid-helpers.js";
 
+// Функция для определения iOS устройства
+function isIOSDevice() {
+  if (typeof window === 'undefined' || !window.navigator) {
+    return false;
+  }
+  const ua = window.navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+}
+
+// Функция для определения, работает ли приложение в Mini-app (Farcaster/Warpcast)
+function isMiniApp() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  // Проверяем различные признаки Mini-app окружения
+  const ua = window.navigator.userAgent || '';
+  const isWarpcast = /Warpcast/i.test(ua);
+  const isInFrame = window.self !== window.top;
+  const hasFarcasterContext = typeof window.farcaster !== 'undefined' || 
+                               typeof window.parent?.farcaster !== 'undefined';
+  
+  return isWarpcast || isInFrame || hasFarcasterContext;
+}
+
 // Функция для добавления логов в debug панель (если доступна)
 function addDebugLog(message, data = null) {
   // Проверяем, доступна ли функция addDebugLog через window
@@ -654,6 +678,33 @@ export function renderLeaderboard(leaderboard, container) {
         const pixelRatio = window.devicePixelRatio || 1;
         const scaleDownRatio = avatarImg.naturalWidth / displaySize; // Во сколько раз браузер уменьшает изображение
         
+        // Детальное логирование для iOS устройств
+        const isIOS = isIOSDevice();
+        const isMiniAppEnv = isMiniApp();
+        if (isIOS) {
+          const logData = {
+            platform: 'iOS',
+            isMiniApp: isMiniAppEnv,
+            userAgent: window.navigator?.userAgent || 'unknown',
+            playerName: playerName,
+            avatarUrl: avatarUrl,
+            displaySize: displaySize,
+            naturalWidth: avatarImg.naturalWidth,
+            naturalHeight: avatarImg.naturalHeight,
+            scaleFactor: scaleFactor,
+            scaleDownRatio: scaleDownRatio,
+            pixelRatio: pixelRatio,
+            crossOrigin: avatarImg.crossOrigin || 'not set',
+            isExternal: isExternalUrl,
+            isSameOrigin: isSameOrigin,
+            isCloudflareImages: isCloudflareImages,
+            complete: avatarImg.complete,
+            imageRendering: imageRendering,
+            timestamp: new Date().toISOString()
+          };
+          addDebugLog(`📱 [iOS Avatar Load] Успешная загрузка для @${playerName}`, logData);
+        }
+        
         // Для Cloudflare Images используем Canvas для улучшения качества
         if (isCloudflareImages && scaleDownRatio > 3) {
           try {
@@ -672,6 +723,38 @@ export function renderLeaderboard(leaderboard, container) {
       
       // Обработка ошибки загрузки с детальным логированием
       avatarImg.onerror = (e) => {
+        const isIOS = isIOSDevice();
+        const isMiniAppEnv = isMiniApp();
+        
+        // Детальное логирование для iOS устройств
+        if (isIOS) {
+          const errorData = {
+            platform: 'iOS',
+            isMiniApp: isMiniAppEnv,
+            userAgent: window.navigator?.userAgent || 'unknown',
+            playerName: playerName,
+            avatarUrl: avatarUrl,
+            error: e?.type || 'unknown',
+            crossOrigin: avatarImg.crossOrigin || 'not set',
+            isExternal: isExternalUrl,
+            isSameOrigin: isSameOrigin,
+            complete: avatarImg.complete,
+            naturalWidth: avatarImg.naturalWidth,
+            naturalHeight: avatarImg.naturalHeight,
+            isCloudflareImages: isCloudflareImages,
+            errorType: avatarImg.complete && avatarImg.naturalWidth === 0 
+              ? 'Image load error - zero size' 
+              : 'Image load error - network/failed',
+            timestamp: new Date().toISOString(),
+            // Дополнительная диагностика для iOS
+            windowLocation: window.location?.href || 'unknown',
+            windowOrigin: window.location?.origin || 'unknown',
+            isInFrame: window.self !== window.top,
+            parentOrigin: window.parent?.location?.origin || 'same-origin'
+          };
+          addDebugLog(`❌ [iOS Avatar Error] Ошибка загрузки для @${playerName}`, errorData);
+        }
+        
         // Проверяем, действительно ли произошла ошибка или это ложное срабатывание
         if (avatarImg.complete && avatarImg.naturalWidth === 0) {
           // Изображение помечено как загруженное, но имеет нулевой размер - это ошибка
@@ -691,6 +774,7 @@ export function renderLeaderboard(leaderboard, container) {
           avatarImg.src = fallbackUrl;
         }
         
+        // Общее логирование для всех платформ
         console.warn(`[Leaderboard] Failed to load avatar for ${playerName}:`, avatarUrl, {
           crossOrigin: avatarImg.crossOrigin || 'not set',
           isExternal: isExternalUrl,
@@ -707,6 +791,27 @@ export function renderLeaderboard(leaderboard, container) {
       // 3. Добавляем в DOM
       // 4. Устанавливаем src (это запускает загрузку)
       playerDiv.appendChild(avatarImg);
+      
+      // Логирование начала загрузки для iOS
+      const isIOS = isIOSDevice();
+      const isMiniAppEnv = isMiniApp();
+      if (isIOS) {
+        const startLogData = {
+          platform: 'iOS',
+          isMiniApp: isMiniAppEnv,
+          userAgent: window.navigator?.userAgent || 'unknown',
+          playerName: playerName,
+          avatarUrl: avatarUrl,
+          displaySize: parseInt(avatarSize),
+          crossOrigin: avatarImg.crossOrigin || 'not set',
+          isExternal: isExternalUrl,
+          isSameOrigin: isSameOrigin,
+          isCloudflareImages: isCloudflareImages,
+          loading: avatarImg.loading || 'not set',
+          timestamp: new Date().toISOString()
+        };
+        addDebugLog(`🔄 [iOS Avatar Start] Начало загрузки для @${playerName}`, startLogData);
+      }
       
       // Устанавливаем src СРАЗУ после добавления в DOM
       // Не используем requestAnimationFrame, так как элемент уже в DOM и готов к загрузке
